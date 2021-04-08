@@ -49,22 +49,19 @@ void LfgMgr::initialize()
         m_NumWaitTimeHealer = 0;
         m_NumWaitTimeDps = 0;
 
-        if (m_update)
-        {
 #if VERSION_STRING < Cata
-            // Initialize dungeon cache
-            for (uint32 i = 0; i < sLFGDungeonStore.GetNumRows(); ++i)
+        // Initialize dungeon cache
+        for (uint32 i = 0; i < sLFGDungeonStore.GetNumRows(); ++i)
+        {
+            DBC::Structures::LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(i);
+            if (dungeon && dungeon->type != LFG_TYPE_ZONE)
             {
-                DBC::Structures::LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(i);
-                if (dungeon && dungeon->type != LFG_TYPE_ZONE)
-                {
-                    if (dungeon->type != LFG_TYPE_RANDOM)
-                        m_CachedDungeonMap[dungeon->grouptype].insert(dungeon->ID);
-                    m_CachedDungeonMap[0].insert(dungeon->ID);
-                }
+                if (dungeon->type != LFG_TYPE_RANDOM)
+                    m_CachedDungeonMap[dungeon->grouptype].insert(dungeon->ID);
+                m_CachedDungeonMap[0].insert(dungeon->ID);
             }
-#endif
         }
+#endif
 }
 
 void LfgMgr::finalize()
@@ -895,7 +892,7 @@ bool LfgMgr::CheckCompatibility(LfgGuidList check, LfgProposal*& pProposal)
     if (answer != LFG_ANSWER_PENDING)
     {
         LOG_DEBUG("(%s) compatibles (cached): %d", strGuids.c_str(), answer);
-        return bool(answer ? true : false);
+        return answer == LFG_ANSWER_AGREE ? true : false;
     }
 
     // Check all but new compatiblitity
@@ -1000,21 +997,18 @@ bool LfgMgr::CheckCompatibility(LfgGuidList check, LfgProposal*& pProposal)
         WoWGuid wowGuid;
         wowGuid.Init(it->first);
 
-        Player* player = sObjectMgr.GetPlayer(wowGuid.getGuidLowPart());
-        if (!player)
+        if (Player* player = sObjectMgr.GetPlayer(wowGuid.getGuidLowPart()))
         {
-            LOG_DEBUG("(%s) Warning! %u offline! Marking as not compatibles!", strGuids.c_str(), it->first);
+            //for (PlayerSet::const_iterator itPlayer = players.begin(); itPlayer != players.end() && player; ++itPlayer)
+            //{
+            //    // Do not form a group with ignoring candidates
+            //}
+
+            players.insert(player);
         }
         else
         {
-            for (PlayerSet::const_iterator itPlayer = players.begin(); itPlayer != players.end() && player; ++itPlayer)
-            {
-                // Do not form a group with ignoring candidates
-            }
-            if (player)
-            {
-                players.insert(player);
-            }
+            LOG_DEBUG("(%s) Warning! %u offline! Marking as not compatibles!", strGuids.c_str(), it->first);
         }
     }
 
@@ -1580,8 +1574,7 @@ void LfgMgr::UpdateProposal(uint32 proposalId, uint64 guid, bool accept)
             TeleportPlayer(*it, false);
 
         // Update group info
-        if (grp)
-            grp->Update();
+        grp->Update();
 
         delete pProposal;
         m_Proposals.erase(itProposal);
@@ -1736,7 +1729,10 @@ void LfgMgr::InitBoot(Group* grp, uint64 kicker, uint64 victim, std::string reas
 
 void LfgMgr::UpdateBoot(Player* player, bool accept)
 {
-    Group* grp = player ? player->getGroup() : NULL;
+    if (!player)
+        return;
+
+    Group* grp = player->getGroup();
     if (!grp)
         return;
 

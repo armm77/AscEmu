@@ -381,7 +381,7 @@ public:
         uint32_t lang = CHECK_ULONG(L, 2);
         const char* msg = luaL_checklstring(L, 3, nullptr);
         Player* plr = static_cast<Player*>(ptr);
-        if (msg == nullptr || !plr)
+        if (msg == nullptr)
             return 0;
         WorldPacket* data = sChatHandler.FillMessageData(type, lang, msg, plr->getGuid(), 0);
         plr->GetSession()->SendChatPacket(data, 1, lang, plr->GetSession());
@@ -1501,36 +1501,29 @@ public:
         uint32_t quest_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         Player* plr = static_cast<Player*>(ptr);
 
-        QuestProperties const* qst = sMySQLStore.getQuestProperties(quest_id);
-        if (qst)
+        if (auto* qst = sMySQLStore.getQuestProperties(quest_id))
         {
             if (plr->HasFinishedQuest(quest_id))
             {
                 lua_pushnumber(L, 0);
                 return 1;
             }
-            else
-            {
-                QuestLogEntry* IsPlrOnQuest = plr->GetQuestLogForEntry(quest_id);
-                if (IsPlrOnQuest)
-                {
-                    sQuestMgr.GenerateQuestXP(plr, qst);
-                    sQuestMgr.BuildQuestComplete(plr, qst);
 
-                    IsPlrOnQuest->finishAndRemove();
-                    plr->AddToFinishedQuests(quest_id);
-                    lua_pushnumber(L, 1);
-                    return 1;
-                }
-                else
-                {
-                    lua_pushnumber(L, 2);
-                    return 1;
-                }
+            if (auto* questLog = plr->getQuestLogByQuestId(quest_id))
+            {
+                sQuestMgr.GenerateQuestXP(plr, qst);
+                sQuestMgr.BuildQuestComplete(plr, qst);
+
+                questLog->finishAndRemove();
+                plr->AddToFinishedQuests(quest_id);
+                lua_pushnumber(L, 1);
+                return 1;
             }
+
+            lua_pushnumber(L, 2);
+            return 1;
         }
-        else
-            return 0;
+        return 0;
     }
 
     static int StartQuest(lua_State* L, Unit* ptr)
@@ -1538,66 +1531,60 @@ public:
         TEST_PLAYER_RET()
         uint32_t quest_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         Player* player = static_cast<Player*>(ptr);
-        QuestProperties const* questProperties = sMySQLStore.getQuestProperties(quest_id);
-        if (questProperties && player)
+
+        if (auto* questProperties = sMySQLStore.getQuestProperties(quest_id))
         {
             if (player->HasFinishedQuest(quest_id))
             {
                 lua_pushnumber(L, 0);
                 return 1;
             }
-            else
+
+            if (player->hasQuestInQuestLog(quest_id))
             {
-                QuestLogEntry* IsPlrOnQuest = player->GetQuestLogForEntry(quest_id);
-                if (IsPlrOnQuest)
+                lua_pushnumber(L, 1);
+                return 1;
+            }
+
+            uint8_t open_slot = player->getFreeQuestSlot();
+            if (open_slot > MAX_QUEST_SLOT)
+            {
+                sQuestMgr.SendQuestLogFull(player);
+                lua_pushnumber(L, 2);
+                return 1;
+            }
+
+            QuestLogEntry* questLogEntry = new QuestLogEntry(questProperties, player, open_slot);
+            questLogEntry->updatePlayerFields();
+            // If the quest should give any items on begin, give them the items.
+            for (uint8_t i = 0; i < 4; ++i)
+            {
+                if (questProperties->receive_items[i])
                 {
-                    lua_pushnumber(L, 1);
-                    return 1;
-                }
-                else
-                {
-                    uint8_t open_slot = player->GetOpenQuestSlot();
-                    if (open_slot > MAX_QUEST_SLOT)
-                    {
-                        sQuestMgr.SendQuestLogFull(player);
-                        lua_pushnumber(L, 2);
-                        return 1;
-                    }
-                    else
-                    {
-                        QuestLogEntry* questLogEntry = new QuestLogEntry(questProperties, player, open_slot);
-                        questLogEntry->updatePlayerFields();
-                        // If the quest should give any items on begin, give them the items.
-                        for (uint8_t i = 0; i < 4; ++i)
-                        {
-                            if (questProperties->receive_items[i])
-                            {
-                                Item* item = sObjectMgr.CreateItem(questProperties->receive_items[i], player);
-                                if (item == nullptr)
-                                    return false;
+                    Item* item = sObjectMgr.CreateItem(questProperties->receive_items[i], player);
+                    if (item == nullptr)
+                        return false;
 
-                                if (!player->getItemInterface()->AddItemToFreeSlot(item))
-                                    item->DeleteMe();
-                            }
-                        }
-
-                        if (questProperties->srcitem && questProperties->srcitem != questProperties->receive_items[0])
-                        {
-                            Item* item = sObjectMgr.CreateItem(questProperties->srcitem, player);
-                            if (item)
-                            {
-                                item->setStackCount(questProperties->srcitemcount ? questProperties->srcitemcount : 1);
-                                if (!player->getItemInterface()->AddItemToFreeSlot(item))
-                                    item->DeleteMe();
-                            }
-                        }
-
-                        sHookInterface.OnQuestAccept(player, questProperties, nullptr);
-                        lua_pushnumber(L, 3);
-                        return 1;
-                    }
+                    if (!player->getItemInterface()->AddItemToFreeSlot(item))
+                        item->DeleteMe();
                 }
             }
+
+            if (questProperties->srcitem && questProperties->srcitem != questProperties->receive_items[0])
+            {
+                Item* item = sObjectMgr.CreateItem(questProperties->srcitem, player);
+                if (item)
+                {
+                    item->setStackCount(questProperties->srcitemcount ? questProperties->srcitemcount : 1);
+                    if (!player->getItemInterface()->AddItemToFreeSlot(item))
+                        item->DeleteMe();
+                }
+            }
+
+            sHookInterface.OnQuestAccept(player, questProperties, nullptr);
+            lua_pushnumber(L, 3);
+            return 1;
+
         }
         return 0;
     } // StartQuest
@@ -1647,18 +1634,18 @@ public:
         TEST_PLAYER()
         uint32_t questid = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         int objective = static_cast<int>(luaL_checkinteger(L, 2));
-        Player* pl = static_cast<Player*>(ptr);
-        if (!pl->HasFinishedQuest(questid))
+        Player* player = static_cast<Player*>(ptr);
+
+        if (!player->HasFinishedQuest(questid))
         {
-            auto questlog_entry = pl->GetQuestLogForEntry(questid);
-            if (questlog_entry != nullptr)
+            if (auto questLog = player->getQuestLogByQuestId(questid))
             {
-                questlog_entry->setMobCountForIndex(objective, questlog_entry->getQuestProperties()->required_mob_or_go[objective]);
-                questlog_entry->SendUpdateAddKill(objective);
-                if (questlog_entry->canBeFinished())
+                questLog->setMobCountForIndex(objective, questLog->getQuestProperties()->required_mob_or_go[objective]);
+                questLog->SendUpdateAddKill(objective);
+                if (questLog->canBeFinished())
                 {
-                    questlog_entry->sendQuestComplete();
-                    questlog_entry->updatePlayerFields();
+                    questLog->sendQuestComplete();
+                    questLog->updatePlayerFields();
                 }
             }
         }
@@ -1693,16 +1680,13 @@ public:
         float posY = CHECK_FLOAT(L, 3);
         float posZ = CHECK_FLOAT(L, 4);
         float Orientation = CHECK_FLOAT(L, 5);
-        if (!posX || !posY || !posZ || !mapId)
+
+        if (!posX || !posY || !posZ)
         {
-            if (mapId)
-            {
-                DLLLogDetail("LuaEngineMgr : LUATeleporter ERROR - Wrong Coordinates given (Map, X, Y, Z) :: Map%f%s%f%s%f%s%f", mapId, " X", posX, " Y", posY, " Z", posZ);
-                return 0;
-            }
-            else
-                mapId = 0; //MapId is false reported as empty if you use Eastern Kingdoms (0) So lets override it IF it is reported as empty.
+            DLLLogDetail("LuaEngineMgr : LUATeleporter ERROR - Wrong Coordinates given (Map, X, Y, Z) :: Map%f%s%f%s%f%s%f", mapId, " X", posX, " Y", posY, " Z", posZ);
+            return 0;
         }
+
         LocationVector vec(posX, posY, posZ, Orientation);
         static_cast<Player*>(ptr)->SafeTeleport(mapId, 0, vec);
         return 0;
@@ -2535,16 +2519,16 @@ public:
         TEST_PLAYER()
         uint32_t questid = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         uint32_t objective = static_cast<uint32_t>(luaL_checkinteger(L, 2));
-        Player* pl = static_cast<Player*>(ptr);
-        QuestLogEntry* qle = pl->GetQuestLogForEntry(questid);
-        if (qle != nullptr)
-        {
-            qle->setMobCountForIndex(objective, qle->getMobCountByIndex(objective) + 1);
-            qle->SendUpdateAddKill(objective);
-            if (qle->canBeFinished())
-                qle->sendQuestComplete();
+        Player* player = static_cast<Player*>(ptr);
 
-            qle->updatePlayerFields();
+        if (auto* questLog = player->getQuestLogByQuestId(questid))
+        {
+            questLog->setMobCountForIndex(objective, questLog->getMobCountByIndex(objective) + 1);
+            questLog->SendUpdateAddKill(objective);
+            if (questLog->canBeFinished())
+                questLog->sendQuestComplete();
+
+            questLog->updatePlayerFields();
         }
         return 0;
     }
@@ -2955,13 +2939,12 @@ public:
         v.y += (3 * (sinf(angle + v.o)));
 
         Summon* guardian = ptr->GetMapMgr()->CreateSummon(entry, SUMMONTYPE_GUARDIAN, 0);
+        if (guardian == nullptr)
+            return 0;
 
         guardian->Load(cp, ptr, v, 0, -1);
         guardian->GetAIInterface()->SetUnitToFollowAngle(angle);
         guardian->PushToWorld(ptr->GetMapMgr());
-
-        if (guardian == nullptr)
-            return 0;
 
         PUSH_UNIT(L, guardian);
 
@@ -2987,13 +2970,12 @@ public:
     static int IsInWater(lua_State* L, Unit* ptr)
     {
         TEST_PLAYER()
-        if (ptr)
-        {
-            if (static_cast<Player*>(ptr)->m_UnderwaterState)
-                lua_pushboolean(L, 1);
-            else
-                lua_pushboolean(L, 0);
-        }
+
+        if (static_cast<Player*>(ptr)->m_UnderwaterState)
+            lua_pushboolean(L, 1);
+        else
+            lua_pushboolean(L, 0);
+
         return 1;
     }
 
@@ -3536,7 +3518,7 @@ public:
         uint32_t sp = CHECK_ULONG(L, 2);
         uint32_t delay = CHECK_ULONG(L, 3);
         uint32_t repeats = CHECK_ULONG(L, 4);
-        if (ptr && sp)
+        if (sp)
         {
             switch (ptr->getObjectTypeId())
             {
@@ -3756,7 +3738,7 @@ public:
     {
         TEST_PLAYER()
         uint32_t skill = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-        if (!ptr || !skill)
+        if (!skill)
             return 0;
         Player* plr = static_cast<Player*>(ptr);
         plr->_RemoveSkillLine(skill);
@@ -3791,7 +3773,7 @@ public:
         TEST_UNITPLAYER()
         uint32_t mechanic = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         bool hostileonly = CHECK_BOOL(L, 2);
-        if (ptr && mechanic)
+        if (mechanic)
             ptr->RemoveAllAurasByMechanic(mechanic, 0, hostileonly);
         return 0;
     }
@@ -3800,7 +3782,7 @@ public:
     {
         TEST_UNITPLAYER()
         uint32_t type = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-        if (ptr && type)
+        if (type)
             ptr->RemoveAllAuraType(type);
         return 0;
     }
@@ -3811,7 +3793,7 @@ public:
         uint32_t spellid = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         int32_t duration = static_cast<int32_t>(luaL_checkinteger(L, 2));
         bool temp = CHECK_BOOL(L, 3);
-        if (ptr && spellid)
+        if (spellid)
         {
             Aura* aura = sSpellMgr.newAura(sSpellMgr.getSpellInfo(spellid), duration, ptr, ptr, temp);
             ptr->addAura(aura);
@@ -3963,10 +3945,11 @@ public:
         TEST_PLAYER()
         Player* plr = static_cast<Player*>(ptr);
         uint32_t debt = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-        if (debt < 0)
-            return 0;
+
         if (!plr->hasEnoughCoinage(debt))
+        {
             lua_pushboolean(L, 0);
+        }
         else
         {
             plr->modCoinage(-(int32_t)debt);
@@ -4277,7 +4260,7 @@ public:
     {
         TEST_PLAYER()
         uint32_t quest_id = CHECK_ULONG(L, 1);
-        if (quest_id && static_cast<Player*>(ptr)->HasQuest(quest_id))
+        if (quest_id && static_cast<Player*>(ptr)->hasQuestInQuestLog(quest_id))
             lua_pushboolean(L, 1);
         else
             lua_pushboolean(L, 0);
@@ -4301,7 +4284,7 @@ public:
     {
         TEST_PLAYER()
         Player* plr = static_cast<Player*>(ptr);
-        if (plr != nullptr && plr->isPvpFlagSet())
+        if (plr->isPvpFlagSet())
             plr->removePvpFlag();
         return 0;
     }
@@ -4343,7 +4326,7 @@ public:
         TEST_PLAYER()
         Player* plr = static_cast<Player*>(ptr);
         Creature* object = static_cast<Creature*>(CHECK_UNIT(L, 1));  //NOT entry. The unit pointer.
-        if (plr != nullptr && object != nullptr)
+        if (object != nullptr)
             plr->GetSession()->sendInventoryList(object);
         return 0;
     }
@@ -4739,12 +4722,12 @@ public:
 
     static int IsMounted(lua_State* L, Unit* ptr)
     {
-        if (!ptr)
-            return 0;
+        TEST_UNITPLAYER()
+
         if (ptr->isPlayer())
         {
             Player* plr = static_cast<Player*>(ptr);
-            if (plr != nullptr && plr->IsMounted())
+            if (plr->IsMounted())
                 lua_pushboolean(L, 1);
             else
                 lua_pushboolean(L, 0);
@@ -4930,7 +4913,7 @@ public:
         TEST_PLAYER()
         const auto sender = static_cast<Player*>(ptr);
         const auto invitedPlayer = CHECK_PLAYER(L, 1);
-        if (invitedPlayer != nullptr && sender)
+        if (invitedPlayer != nullptr)
             sender->getGuild()->sendGuildInvitePacket(sender->GetSession(), invitedPlayer->getName());
 
         return 0;
@@ -5191,7 +5174,7 @@ public:
     {
         TEST_PLAYER()
         const char* channelName = luaL_checkstring(L, 1);
-        if (!ptr || !channelName)
+        if (!channelName)
             return 0;
 
         Channel* channel = sChannelMgr.getChannel(channelName, dynamic_cast<Player*>(ptr));
@@ -5207,11 +5190,15 @@ public:
     static int JoinChannel(lua_State* L, Unit* ptr)
     {
         TEST_PLAYER()
+
         const char* channelName = luaL_checkstring(L, 1);
         Channel* channel = sChannelMgr.getChannel(channelName, dynamic_cast<Player*>(ptr));
+        if (!channel)
+            return 0;
+
         const char* password = luaL_optstring(L, 2, channel->m_password.c_str());
 
-        if (!ptr || !channelName || channel->HasMember(dynamic_cast<Player*>(ptr)) || !channel)
+        if (channel->HasMember(dynamic_cast<Player*>(ptr)))
             return 0;
 
         channel->AttemptJoin(dynamic_cast<Player*>(ptr), password);
@@ -5222,9 +5209,10 @@ public:
     static int LeaveChannel(lua_State* L, Unit* ptr)
     {
         TEST_PLAYER()
+
         const char* channelName = luaL_checkstring(L, 1);
         Channel* channel = sChannelMgr.getChannel(channelName, dynamic_cast<Player*>(ptr));
-        if (!ptr || !channelName || !channel || !channel->HasMember(dynamic_cast<Player*>(ptr)))
+        if (!channelName || !channel || !channel->HasMember(dynamic_cast<Player*>(ptr)))
             return 0;
 
         channel->Part(dynamic_cast<Player*>(ptr), true);
@@ -5235,10 +5223,11 @@ public:
     static int SetChannelName(lua_State* L, Unit* ptr)
     {
         TEST_PLAYER()
+
         const char* currentName = luaL_checkstring(L, 1);
         const char* newName = luaL_checkstring(L, 2);
         Channel* channel = sChannelMgr.getChannel(currentName, dynamic_cast<Player*>(ptr));
-        if (!currentName || !newName || !ptr || !channel || channel->m_name == newName)
+        if (!currentName || !newName || !channel || channel->m_name == newName)
             return 0;
 
         channel->m_name = newName;
@@ -5248,10 +5237,11 @@ public:
     static int SetChannelPassword(lua_State* L, Unit* ptr)
     {
         TEST_PLAYER()
+
         const char* channelName = luaL_checkstring(L, 1);
         const char* password = luaL_checkstring(L, 2);
         Channel* channel = sChannelMgr.getChannel(channelName, dynamic_cast<Player*>(ptr));
-        if (!password || !ptr || channel->m_password == password)
+        if (!password || !channel || channel->m_password == password)
             return 0;
 
         channel->Password(dynamic_cast<Player*>(ptr), password);
@@ -5263,7 +5253,7 @@ public:
         TEST_PLAYER()
         const char* channelName = luaL_checkstring(L, 1);
         Channel* channel = sChannelMgr.getChannel(channelName, dynamic_cast<Player*>(ptr));
-        if (!ptr)
+        if (!channel)
             return 0;
 
         lua_pushstring(L, channel->m_password.c_str());
@@ -5314,7 +5304,7 @@ public:
     {
         TEST_PLAYER()
         const char* channelName = luaL_checkstring(L, 1);
-        if (!ptr || !channelName)
+        if (!channelName)
             return 0;
 
         lua_pushnumber(L, static_cast<lua_Number>(sChannelMgr.getChannel(channelName, dynamic_cast<Player*>(ptr))->GetNumMembers()));
@@ -5881,10 +5871,12 @@ public:
     {
         TEST_PLAYER()
         uint32_t entry = CHECK_ULONG(L, 1);
-        QuestLogEntry* qle = static_cast<Player*>(ptr)->GetQuestLogForEntry(entry);
-        if (!qle)
+
+        if (auto* questLog = static_cast<Player*>(ptr)->getQuestLogByQuestId(entry))
+            lua_pushnumber(L, questLog->getSlot());
+        else
             RET_NUMBER(-1);
-        lua_pushnumber(L, qle->getSlot());
+
         return 1;
     }
 
@@ -5925,10 +5917,10 @@ public:
         TEST_PLAYER_RET()
         uint32_t questid = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         uint32_t objective = static_cast<uint32_t>(luaL_checkinteger(L, 2));
-        Player* pl = static_cast<Player*>(ptr);
-        QuestLogEntry* qle = pl->GetQuestLogForEntry(questid);
-        if (qle != nullptr)
-            lua_pushnumber(L, qle->getMobCountByIndex(objective));
+        Player* player = static_cast<Player*>(ptr);
+
+        if (auto* questLog = player->getQuestLogByQuestId(questid))
+            lua_pushnumber(L, questLog->getMobCountByIndex(objective));
         else
             lua_pushnil(L);
         return 1;

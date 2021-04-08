@@ -84,11 +84,7 @@ Spell::Spell(Object* Caster, SpellInfo const* info, bool triggered, Aura* aur)
 
     Caster->m_pendingSpells.insert(this);
     chaindamage = 0;
-    bDurSet = 0;
     damage = 0;
-    bRadSet[0] = 0;
-    bRadSet[1] = 0;
-    bRadSet[2] = 0;
 
     m_DelayStep = 0;
 
@@ -150,7 +146,7 @@ Spell::Spell(Object* Caster, SpellInfo const* info, bool triggered, Aura* aur)
     {
         case TYPEID_PLAYER:
         case TYPEID_UNIT:
-            if (u_caster->getPlayerOwner() != nullptr && u_caster->getPlayerOwner()->GetDuelState() == DUEL_STATE_STARTED)
+            if (u_caster && u_caster->getPlayerOwner() != nullptr && u_caster->getPlayerOwner()->GetDuelState() == DUEL_STATE_STARTED)
                 duelSpell = true;
             break;
         case TYPEID_ITEM:
@@ -166,7 +162,7 @@ Spell::Spell(Object* Caster, SpellInfo const* info, bool triggered, Aura* aur)
             break;
     }
 
-    if (u_caster != nullptr && getSpellInfo()->getAttributesExF() & ATTRIBUTESEXF_CAST_BY_CHARMER)
+    if (u_caster && getSpellInfo()->getAttributesExF() & ATTRIBUTESEXF_CAST_BY_CHARMER)
     {
         auto unitCharmer = u_caster->GetMapMgrUnit(u_caster->getCharmedByGuid());
         if (unitCharmer != nullptr)
@@ -1520,7 +1516,7 @@ void Spell::HandleAddAura(uint64 guid)
         break;
     }
 
-    if (spellid && Target)
+    if (spellid)
     {
         const auto spellInfo = sSpellMgr.getSpellInfo(spellid);
         if (!spellInfo)

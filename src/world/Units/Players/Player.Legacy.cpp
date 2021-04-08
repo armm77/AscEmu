@@ -2537,6 +2537,8 @@ bool Player::LoadFromDB(uint32 guid)
 
 void Player::LoadFromDBProc(QueryResultVector & results)
 {
+    auto startTime = Util::TimeNow();
+
     if (GetSession() == nullptr || results.size() < 8)        // should have 8 queryresults for aplayer load.
     {
         RemovePendingPlayer();
@@ -3320,6 +3322,9 @@ void Player::LoadFromDBProc(QueryResultVector & results)
             }
         }
     }
+
+    auto timeToNow = Util::GetTimeDifferenceToNow(startTime);
+    LogDetail("Time for playerloading: %u ms", static_cast<uint32_t>(timeToNow));
 }
 
 
@@ -3334,7 +3339,7 @@ void Player::SetPersistentInstanceId(Instance* pInstance)
 
     // Bind instance to "my" group.
     if (m_playerInfo && m_playerInfo->m_Group && pInstance->m_creatorGroup == 0)
-        pInstance->m_creatorGroup = m_playerInfo && m_playerInfo->m_Group->GetID();
+        pInstance->m_creatorGroup = m_playerInfo->m_Group->GetID();
 
     // Skip handling for non-persistent instances.
     if (!pInstance->isPersistent())
@@ -3428,24 +3433,6 @@ void Player::_LoadQuestLogEntry(QueryResult* result)
         }
         while (result->NextRow());
     }
-}
-
-QuestLogEntry* Player::GetQuestLogForEntry(uint32 quest)
-{
-    for (uint8 i = 0; i < MAX_QUEST_LOG_SIZE; ++i)
-    {
-        if (m_questlog[i] != nullptr)
-        {
-            if (m_questlog[i]->getQuestProperties()->id == quest)
-                return m_questlog[i];
-        }
-    }
-    return nullptr;
-}
-
-void Player::SetQuestLogSlot(QuestLogEntry* entry, uint32 slot)
-{
-    m_questlog[slot] = entry;
 }
 
 void Player::AddToWorld()
@@ -4675,15 +4662,6 @@ void Player::CleanupChannels()
     }
 }
 
-uint8_t Player::GetOpenQuestSlot()
-{
-    for (uint8 i = 0; i < MAX_QUEST_SLOT; ++i)
-        if (m_questlog[i] == nullptr)
-            return i;
-
-    return MAX_QUEST_SLOT + 1;
-}
-
 void Player::AddToFinishedQuests(uint32 quest_id)
 {
     if (m_finishedQuests.find(quest_id) != m_finishedQuests.end())
@@ -4695,15 +4673,6 @@ void Player::AddToFinishedQuests(uint32 quest_id)
 bool Player::HasFinishedQuest(uint32 quest_id)
 {
     return m_finishedQuests.find(quest_id) != m_finishedQuests.end();
-}
-
-bool Player::HasTimedQuest()
-{
-    for (uint8 i = 0; i < MAX_QUEST_SLOT; i++)
-        if (m_questlog[i] != nullptr && m_questlog[i]->getQuestProperties()->time != 0)
-            return true;
-
-    return false;
 }
 
 void Player::ClearQuest(uint32 id)
@@ -5568,7 +5537,7 @@ void Player::EventDeActivateGameObject(GameObject* obj)
 
 void Player::EventTimedQuestExpire(uint32 questid)
 {
-    QuestLogEntry* questLogEntry = this->GetQuestLogForEntry(questid);
+    QuestLogEntry* questLogEntry = this->getQuestLogByQuestId(questid);
     if (questLogEntry == nullptr)
         return;
 
@@ -5685,7 +5654,7 @@ void Player::UpdateNearbyGameObjects()
             {
                 for (GameObjectGOMap::const_iterator GOitr = gameobject_info->goMap.begin(); GOitr != gameobject_info->goMap.end(); ++GOitr)
                 {
-                    if ((qle = GetQuestLogForEntry(GOitr->first->id)) != nullptr)
+                    if ((qle = getQuestLogByQuestId(GOitr->first->id)) != nullptr)
                     {
                         for (uint32 i = 0; i < qle->getQuestProperties()->count_required_mob; ++i)
                         {
@@ -6229,7 +6198,7 @@ void Player::AddItemsToWorld()
             if (i < INVENTORY_SLOT_BAG_END)      // only equipment slots get mods.
                 _ApplyItemMods(pItem, i, true, false, true);
 
-            if (i >= CURRENCYTOKEN_SLOT_START && i < CURRENCYTOKEN_SLOT_END)
+            if (i >= CURRENCYTOKEN_SLOT_START)
                 UpdateKnownCurrencies(pItem->getEntry(), true);
 
             if (pItem->isContainer() && getItemInterface()->IsBagSlot(i))
@@ -9159,17 +9128,6 @@ bool Player::HasQuestMob(uint32 entry) //Only for Kill Quests
     return false;
 }
 
-bool Player::HasQuest(uint32 entry)
-{
-    for (uint8 i = 0; i < MAX_QUEST_SLOT; i++)
-    {
-        if (m_questlog[i] != nullptr && m_questlog[i]->getQuestProperties()->id == entry)
-            return true;
-    }
-
-    return false;
-}
-
 void Player::RemoveQuestMob(uint32 entry) //Only for Kill Quests
 {
     if (quest_mobs.size() > 0)
@@ -10042,24 +10000,20 @@ void Player::SendPreventSchoolCast(uint32 SpellSchool, uint32 unTimeMs)
     {
         uint32 SpellId = (*sitr);
 
-        const auto spellInfo = sSpellMgr.getSpellInfo(SpellId);
-        if (!spellInfo)
+        if (const auto* spellInfo = sSpellMgr.getSpellInfo(SpellId))
         {
-            ASSERT(spellInfo)
-            continue;
-        }
+            // Not send cooldown for this spells
+            if (spellInfo->getAttributes() & ATTRIBUTES_TRIGGER_COOLDOWN)
+                continue;
 
-        // Not send cooldown for this spells
-        if (spellInfo->getAttributes() & ATTRIBUTES_TRIGGER_COOLDOWN)
-            continue;
+            if (spellInfo->getFirstSchoolFromSchoolMask() == SpellSchool)
+            {
+                SmsgSpellCooldownMap mapMembers;
+                mapMembers.spellId = SpellId;
+                mapMembers.duration = unTimeMs;
 
-        if (spellInfo->getFirstSchoolFromSchoolMask() == SpellSchool)
-        {
-            SmsgSpellCooldownMap mapMembers;
-            mapMembers.spellId = SpellId;
-            mapMembers.duration = unTimeMs;
-
-            spellMap.push_back(mapMembers);
+                spellMap.push_back(mapMembers);
+            }
         }
     }
     GetSession()->SendPacket(SmsgSpellCooldown(getGuid(), 0x0, spellMap).serialise().get());
@@ -10593,7 +10547,7 @@ void Player::AcceptQuest(uint64 guid, uint32 quest_id)
         return;
     }
 
-    if (HasQuest(questProperties->id))
+    if (hasQuestInQuestLog(questProperties->id))
         return;
 
     if (qst_giver->isCreature() && dynamic_cast<Creature*>(qst_giver)->m_escorter != nullptr)
@@ -10616,14 +10570,14 @@ void Player::AcceptQuest(uint64 guid, uint32 quest_id)
         return;
     }
 
-    uint8_t log_slot = GetOpenQuestSlot();
+    uint8_t log_slot = getFreeQuestSlot();
     if (log_slot > MAX_QUEST_SLOT)
     {
         sQuestMgr.SendQuestLogFull(this);
         return;
     }
 
-    if ((questProperties->time != 0) && HasTimedQuest())
+    if ((questProperties->time != 0) && hasTimedQuestInQuestSlot())
     {
         sQuestMgr.SendQuestInvalid(INVALID_REASON_HAVE_TIMED_QUEST, this);
         return;
@@ -10905,7 +10859,7 @@ bool Player::SaveSkills(bool NewCharacter, QueryBuffer* buf)
 
 void Player::AddQuestKill(uint32 questid, uint8 reqid, uint32 delay)
 {
-    if (!HasQuest(questid))
+    if (!hasQuestInQuestLog(questid))
         return;
 
     if (delay)
@@ -10914,7 +10868,7 @@ void Player::AddQuestKill(uint32 questid, uint8 reqid, uint32 delay)
         return;
     }
 
-    QuestLogEntry* quest_entry = GetQuestLogForEntry(questid);
+    QuestLogEntry* quest_entry = getQuestLogByQuestId(questid);
     if (quest_entry == nullptr)
         return;
 
@@ -11430,9 +11384,9 @@ void Player::SendLoot(uint64 guid, uint8 loot_type, uint32 mapid)
             continue;
 
         //quest items that start quests need special check to avoid drops all the time.
-        if ((itemProto->Bonding == ITEM_BIND_QUEST) && (itemProto->QuestId) && HasQuest(itemProto->QuestId))
+        if ((itemProto->Bonding == ITEM_BIND_QUEST) && (itemProto->QuestId) && hasQuestInQuestLog(itemProto->QuestId))
             continue;
-        if ((itemProto->Bonding == ITEM_BIND_QUEST2) && (itemProto->QuestId) && HasQuest(itemProto->QuestId))
+        if ((itemProto->Bonding == ITEM_BIND_QUEST2) && (itemProto->QuestId) && hasQuestInQuestLog(itemProto->QuestId))
             continue;
 
         if ((itemProto->Bonding == ITEM_BIND_QUEST) && (itemProto->QuestId) && HasFinishedQuest(itemProto->QuestId))
@@ -11453,7 +11407,7 @@ void Player::SendLoot(uint64 guid, uint8 loot_type, uint32 mapid)
                 {
                     if (pQuest->required_quests[i])
                     {
-                        if (!HasFinishedQuest(pQuest->required_quests[i]) || HasQuest(pQuest->required_quests[i]))
+                        if (!HasFinishedQuest(pQuest->required_quests[i]) || hasQuestInQuestLog(pQuest->required_quests[i]))
                         {
 
                         }

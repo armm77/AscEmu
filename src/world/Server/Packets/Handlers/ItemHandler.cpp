@@ -855,7 +855,7 @@ void WorldSession::handleSwapInvItemOpcode(WorldPacket& recvPacket)
                     dstItem->getItemProperties()->Quality, 0);
         }
     }
-    if (srcItem && srlPacket.destSlot < INVENTORY_SLOT_BAG_END)
+    if (srlPacket.destSlot < INVENTORY_SLOT_BAG_END)
     {
         _player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_ITEM, srcItem->getItemProperties()->ItemId, 0, 0);
         if (srlPacket.destSlot < INVENTORY_SLOT_BAG_START) // check Superior/Epic achievement
@@ -1786,10 +1786,8 @@ void WorldSession::handleBuyItemInSlotOpcode(WorldPacket& recvPacket)
     }
 
     // ok our z and slot are set.
-    Item* oldItem = nullptr;
+    Item* oldItem = _player->getItemInterface()->GetInventoryItem(bagslot, slot);
     Item* pItem;
-    if (slot != INVENTORY_SLOT_NOT_SET)
-        oldItem = _player->getItemInterface()->GetInventoryItem(bagslot, slot);
 
     if (oldItem != nullptr)
     {
@@ -1812,12 +1810,6 @@ void WorldSession::handleBuyItemInSlotOpcode(WorldPacket& recvPacket)
     }
     else
     {
-        if (slot == ITEM_NO_SLOT_AVAILABLE)
-        {
-            _player->getItemInterface()->buildInventoryChangeError(nullptr, nullptr, INV_ERR_BAG_FULL);
-            return;
-        }
-
         pItem = sObjectMgr.CreateItem(it->ItemId, _player);
         if (pItem)
         {

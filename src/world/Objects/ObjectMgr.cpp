@@ -135,13 +135,13 @@ void ObjectMgr::finalize()
     }
 
     LogNotice("ObjectMgr : Deleting Reputation Tables...");
-    for (ReputationModMap::iterator itr = this->m_reputation_creature.begin(); itr != m_reputation_creature.end(); ++itr)
+    for (ReputationModMap::iterator itr = m_reputation_creature.begin(); itr != m_reputation_creature.end(); ++itr)
     {
         ReputationModifier* mod = itr->second;
         mod->mods.clear();
         delete mod;
     }
-    for (ReputationModMap::iterator itr = this->m_reputation_faction.begin(); itr != m_reputation_faction.end(); ++itr)
+    for (ReputationModMap::iterator itr = m_reputation_faction.begin(); itr != m_reputation_faction.end(); ++itr)
     {
         ReputationModifier* mod = itr->second;
         mod->mods.clear();
@@ -654,12 +654,9 @@ void ObjectMgr::LoadAchievementRewards()
                 LogDebugFlag(LF_DB_TABLES, "ObjectMgr : achievement_reward %u not have sender data but have mail text.", entry);
         }
 
-        if (reward.itemId)
+        if (reward.itemId == 0)
         {
-            if (reward.itemId == 0)
-            {
-                LogDebugFlag(LF_DB_TABLES, "ObjectMgr : achievement_reward %u has invalid item id %u, reward mail will be without item.", entry, reward.itemId);
-            }
+            LogDebugFlag(LF_DB_TABLES, "ObjectMgr : achievement_reward %u has invalid item id %u, reward mail will be without item.", entry, reward.itemId);
         }
 
         AchievementRewards.insert(AchievementRewardsMap::value_type(entry, reward));
@@ -1211,7 +1208,7 @@ void ObjectMgr::generateDatabaseGossipMenu(Object* object, uint32_t gossipMenuId
 
         if (itr->first == gossipMenuId)
         {
-            if (itr->second.requirementType == 1 && !player->HasQuest(itr->second.requirementData))
+            if (itr->second.requirementType == 1 && !player->hasQuestInQuestLog(itr->second.requirementData))
                 continue;
 
             if (itr->second.requirementType == 3)
@@ -1841,12 +1838,12 @@ void ObjectMgr::GenerateLevelUpInfo()
                         break;
 #if VERSION_STRING > TBC
                     case DEATHKNIGHT: // Based on 55-56 more testing will be done.
-                        if (Level < 60)
+                        //if (Level < 60)
                             TotalHealthGain += 92;
                         /*else if (Level <60) TotalHealthGain+=??;
                         else if (Level <70) TotalHealthGain+=??;*/
-                        else
-                            TotalHealthGain += 92;
+                        /*else
+                            TotalHealthGain += 92;*/
                         break;
 #endif
                 }
@@ -3098,17 +3095,16 @@ void ObjectMgr::EventScriptsUpdate(Player* plr, uint32 next_event)
 
             case static_cast<uint8>(ScriptCommands::SCRIPT_COMMAND_KILL_CREDIT):
             {
-                QuestLogEntry* pQuest = plr->GetQuestLogForEntry(itr->second.data_2);
-                if (pQuest != nullptr)
+                if (auto* questLog = plr->getQuestLogByQuestId(itr->second.data_2))
                 {
-                    if (pQuest->getQuestProperties()->required_mob_or_go[itr->second.data_5] >= 0)
+                    if (questLog->getQuestProperties()->required_mob_or_go[itr->second.data_5] >= 0)
                     {
-                        uint32 required_mob = static_cast<uint32>(pQuest->getQuestProperties()->required_mob_or_go[itr->second.data_5]);
-                        if (pQuest->getMobCountByIndex(itr->second.data_5) < required_mob)
+                        uint32 required_mob = static_cast<uint32>(questLog->getQuestProperties()->required_mob_or_go[itr->second.data_5]);
+                        if (questLog->getMobCountByIndex(itr->second.data_5) < required_mob)
                         {
-                            pQuest->setMobCountForIndex(itr->second.data_5, pQuest->getMobCountByIndex(itr->second.data_5) + 1);
-                            pQuest->SendUpdateAddKill(itr->second.data_5);
-                            pQuest->updatePlayerFields();
+                            questLog->setMobCountForIndex(itr->second.data_5, questLog->getMobCountByIndex(itr->second.data_5) + 1);
+                            questLog->SendUpdateAddKill(itr->second.data_5);
+                            questLog->updatePlayerFields();
                         }
                     }
                 }
@@ -3212,14 +3208,6 @@ void ObjectMgr::LoadCreatureAIAgents()
             sp->Misc2 = fields[11].GetUInt32();
             if (sp->agent == AGENT_SPELL)
             {
-                if (!sp->spell)
-                {
-                    LogDebugFlag(LF_DB_TABLES, "SpellId %u in ai_agent for %u is invalid.", (unsigned int)fields[6].GetUInt32(), (unsigned int)sp->entryId);
-                    delete sp;
-                    sp = nullptr;
-                    continue;
-                }
-
                 if (sp->spell->getEffect(0) == SPELL_EFFECT_LEARN_SPELL || sp->spell->getEffect(1) == SPELL_EFFECT_LEARN_SPELL ||
                     sp->spell->getEffect(2) == SPELL_EFFECT_LEARN_SPELL)
                 {

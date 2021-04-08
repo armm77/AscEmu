@@ -19,6 +19,7 @@
 #ifndef CALENDARMGR_H
 #define CALENDARMGR_H
 
+#include <utility>
 #include <vector>
 #include <set>
 #include <map>
@@ -66,16 +67,9 @@ enum CalendarInviteStatus
 
 struct CalendarEvent
 { 
-    CalendarEvent(uint32 p_entry = 0, uint32 p_creator = 0, std::string p_title = "", std::string p_description = "", CalendarEventType p_type = CALENDAR_TYPE_RAID, uint32 p_dungeon = 0, time_t p_date = 0, uint32 p_flags = 0)
+    CalendarEvent(uint32 p_entry = 0, uint32 p_creator = 0, std::string p_title = "", std::string p_description = "", CalendarEventType p_type = CALENDAR_TYPE_RAID, uint32 p_dungeon = 0, time_t p_date = 0, uint32 p_flags = 0) :
+        entry(p_entry), creator(p_creator), title(std::move(p_title)), description(std::move(p_description)), type(p_type), dungeon(p_dungeon), date(p_date), flags(p_flags)
     {
-        entry = p_entry;
-        creator = p_creator;
-        title = p_title;
-        description = p_description;
-        type = p_type;
-        dungeon = p_dungeon;
-        date = p_date;
-        flags = p_flags;
     }
 
     ~CalendarEvent(){};
@@ -92,16 +86,9 @@ struct CalendarEvent
 
 struct CalendarInvite
 {
-    CalendarInvite(uint32 p_invite_id = 0, uint32 p_event = 0, uint32 p_invitee = 0, uint32 p_sender = 0, CalendarInviteStatus p_status = CALENDAR_STATUS_REMOVED, time_t p_statustime = 0, uint32 p_rank = 0, std::string p_text = "")
+    CalendarInvite(uint32 p_invite_id = 0, uint32 p_event = 0, uint32 p_invitee = 0, uint32 p_sender = 0, CalendarInviteStatus p_status = CALENDAR_STATUS_REMOVED, time_t p_statustime = 0, uint32 p_rank = 0, std::string p_text = "") :
+        invite_id(p_invite_id), event(p_event), invitee(p_invitee), sender(p_sender), status(p_status), statustime(p_statustime), rank(p_rank), text(std::move(p_text))
     {
-        invite_id = p_invite_id;
-        event = p_event;
-        invitee = p_invitee;
-        sender = p_sender;
-        status = p_status;
-        statustime = p_statustime;
-        rank = p_rank;
-        text = p_text;
     }
 
     ~CalendarInvite(){};

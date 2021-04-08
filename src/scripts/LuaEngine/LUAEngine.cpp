@@ -72,7 +72,7 @@ void report(lua_State* L)
 
 LuaEngine::LuaEngine() : lu(nullptr) {}
 
-void LuaEngine::ScriptLoadDir(std::string Dirname, LUALoadScripts* pak)
+void LuaEngine::ScriptLoadDir(const std::string Dirname, LUALoadScripts* pak)
 {
     DLLLogDetail("LuaEngine : Scanning Directory %s", Dirname.c_str());
 
@@ -142,7 +142,7 @@ bool LuaEngine::ExecuteCall(uint8_t params, uint8_t res)
 {
     bool ret = true;
     int top = lua_gettop(lu);
-    if (strcmp(luaL_typename(lu, top - params), "function"))
+    if (strcmp(luaL_typename(lu, top - params), "function") != 0)
     {
         ret = false;
         //Paroxysm : Stack Cleaning here, not sure what causes that crash in luaH_getstr, maybe due to lack of stack space. Anyway, experimental.
@@ -734,6 +734,7 @@ static int RegisterTimedEvent(lua_State* L)  //in this case, L == lu
     if (!delay || repeats < 0 || !funcName)
     {
         lua_pushnumber(L, LUA_REFNIL);
+        free((void*)funcName);
         return 1;
     }
 
@@ -745,7 +746,10 @@ static int RegisterTimedEvent(lua_State* L)  //in this case, L == lu
 
     int ref = luaL_ref(L, LUA_REGISTRYINDEX); //empty
     if (ref == LUA_REFNIL || ref == LUA_NOREF)
+    {
+        free((void*)funcName);
         return luaL_error(L, "Error in RegisterTimedEvent! Failed to create a valid reference.");
+    }
    
     TimedEvent* te = TimedEvent::Allocate(LuaGlobal::instance()->luaEngine().get(), new CallbackP2<LuaEngine, const char*, int>(LuaGlobal::instance()->luaEngine().get(), &LuaEngine::HyperCallFunction, funcName, ref), EVENT_LUA_TIMED, delay, repeats);
     EventInfoHolder* ek = new EventInfoHolder;
@@ -756,6 +760,7 @@ static int RegisterTimedEvent(lua_State* L)  //in this case, L == lu
     lua_settop(L, 0);
     lua_pushnumber(L, ref);
     delete ek;
+    free((void*)funcName);
     return 1;
 }
 
@@ -2430,7 +2435,7 @@ CreatureAIScript* CreateLuaCreature(Creature* src)
             typedef std::multimap<uint32_t, LuaCreature*> CRCMAP;
             CRCMAP& cMap = LuaGlobal::instance()->luaEngine()->getLuCreatureMap();
             script = new LuaCreature(src);
-            cMap.insert(std::make_pair(id, script));
+            cMap.emplace(std::make_pair(id, script));
             script->m_binding = pBinding;
         }
     }
@@ -2450,7 +2455,7 @@ GameObjectAIScript* CreateLuaGameObjectScript(GameObject* src)
             typedef std::multimap<uint32_t, LuaGameObjectScript*> GMAP;
             GMAP& gMap = LuaGlobal::instance()->luaEngine()->getLuGameObjectMap();
             script = new LuaGameObjectScript(src);
-            gMap.insert(std::make_pair(id, script));
+            gMap.emplace(std::make_pair(id, script));
             script->m_binding = pBinding;
         }
     }
@@ -2600,13 +2605,13 @@ void LuaEngine::Startup()
     for (auto& itr : m_unitBinding)
     {
         m_scriptMgr->register_creature_script(itr.first, CreateLuaCreature);
-        LuaGlobal::instance()->luaEngine()->getLuCreatureMap().insert(std::make_pair(itr.first, (LuaCreature*)nullptr));
+        LuaGlobal::instance()->luaEngine()->getLuCreatureMap().emplace(std::make_pair(itr.first, (LuaCreature*)nullptr));
     }
 
     for (auto& itr : m_gameobjectBinding)
     {
         m_scriptMgr->register_gameobject_script(itr.first, CreateLuaGameObjectScript);
-        LuaGlobal::instance()->luaEngine()->getLuGameObjectMap().insert(std::make_pair(itr.first, (LuaGameObjectScript*)nullptr));
+        LuaGlobal::instance()->luaEngine()->getLuGameObjectMap().emplace(std::make_pair(itr.first, (LuaGameObjectScript*)nullptr));
     }
 
     for (auto& itr : m_questBinding)
@@ -2978,7 +2983,7 @@ void LuaEngine::Restart()
         if (it == cMap.end())
         {
             m_scriptMgr->register_creature_script(itr.first, CreateLuaCreature);
-            cMap.insert(std::make_pair(itr.first, (LuaCreature*)nullptr));
+            cMap.emplace(std::make_pair(itr.first, (LuaCreature*)nullptr));
         }
         else
         {
@@ -2997,7 +3002,7 @@ void LuaEngine::Restart()
         if (it == gMap.end())
         {
             m_scriptMgr->register_gameobject_script(itr.first, CreateLuaGameObjectScript);
-            gMap.insert(std::make_pair(itr.first, (LuaGameObjectScript*)nullptr));
+            gMap.emplace(std::make_pair(itr.first, (LuaGameObjectScript*)nullptr));
         }
         else
         {
@@ -3042,7 +3047,7 @@ void LuaEngine::Restart()
         }
     }
 
-    for (auto itr = this->m_unit_gossipBinding.begin(); itr != m_unit_gossipBinding.end(); ++itr)
+    for (auto itr = m_unit_gossipBinding.begin(); itr != m_unit_gossipBinding.end(); ++itr)
     {
         typedef std::unordered_map<uint32_t, LuaGossip*> GMAP;
         GMAP& gMap = LuaGlobal::instance()->luaEngine()->getUnitGossipInterfaceMap();
@@ -3064,7 +3069,7 @@ void LuaEngine::Restart()
         }
     }
 
-    for (auto itr = this->m_item_gossipBinding.begin(); itr != m_item_gossipBinding.end(); ++itr)
+    for (auto itr = m_item_gossipBinding.begin(); itr != m_item_gossipBinding.end(); ++itr)
     {
         typedef std::unordered_map<uint32_t, LuaGossip*> GMAP;
         GMAP& gMap = LuaGlobal::instance()->luaEngine()->getItemGossipInterfaceMap();
@@ -3086,7 +3091,7 @@ void LuaEngine::Restart()
         }
     }
 
-    for (auto itr = this->m_go_gossipBinding.begin(); itr != m_go_gossipBinding.end(); ++itr)
+    for (auto itr = m_go_gossipBinding.begin(); itr != m_go_gossipBinding.end(); ++itr)
     {
         typedef std::unordered_map<uint32_t, LuaGossip*> GMAP;
         GMAP& gMap = LuaGlobal::instance()->luaEngine()->getGameObjectGossipInterfaceMap();

@@ -538,7 +538,7 @@ void Spell::ApplyAreaAura(uint8_t effectIndex)
                 eventtype = EVENT_ENEMY_AREA_AURA_UPDATE;
                 break;
             case SPELL_EFFECT_APPLY_OWNER_AREA_AURA:
-                eventtype = EVENT_ENEMY_AREA_AURA_UPDATE;
+                eventtype = EVENT_ENEMY_AREA_AURA_UPDATE; //Zyres: The same event as SPELL_EFFECT_APPLY_ENEMY_AREA_AURA? @Appled o.O
                 break;
         }
 
@@ -2365,13 +2365,14 @@ void Spell::SpellEffectBind(uint8_t effectIndex)
 
 void Spell::SpellEffectQuestComplete(uint8_t effectIndex) // Quest Complete
 {
-    if (!p_caster) return;
-    QuestLogEntry* en = p_caster->GetQuestLogForEntry(getSpellInfo()->getEffectMiscValue(effectIndex));
-    if (en)
+    if (!p_caster)
+        return;
+
+    if (auto* questLog = p_caster->getQuestLogByQuestId(getSpellInfo()->getEffectMiscValue(effectIndex)))
     {
-        en->setStateComplete();
-        en->updatePlayerFields();
-        en->sendQuestComplete();
+        questLog->setStateComplete();
+        questLog->updatePlayerFields();
+        questLog->sendQuestComplete();
     }
 }
 
@@ -3310,7 +3311,7 @@ void Spell::SpellEffectLeap(uint8_t effectIndex) // Leap
         unitTarget->GetPoint(unitTarget->GetOrientation(), radius, destx, desty, destz);
         if (playerTarget != nullptr)
             playerTarget->SafeTeleport(playerTarget->GetMapId(), playerTarget->GetInstanceID(), LocationVector(destx, desty, destz, playerTarget->GetOrientation()));
-        else if (unitTarget != nullptr)
+        else
             unitTarget->GetAIInterface()->splineMoveJump(destx, desty, destz, unitTarget->GetOrientation());
     }
     else
