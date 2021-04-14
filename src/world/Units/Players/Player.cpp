@@ -850,10 +850,6 @@ void Player::handleFall(MovementInfo const& /*movement_info*/)
 {
 }
 
-void Player::handleBreathing(MovementInfo const& /*movement_info*/, WorldSession* /*session*/)
-{
-}
-
 bool Player::isSpellFitByClassAndRace(uint32_t /*spell_id*/)
 {
     return false;
@@ -1086,86 +1082,6 @@ void Player::handleFall(MovementInfo const& movementInfo)
     z_axisposition = 0.0f;
 }
 
-void Player::handleBreathing(MovementInfo const& movementInfo, WorldSession* session)
-{
-    if (!worldConfig.server.enableBreathing || m_cheats.hasFlyCheat || m_bUnlimitedBreath || !isAlive() || m_cheats.hasGodModeCheat)
-    {
-        if (m_UnderwaterState & UNDERWATERSTATE_SWIMMING)
-            m_UnderwaterState &= ~UNDERWATERSTATE_SWIMMING;
-
-        if (m_UnderwaterState & UNDERWATERSTATE_UNDERWATER)
-        {
-            m_UnderwaterState &= ~UNDERWATERSTATE_UNDERWATER;
-
-            SendMirrorTimer(MIRROR_TYPE_BREATH, m_UnderwaterTime, m_UnderwaterMaxTime, -1);
-        }
-
-        if (session->m_bIsWLevelSet)
-        {
-            if ((movementInfo.getPosition()->z + m_noseLevel) > session->m_wLevel)
-            {
-                RemoveAurasByInterruptFlag(AURA_INTERRUPT_ON_LEAVE_WATER);
-
-                session->m_bIsWLevelSet = false;
-            }
-        }
-
-        return;
-    }
-
-    if (movementInfo.hasMovementFlag(MOVEFLAG_SWIMMING) && !(m_UnderwaterState & UNDERWATERSTATE_SWIMMING))
-    {
-        RemoveAurasByInterruptFlag(AURA_INTERRUPT_ON_ENTER_WATER);
-
-        if (!session->m_bIsWLevelSet)
-        {
-            session->m_wLevel = movementInfo.getPosition()->z + m_noseLevel * 0.95f;
-            session->m_bIsWLevelSet = true;
-        }
-
-        m_UnderwaterState |= UNDERWATERSTATE_SWIMMING;
-    }
-
-    if (!(movementInfo.hasMovementFlag(MOVEFLAG_SWIMMING)) && (movementInfo.hasMovementFlag(MOVEFLAG_NONE)) && (m_UnderwaterState & UNDERWATERSTATE_SWIMMING))
-    {
-        if ((movementInfo.getPosition()->z + m_noseLevel) > session->m_wLevel)
-        {
-            RemoveAurasByInterruptFlag(AURA_INTERRUPT_ON_LEAVE_WATER);
-
-            session->m_bIsWLevelSet = false;
-
-            m_UnderwaterState &= ~UNDERWATERSTATE_SWIMMING;
-        }
-    }
-
-    if (m_UnderwaterState & UNDERWATERSTATE_SWIMMING && !(m_UnderwaterState & UNDERWATERSTATE_UNDERWATER))
-    {
-        if ((movementInfo.getPosition()->z + m_noseLevel) < session->m_wLevel)
-        {
-            m_UnderwaterState |= UNDERWATERSTATE_UNDERWATER;
-            SendMirrorTimer(MIRROR_TYPE_BREATH, m_UnderwaterTime, m_UnderwaterMaxTime, -1);
-        }
-    }
-
-    if (m_UnderwaterState & UNDERWATERSTATE_SWIMMING && m_UnderwaterState & UNDERWATERSTATE_UNDERWATER)
-    {
-        if ((movementInfo.getPosition()->z + m_noseLevel) > session->m_wLevel)
-        {
-            m_UnderwaterState &= ~UNDERWATERSTATE_UNDERWATER;
-            SendMirrorTimer(MIRROR_TYPE_BREATH, m_UnderwaterTime, m_UnderwaterMaxTime, 10);
-        }
-    }
-
-    if (!(m_UnderwaterState & UNDERWATERSTATE_SWIMMING) && m_UnderwaterState & UNDERWATERSTATE_UNDERWATER)
-    {
-        if ((movementInfo.getPosition()->z + m_noseLevel) > session->m_wLevel)
-        {
-            m_UnderwaterState &= ~UNDERWATERSTATE_UNDERWATER;
-            SendMirrorTimer(MIRROR_TYPE_BREATH, m_UnderwaterTime, m_UnderwaterMaxTime, 10);
-        }
-    }
-}
-
 void Player::handleAuraInterruptForMovementFlags(MovementInfo const& movementInfo)
 {
     uint32_t auraInterruptFlags = 0;
@@ -1329,6 +1245,87 @@ bool Player::isSpellFitByClassAndRace(uint32_t spell_id)
 
 #endif
 
+void Player::handleBreathing(MovementInfo const& movementInfo, WorldSession* session)
+{
+    if (!worldConfig.server.enableBreathing || m_cheats.hasFlyCheat || m_isWaterBreathingEnabled || !isAlive() || m_cheats.hasGodModeCheat)
+    {
+        if (m_underwaterState & UNDERWATERSTATE_SWIMMING)
+            m_underwaterState &= ~UNDERWATERSTATE_SWIMMING;
+
+        if (m_underwaterState & UNDERWATERSTATE_UNDERWATER)
+        {
+            m_underwaterState &= ~UNDERWATERSTATE_UNDERWATER;
+            SendMirrorTimer(MIRROR_TYPE_BREATH, m_underwaterTime, m_underwaterMaxTime, -1);
+        }
+
+        if (session->m_bIsWLevelSet)
+        {
+            if (movementInfo.getPosition()->z + m_noseLevel > session->m_wLevel)
+            {
+                RemoveAurasByInterruptFlag(AURA_INTERRUPT_ON_LEAVE_WATER);
+                session->m_bIsWLevelSet = false;
+            }
+        }
+
+        return;
+    }
+
+    if (movementInfo.hasMovementFlag(MOVEFLAG_SWIMMING) && !(m_underwaterState & UNDERWATERSTATE_SWIMMING))
+    {
+        RemoveAurasByInterruptFlag(AURA_INTERRUPT_ON_ENTER_WATER);
+
+        if (!session->m_bIsWLevelSet)
+        {
+            session->m_wLevel = movementInfo.getPosition()->z + m_noseLevel * 0.95f;
+            session->m_bIsWLevelSet = true;
+        }
+
+        m_underwaterState |= UNDERWATERSTATE_SWIMMING;
+    }
+
+#if VERSION_STRING <= WotLK
+    if (!movementInfo.hasMovementFlag(MOVEFLAG_SWIMMING) && movementInfo.flags != MOVEFLAG_MOVE_STOP && m_underwaterState & UNDERWATERSTATE_SWIMMING)
+#else
+    if (!movementInfo.hasMovementFlag(MOVEFLAG_SWIMMING) && movementInfo.flags != MOVEFLAG_NONE && m_underwaterState & UNDERWATERSTATE_SWIMMING)
+#endif
+    {
+        if (movementInfo.getPosition()->z + m_noseLevel > session->m_wLevel)
+        {
+            RemoveAurasByInterruptFlag(AURA_INTERRUPT_ON_LEAVE_WATER);
+            session->m_bIsWLevelSet = false;
+
+            m_underwaterState &= ~UNDERWATERSTATE_SWIMMING;
+        }
+    }
+
+    if (m_underwaterState & UNDERWATERSTATE_SWIMMING && !(m_underwaterState & UNDERWATERSTATE_UNDERWATER))
+    {
+        if (movementInfo.getPosition()->z + m_noseLevel < session->m_wLevel)
+        {
+            m_underwaterState |= UNDERWATERSTATE_UNDERWATER;
+            SendMirrorTimer(MIRROR_TYPE_BREATH, m_underwaterTime, m_underwaterMaxTime, -1);
+        }
+    }
+
+    if (m_underwaterState & UNDERWATERSTATE_SWIMMING && m_underwaterState & UNDERWATERSTATE_UNDERWATER)
+    {
+        if (movementInfo.getPosition()->z + m_noseLevel > session->m_wLevel)
+        {
+            m_underwaterState &= ~UNDERWATERSTATE_UNDERWATER;
+            SendMirrorTimer(MIRROR_TYPE_BREATH, m_underwaterTime, m_underwaterMaxTime, 10);
+        }
+    }
+
+    if (!(m_underwaterState & UNDERWATERSTATE_SWIMMING) && m_underwaterState & UNDERWATERSTATE_UNDERWATER)
+    {
+        if (movementInfo.getPosition()->z + m_noseLevel > session->m_wLevel)
+        {
+            m_underwaterState &= ~UNDERWATERSTATE_UNDERWATER;
+            SendMirrorTimer(MIRROR_TYPE_BREATH, m_underwaterTime, m_underwaterMaxTime, 10);
+        }
+    }
+}
+
 bool Player::isInCity() const
 {
     const auto at = GetMapMgr()->GetArea(GetPositionX(), GetPositionY(), GetPositionZ());
@@ -1346,6 +1343,99 @@ bool Player::isInCity() const
 
     return false;
 }
+
+//\todo: find another solution for this
+void Player::initialiseNoseLevel()
+{
+    // Set the height of the player
+    switch (getRace())
+    {
+    case RACE_HUMAN:
+        // female
+        if (getGender())
+            m_noseLevel = 1.72f;
+        // male
+        else
+            m_noseLevel = 1.78f;
+        break;
+    case RACE_ORC:
+        if (getGender())
+            m_noseLevel = 1.82f;
+        else
+            m_noseLevel = 1.98f;
+        break;
+    case RACE_DWARF:
+        if (getGender())
+            m_noseLevel = 1.27f;
+        else
+            m_noseLevel = 1.4f;
+        break;
+    case RACE_NIGHTELF:
+        if (getGender())
+            m_noseLevel = 1.84f;
+        else
+            m_noseLevel = 2.13f;
+        break;
+    case RACE_UNDEAD:
+        if (getGender())
+            m_noseLevel = 1.61f;
+        else
+            m_noseLevel = 1.8f;
+        break;
+    case RACE_TAUREN:
+        if (getGender())
+            m_noseLevel = 2.48f;
+        else
+            m_noseLevel = 2.01f;
+        break;
+    case RACE_GNOME:
+        if (getGender())
+            m_noseLevel = 1.06f;
+        else
+            m_noseLevel = 1.04f;
+        break;
+#if VERSION_STRING >= Cata
+    case RACE_GOBLIN:
+        if (getGender())
+            m_noseLevel = 1.06f;
+        else
+            m_noseLevel = 1.04f;
+        break;
+#endif
+    case RACE_TROLL:
+        if (getGender())
+            m_noseLevel = 2.02f;
+        else
+            m_noseLevel = 1.93f;
+        break;
+#if VERSION_STRING > Classic
+    case RACE_BLOODELF:
+        if (getGender())
+            m_noseLevel = 1.83f;
+        else
+            m_noseLevel = 1.93f;
+        break;
+    case RACE_DRAENEI:
+        if (getGender())
+            m_noseLevel = 2.09f;
+        else
+            m_noseLevel = 2.36f;
+        break;
+#endif
+#if VERSION_STRING >= Cata
+    case RACE_WORGEN:
+        if (getGender())
+            m_noseLevel = 1.72f;
+        else
+            m_noseLevel = 1.78f;
+        break;
+#endif
+    }
+}
+
+void Player::setTransferStatus(uint8_t status) { m_transferStatus = status; }
+uint8_t Player::getTransferStatus() const { return m_transferStatus; }
+bool Player::isTransferPending() const { return getTransferStatus() == TRANSFER_PENDING; }
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Commands
@@ -1547,11 +1637,6 @@ void Player::applyLevelInfo(uint32_t newLevel)
 
     // Reset current played time
     m_playedtime[0] = 0;
-}
-
-bool Player::isTransferPending() const
-{
-    return GetPlayerStatus() == TRANSFER_PENDING;
 }
 
 bool Player::isClassMage() { return false; }
@@ -3261,6 +3346,27 @@ QuestLogEntry* Player::getQuestLogBySlotId(uint32_t slotId) const
     return nullptr;
 }
 
+void Player::addQuestIdToFinishedDailies(uint32_t questId)
+{
+    std::lock_guard<std::mutex> lock(m_mutextDailies);
+    m_finishedDailies.insert(questId);
+}
+std::set<uint32_t> Player::getFinishedDailies() const
+{
+    std::lock_guard<std::mutex> lock(m_mutextDailies);
+    return m_finishedDailies;
+}
+bool Player::hasQuestInFinishedDailies(uint32_t questId) const
+{
+    std::lock_guard<std::mutex> lock(m_mutextDailies);
+    return m_finishedDailies.find(questId) != m_finishedDailies.end();
+}
+void Player::resetFinishedDailies()
+{
+    std::lock_guard<std::mutex> lock(m_mutextDailies);
+    m_finishedDailies.clear();
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////
 // Social
 void Player::loadFriendList()
@@ -3569,8 +3675,6 @@ void Player::sendMovie([[maybe_unused]]uint32_t movieId)
     m_session->SendPacket(SmsgTriggerMovie(movieId).serialise().get());
 #endif
 }
-
-uint8 Player::GetPlayerStatus() const { return m_status; }
 
 PlayerSpec& Player::getActiveSpec()
 {

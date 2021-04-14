@@ -177,9 +177,7 @@ Player::Player(uint32 guid)
     SpellHasteRatingBonus(1.0f),
     m_nextSave(Util::getMSTime() + worldConfig.getIntRate(INTRATE_SAVE)),
     m_lifetapbonus(0),
-    m_bUnlimitedBreath(false),
-    m_UnderwaterTime(180000),
-    m_UnderwaterState(0),
+
     // Battleground
     m_bg(nullptr),
     m_bgHasFlag(false),
@@ -191,18 +189,14 @@ Player::Player(uint32 guid)
     DetectedRange(0),
     PctIgnoreRegenModifier(0.0f),
     m_retainedrage(0),
-    SoulStone(0),
-    SoulStoneReceiver(0),
     misdirectionTarget(0),
     bReincarnation(false),
     m_MountSpellId(0),
     TrackingSpell(0),
-    m_CurrentCharm(0),
     // gm stuff
     //m_invincible(false),
     m_Autojoin(false),
     m_AutoAddMem(false),
-    m_UnderwaterMaxTime(180000),
     m_UnderwaterLastDmg(Util::getMSTime()),
     m_resurrectHealth(0),
     m_resurrectMana(0),
@@ -242,9 +236,6 @@ Player::Player(uint32 guid)
     //FIX for professions
     weapon_proficiency(0x4000), //2^14
     m_talentresettimes(0),
-    m_status(0),
-    m_curTarget(0),
-    m_curSelection(0),
     m_targetIcon(0),
     m_session(nullptr),
     m_SummonedObject(nullptr),
@@ -342,7 +333,6 @@ Player::Player(uint32 guid)
 
     blinked = false;
     m_explorationTimer = Util::getMSTime();
-    linkTarget = nullptr;
     m_pvpTimer = 0;
     m_globalCooldown = 0;
     m_lastHonorResetTime = 0;
@@ -431,8 +421,6 @@ Player::Player(uint32 guid)
     m_CurrentTaxiPath = nullptr;
 
     m_fallDisabledUntil = 0;
-    m_lfgMatch = nullptr;
-    m_lfgInviterGuid = 0;
     m_indoorCheckTimer = 0;
     m_taxiMapChangeNode = 0;
     this->OnLogin();
@@ -447,7 +435,6 @@ Player::Player(uint32 guid)
     m_taxiPaths.clear();
     m_removequests.clear();
     m_finishedQuests.clear();
-    m_finishedDailies.clear();
     quest_spells.clear();
     quest_mobs.clear();
 
@@ -486,7 +473,7 @@ Player::Player(uint32 guid)
     lvlinfo = nullptr;
     load_health = 0;
     load_mana = 0;
-    m_noseLevel = 0;
+
     m_StableSlotCount = 0;
     m_timeSyncCounter = 0;
     m_timeSyncTimer = 0;
@@ -785,6 +772,8 @@ bool Player::Create(CharCreate& charCreateContent)
     setClass(charCreateContent._class);
     setGender(charCreateContent.gender);
 
+    initialiseNoseLevel();
+
     setInitialDisplayIds(charCreateContent.gender, charCreateContent._race);
 
     EventModelChange();
@@ -923,19 +912,19 @@ void Player::Update(unsigned long time_passed)
     }
 
     // Breathing
-    if (m_UnderwaterState & UNDERWATERSTATE_UNDERWATER)
+    if (m_underwaterState & UNDERWATERSTATE_UNDERWATER)
     {
         // keep subtracting timer
-        if (m_UnderwaterTime)
+        if (m_underwaterTime)
         {
             // not taking dmg yet
-            if (time_passed >= m_UnderwaterTime)
-                m_UnderwaterTime = 0;
+            if (time_passed >= m_underwaterTime)
+                m_underwaterTime = 0;
             else
-                m_UnderwaterTime -= time_passed;
+                m_underwaterTime -= time_passed;
         }
 
-        if (!m_UnderwaterTime)
+        if (!m_underwaterTime)
         {
             // check last damage dealt timestamp, and if enough time has elapsed deal damage
             if (mstime >= m_UnderwaterLastDmg)
@@ -951,21 +940,21 @@ void Player::Update(unsigned long time_passed)
     else
     {
         // check if we're not on a full breath timer
-        if (m_UnderwaterTime < m_UnderwaterMaxTime)
+        if (m_underwaterTime < m_underwaterMaxTime)
         {
             // regenning
-            m_UnderwaterTime += (time_passed * 10);
+            m_underwaterTime += (time_passed * 10);
 
-            if (m_UnderwaterTime >= m_UnderwaterMaxTime)
+            if (m_underwaterTime >= m_underwaterMaxTime)
             {
-                m_UnderwaterTime = m_UnderwaterMaxTime;
+                m_underwaterTime = m_underwaterMaxTime;
                 sendStopMirrorTimerPacket(MIRROR_TYPE_BREATH);
             }
         }
     }
 
     // Lava Damage
-    if (m_UnderwaterState & UNDERWATERSTATE_LAVA)
+    if (m_underwaterState & UNDERWATERSTATE_LAVA)
     {
         // check last damage dealt timestamp, and if enough time has elapsed deal damage
         if (mstime >= m_UnderwaterLastDmg)
@@ -1111,8 +1100,8 @@ void Player::_EventAttack(bool offhand)
         return;
 
     Unit* pVictim = nullptr;
-    if (m_curSelection)
-        pVictim = GetMapMgr()->GetUnit(m_curSelection);
+    if (getTargetGuid())
+        pVictim = GetMapMgr()->GetUnit(getTargetGuid());
 
     //Can't find victim, stop attacking
     if (!pVictim)
@@ -1186,26 +1175,26 @@ void Player::_EventAttack(bool offhand)
 
 void Player::_EventCharmAttack()
 {
-    if (!m_CurrentCharm)
+    if (!getCharmGuid())
         return;
 
     if (!IsInWorld())
     {
-        m_CurrentCharm = 0;
+        setCharmGuid(0);
         sEventMgr.RemoveEvents(this, EVENT_PLAYER_CHARM_ATTACK);
         return;
     }
 
-    if (m_curSelection == 0)
+    if (getTargetGuid() == 0)
     {
         sEventMgr.RemoveEvents(this, EVENT_PLAYER_CHARM_ATTACK);
         return;
     }
 
-    Unit* pVictim = GetMapMgr()->GetUnit(m_curSelection);
+    Unit* pVictim = GetMapMgr()->GetUnit(getTargetGuid());
     if (!pVictim)
     {
-        LOG_ERROR("WORLD: " I64FMT " doesn't exist.", m_curSelection);
+        LOG_ERROR("WORLD: " I64FMT " doesn't exist.", getTargetGuid());
         LOG_DETAIL("Player::Update:  No valid current selection to attack, stopping attack");
         this->interruptHealthRegeneration(5000); //prevent clicking off creature for a quick heal
         removeUnitStateFlag(UNIT_STATE_ATTACKING);
@@ -1213,7 +1202,7 @@ void Player::_EventCharmAttack()
     }
     else
     {
-        Unit* currentCharm = GetMapMgr()->GetUnit(m_CurrentCharm);
+        Unit* currentCharm = GetMapMgr()->GetUnit(getCharmGuid());
         if (!currentCharm)
             return;
 
@@ -1264,7 +1253,7 @@ void Player::_EventCharmAttack()
                 const auto spellInfo = sSpellMgr.getSpellInfo(currentCharm->GetOnMeleeSpell());
                 currentCharm->SetOnMeleeSpell(0);
                 Spell* spell = sSpellMgr.newSpell(currentCharm, spellInfo, true, nullptr);
-                SpellCastTargets targets(GetSelection());
+                SpellCastTargets targets(getTargetGuid());
                 spell->prepare(&targets);
                 //delete spell;         // deleted automatically, no need to do this.
             }
@@ -1280,7 +1269,7 @@ void Player::EventAttackStart()
 
 void Player::EventAttackStop()
 {
-    if (m_CurrentCharm != 0)
+    if (getCharmGuid() != 0)
         sEventMgr.RemoveEvents(this, EVENT_PLAYER_CHARM_ATTACK);
 
     m_attacking = false;
@@ -2254,11 +2243,10 @@ void Player::SaveToDB(bool bNewCharacter /* =false */)
         ss << (*finishedQuests) << ",";
     ss << "'" << ", ";
 
+    // add finished dailies
     ss << "'";
-    DailyMutex.Acquire();
-    for (auto finishedDailies = m_finishedDailies.begin(); finishedDailies != m_finishedDailies.end(); ++finishedDailies)
-        ss << (*finishedDailies) << ",";
-    DailyMutex.Release();
+    for (auto finishedDailies : getFinishedDailies())
+        ss << finishedDailies << ",";
     ss << "'" << ", ";
 
     ss << m_honorRolloverTime << ", " << m_killsToday << ", " << m_killsYesterday << ", " << m_killsLifetime << ", " << m_honorToday << ", " << m_honorYesterday << ", " << m_honorPoints << ", ";
@@ -2537,7 +2525,7 @@ void Player::LoadFromDBProc(QueryResultVector & results)
     else
         m_bgTeam = m_team = 1;
 
-    SetNoseLevel();
+    initialiseNoseLevel();
 
     // set power type
     setPowerType(static_cast<uint8>(myClass->power_type));
@@ -5159,17 +5147,16 @@ void Player::onRemoveInRangeObject(Object* pObj)
     m_visibleObjects.erase(pObj->getGuid());
     Unit::onRemoveInRangeObject(pObj);
 
-    if (pObj->getGuid() == m_CurrentCharm)
+    if (pObj->getGuid() == getCharmGuid())
     {
-        Unit* p = GetMapMgr()->GetUnit(m_CurrentCharm);
+        Unit* p = GetMapMgr()->GetUnit(getCharmGuid());
         if (!p)
             return;
 
         UnPossess();
         if (isCastingSpell())
             interruptSpell();       // cancel the spell
-        m_CurrentCharm = 0;
-
+        setCharmGuid(0);
     }
 
     // We've just gone out of range of our pet :(
@@ -6038,7 +6025,7 @@ void Player::_Relocate(uint32 mapid, const LocationVector & v, bool sendpending,
         SendTeleportAckPacket(v.x, v.y, v.z, v.o);
     }
 
-    SetPlayerStatus(TRANSFER_PENDING);
+    setTransferStatus(TRANSFER_PENDING);
     m_sentTeleportPosition = v;
     SetPosition(v);
 
@@ -6286,7 +6273,7 @@ void Player::ZoneUpdate(uint32 ZoneId)
     auto at = GetMapMgr()->GetArea(GetPositionX(), GetPositionY(), GetPositionZ());
     if (at && (at->team == AREAC_SANCTUARY || at->flags & AREA_SANCTUARY))
     {
-        Unit* pUnit = (GetSelection() == 0) ? nullptr : (m_mapMgr ? m_mapMgr->GetUnit(GetSelection()) : nullptr);
+        Unit* pUnit = (getTargetGuid() == 0) ? nullptr : (m_mapMgr ? m_mapMgr->GetUnit(getTargetGuid()) : nullptr);
         if (pUnit && DuelingWith != pUnit)
         {
             EventAttackStop();
@@ -6822,8 +6809,8 @@ bool Player::SafeTeleport(uint32 MapID, uint32 InstanceID, const LocationVector 
     }
 
     // make sure player does not drown when teleporting from under water
-    if (m_UnderwaterState & UNDERWATERSTATE_UNDERWATER)
-        m_UnderwaterState &= ~UNDERWATERSTATE_UNDERWATER;
+    if (m_underwaterState & UNDERWATERSTATE_UNDERWATER)
+        m_underwaterState &= ~UNDERWATERSTATE_UNDERWATER;
 
     if (flying_aura && ((m_mapId != 530) && (m_mapId != 571 || !HasSpell(54197) && getDeathState() == ALIVE)))
         // can only fly in outlands or northrend (northrend requires cold weather flying)
@@ -6901,8 +6888,8 @@ bool Player::SafeTeleport(uint32 MapID, uint32 InstanceID, const LocationVector 
     }
 
     // make sure player does not drown when teleporting from under water
-    if (m_UnderwaterState & UNDERWATERSTATE_UNDERWATER)
-        m_UnderwaterState &= ~UNDERWATERSTATE_UNDERWATER;
+    if (m_underwaterState & UNDERWATERSTATE_UNDERWATER)
+        m_underwaterState &= ~UNDERWATERSTATE_UNDERWATER;
 
     if (flying_aura && ((m_mapId != 530) && (m_mapId != 571 || !HasSpell(54197) && getDeathState() == ALIVE)))
         // can only fly in outlands or northrend (northrend requires cold weather flying)
@@ -6939,7 +6926,7 @@ bool Player::SafeTeleport(uint32 MapID, uint32 InstanceID, const LocationVector 
     {
         if (GetSession())
         {
-            SetPlayerStatus(TRANSFER_PENDING);
+            setTransferStatus(TRANSFER_PENDING);
             m_sentTeleportPosition = vec;
 
             SetPosition(vec);
@@ -7000,7 +6987,7 @@ void Player::SafeTeleport(MapMgr* mgr, const LocationVector & vec)
 
     GetSession()->SendPacket(SmsgNewWorld(mgr->GetMapId(), vec).serialise().get());
 
-    SetPlayerStatus(TRANSFER_PENDING);
+    setTransferStatus(TRANSFER_PENDING);
     m_sentTeleportPosition = vec;
     SetPosition(vec);
     SpeedCheatReset();
@@ -8156,7 +8143,7 @@ void Player::UpdateComboPoints()
     if (m_comboTarget != 0)
     {
         Unit* target = (m_mapMgr != nullptr) ? m_mapMgr->GetUnit(m_comboTarget) : NULL;
-        if (!target || target->isDead() || GetSelection() != m_comboTarget)
+        if (!target || target->isDead() || getTargetGuid() != m_comboTarget)
         {
             buffer[0] = buffer[1] = 0;
         }
@@ -8183,135 +8170,12 @@ void Player::SendAreaTriggerMessage(const char* message, ...)
     m_session->SendPacket(SmsgAreaTriggerMessage(0, msg, 0).serialise().get());
 }
 
-void Player::removeSoulStone()
-{
-    if (!this->SoulStone)
-        return;
-
-    uint32 sSoulStone = 0;
-    switch (this->SoulStone)
-    {
-        case 3026:
-            sSoulStone = 20707;
-        break;
-        case 20758:
-            sSoulStone = 20762;
-        break;
-        case 20759:
-            sSoulStone = 20763;
-        break;
-        case 20760:
-            sSoulStone = 20764;
-        break;
-        case 20761:
-            sSoulStone = 20765;
-        break;
-        case 27240:
-            sSoulStone = 27239;
-        break;
-        case 47882:
-            sSoulStone = 47883;
-        break;
-    }
-    this->RemoveAura(sSoulStone);
-    this->SoulStone = this->SoulStoneReceiver = 0; //just incase
-}
-
 void Player::SoftDisconnect()
 {
     sEventMgr.RemoveEvents(this, EVENT_PLAYER_SOFT_DISCONNECT);
     WorldSession* session = GetSession();
     session->LogoutPlayer(true);
     session->Disconnect();
-}
-
-//\todo: find another solution for this
-void Player::SetNoseLevel()
-{
-    // Set the height of the player
-    switch (getRace())
-    {
-        case RACE_HUMAN:
-            // female
-            if (getGender())
-                m_noseLevel = 1.72f;
-            // male
-            else
-                m_noseLevel = 1.78f;
-            break;
-        case RACE_ORC:
-            if (getGender())
-                m_noseLevel = 1.82f;
-            else
-                m_noseLevel = 1.98f;
-            break;
-        case RACE_DWARF:
-            if (getGender())
-                m_noseLevel = 1.27f;
-            else
-                m_noseLevel = 1.4f;
-            break;
-        case RACE_NIGHTELF:
-            if (getGender())
-                m_noseLevel = 1.84f;
-            else
-                m_noseLevel = 2.13f;
-            break;
-        case RACE_UNDEAD:
-            if (getGender())
-                m_noseLevel = 1.61f;
-            else
-                m_noseLevel = 1.8f;
-            break;
-        case RACE_TAUREN:
-            if (getGender())
-                m_noseLevel = 2.48f;
-            else
-                m_noseLevel = 2.01f;
-            break;
-        case RACE_GNOME:
-            if (getGender())
-                m_noseLevel = 1.06f;
-            else
-                m_noseLevel = 1.04f;
-            break;
-#if VERSION_STRING >= Cata
-        case RACE_GOBLIN:
-            if (getGender())
-                m_noseLevel = 1.06f;
-            else
-                m_noseLevel = 1.04f;
-            break;
-#endif
-        case RACE_TROLL:
-            if (getGender())
-                m_noseLevel = 2.02f;
-            else
-                m_noseLevel = 1.93f;
-            break;
-#if VERSION_STRING > Classic
-        case RACE_BLOODELF:
-            if (getGender())
-                m_noseLevel = 1.83f;
-            else
-                m_noseLevel = 1.93f;
-            break;
-        case RACE_DRAENEI:
-            if (getGender())
-                m_noseLevel = 2.09f;
-            else
-                m_noseLevel = 2.36f;
-            break;
-#endif
-#if VERSION_STRING >= Cata
-        case RACE_WORGEN:
-            if (getGender())
-                m_noseLevel = 1.72f;
-            else
-                m_noseLevel = 1.78f;
-            break;
-#endif
-    }
 }
 
 void Player::SummonRequest(uint32 Requestor, uint32 ZoneID, uint32 MapID, uint32 InstanceID, const LocationVector & Position)
@@ -9871,9 +9735,7 @@ void Player::Die(Unit* pAttacker, uint32 /*damage*/, uint32 spellid)
         uint32 self_res_spell = 0;
         if (m_bg == nullptr || (m_bg != nullptr && !isArena(m_bg->GetType())))
         {
-            self_res_spell = SoulStone;
-
-            SoulStone = SoulStoneReceiver = 0;
+            self_res_spell = getSelfResurrectSpell();
 
             if (self_res_spell == 0 && bReincarnation)
             {
@@ -9897,8 +9759,8 @@ void Player::Die(Unit* pAttacker, uint32 /*damage*/, uint32 spellid)
     CALL_SCRIPT_EVENT(pAttacker, OnTargetDied)(this);
     pAttacker->smsg_AttackStop(this);
 
-    m_UnderwaterTime = 0;
-    m_UnderwaterState = 0;
+    m_underwaterTime = 0;
+    m_underwaterState = 0;
 
     getSummonInterface()->removeAllSummons();
     DismissActivePets();
@@ -9990,9 +9852,9 @@ void Player::Phase(uint8 command, uint32 newphase)
     }
     //We should phase other, non-combat "pets" too...
 
-    if (m_CurrentCharm != 0)
+    if (getCharmGuid() != 0)
     {
-        Unit* charm = m_mapMgr->GetUnit(m_CurrentCharm);
+        Unit* charm = m_mapMgr->GetUnit(getCharmGuid());
         if (charm == NULL)
             return;
 
@@ -10635,7 +10497,7 @@ void Player::SendTeleportPacket(float x, float y, float z, float o)
 
 void Player::SendTeleportAckPacket(float x, float y, float z, float o)
 {
-    SetPlayerStatus(TRANSFER_PENDING);
+    setTransferStatus(TRANSFER_PENDING);
 
 #if VERSION_STRING < WotLK
     WorldPacket data(MSG_MOVE_TELEPORT_ACK, 41);

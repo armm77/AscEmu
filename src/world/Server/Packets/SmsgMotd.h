@@ -40,9 +40,10 @@ namespace AscEmu::Packets
                 packet << line;
 
 #else
-            ByteBuffer stringBuffer;
 
-            packet.PutBits(0, lineCount, 4);
+            packet.writeBits(0, 4);
+
+            ByteBuffer stringBuffer;
 
             for (const auto& line : motdLines)
             {
@@ -50,6 +51,7 @@ namespace AscEmu::Packets
                 stringBuffer.WriteString(line);
             }
 
+            packet.PutBits(0, lineCount, 4);
             packet.flushBits();
             packet.append(stringBuffer);
 #endif

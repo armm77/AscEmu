@@ -1372,15 +1372,15 @@ public:
 
     static int GetPrimaryCombatTarget(lua_State* L, Unit* ptr)
     {
-        // should use now instead of GetTarget
         TEST_PLAYER()
+
         if (!ptr->CombatStatus.IsInCombat())
         {
             lua_pushinteger(L, 0);
             return 1;
         }
-        else
-            PUSH_UNIT(L, ptr->GetMapMgr()->GetUnit(static_cast<Player*>(ptr)->CombatStatus.GetPrimaryAttackTarget()));
+
+        PUSH_UNIT(L, ptr->GetMapMgr()->GetUnit(dynamic_cast<Player*>(ptr)->CombatStatus.GetPrimaryAttackTarget()));
 
         return 1;
     }
@@ -2971,7 +2971,7 @@ public:
     {
         TEST_PLAYER()
 
-        if (static_cast<Player*>(ptr)->m_UnderwaterState)
+        if (static_cast<Player*>(ptr)->m_underwaterState)
             lua_pushboolean(L, 1);
         else
             lua_pushboolean(L, 0);
@@ -4003,24 +4003,11 @@ public:
         return 1;
     }
 
-    static int GetTarget(lua_State* L, Unit* ptr)
-    {
-        DLLLogDetail("LuaEngine : GetTarget is outdated. Please use GetPrimaryCombatTarget.");
-        TEST_PLAYER()
-        Player* plr = static_cast<Player*>(ptr);
-        Unit* target = plr->GetMapMgr()->GetUnit(plr->GetTarget());
-        if (target != nullptr)
-            PUSH_UNIT(L, target);
-        else
-            lua_pushnil(L);
-        return 1;
-    }
-
     static int GetSelection(lua_State* L, Unit* ptr)
     {
         TEST_PLAYER()
         Player* plr = static_cast<Player*>(ptr);
-        Unit* selection = plr->GetMapMgr()->GetUnit(plr->GetSelection());
+        Unit* selection = plr->GetMapMgr()->GetUnit(plr->getTargetGuid());
         if (selection)
             PUSH_UNIT(L, selection);
         else
@@ -5908,7 +5895,7 @@ public:
     static int StopPlayerAttack(lua_State* /*L*/, Unit* ptr)
     {
         TEST_PLAYER()
-        ptr->smsg_AttackStop(ptr->GetMapMgr()->GetUnit(static_cast<Player*>(ptr)->GetSelection()));
+        ptr->smsg_AttackStop(ptr->GetMapMgr()->GetUnit(static_cast<Player*>(ptr)->getTargetGuid()));
         return 0;
     }
 

@@ -38,7 +38,7 @@ void WorldSession::handleSetActiveMoverOpcode(WorldPacket& recvPacket)
     if (srlPacket.guid == m_MoverWoWGuid.getRawGuid())
         return;
 
-    if (_player->m_CurrentCharm != srlPacket.guid.getRawGuid() || _player->getGuid() != srlPacket.guid.getRawGuid())
+    if (_player->getCharmGuid() != srlPacket.guid.getRawGuid() || _player->getGuid() != srlPacket.guid.getRawGuid())
     {
         auto bad_packet = true;
 #if VERSION_STRING >= TBC
@@ -59,104 +59,6 @@ void WorldSession::handleSetActiveMoverOpcode(WorldPacket& recvPacket)
     // set up to the movement packet
     movement_packet[0] = m_MoverWoWGuid.GetNewGuidMask();
     memcpy(&movement_packet[1], m_MoverWoWGuid.GetNewGuid(), m_MoverWoWGuid.GetNewGuidLen());
-}
-#endif
-
-#if VERSION_STRING <= WotLK
-void _HandleBreathing(MovementInfo & movement_info, Player* _player, WorldSession* pSession)
-{
-    // no water breathing is required
-    if (!worldConfig.server.enableBreathing || _player->m_cheats.hasFlyCheat || _player->m_bUnlimitedBreath || !_player->isAlive() || _player->m_cheats.hasGodModeCheat)
-    {
-        // player is flagged as in water
-        if (_player->m_UnderwaterState & UNDERWATERSTATE_SWIMMING)
-            _player->m_UnderwaterState &= ~UNDERWATERSTATE_SWIMMING;
-
-        // player is flagged as under water
-        if (_player->m_UnderwaterState & UNDERWATERSTATE_UNDERWATER)
-        {
-            _player->m_UnderwaterState &= ~UNDERWATERSTATE_UNDERWATER;
-            _player->SendMirrorTimer(MIRROR_TYPE_BREATH, _player->m_UnderwaterTime, _player->m_UnderwaterMaxTime, -1);
-        }
-
-        // player is above water level
-        if (pSession->m_bIsWLevelSet)
-        {
-            if ((movement_info.position.z + _player->m_noseLevel) > pSession->m_wLevel)
-            {
-                _player->RemoveAurasByInterruptFlag(AURA_INTERRUPT_ON_LEAVE_WATER);
-
-                // unset swim session water level
-                pSession->m_bIsWLevelSet = false;
-            }
-        }
-
-        return;
-    }
-
-    //player is swimming and not flagged as in the water
-    if (movement_info.flags & MOVEFLAG_SWIMMING && !(_player->m_UnderwaterState & UNDERWATERSTATE_SWIMMING))
-    {
-        _player->RemoveAurasByInterruptFlag(AURA_INTERRUPT_ON_ENTER_WATER);
-
-        // get water level only if it was not set before
-        if (!pSession->m_bIsWLevelSet)
-        {
-            // water level is somewhere below the nose of the character when entering water
-            pSession->m_wLevel = movement_info.position.z + _player->m_noseLevel * 0.95f;
-            pSession->m_bIsWLevelSet = true;
-        }
-
-        _player->m_UnderwaterState |= UNDERWATERSTATE_SWIMMING;
-    }
-
-    // player is not swimming and is not stationary and is flagged as in the water
-    if (!(movement_info.flags & MOVEFLAG_SWIMMING) && (movement_info.flags != MOVEFLAG_MOVE_STOP) && (_player->m_UnderwaterState & UNDERWATERSTATE_SWIMMING))
-    {
-        // player is above water level
-        if ((movement_info.position.z + _player->m_noseLevel) > pSession->m_wLevel)
-        {
-            _player->RemoveAurasByInterruptFlag(AURA_INTERRUPT_ON_LEAVE_WATER);
-
-            // unset swim session water level
-            pSession->m_bIsWLevelSet = false;
-
-            _player->m_UnderwaterState &= ~UNDERWATERSTATE_SWIMMING;
-        }
-    }
-
-    // player is flagged as in the water and is not flagged as under the water
-    if (_player->m_UnderwaterState & UNDERWATERSTATE_SWIMMING && !(_player->m_UnderwaterState & UNDERWATERSTATE_UNDERWATER))
-    {
-        //the player is in the water and has gone under water, requires breath bar.
-        if ((movement_info.position.z + _player->m_noseLevel) < pSession->m_wLevel)
-        {
-            _player->m_UnderwaterState |= UNDERWATERSTATE_UNDERWATER;
-            _player->SendMirrorTimer(MIRROR_TYPE_BREATH, _player->m_UnderwaterTime, _player->m_UnderwaterMaxTime, -1);
-        }
-    }
-
-    // player is flagged as in the water and is flagged as under the water
-    if (_player->m_UnderwaterState & UNDERWATERSTATE_SWIMMING && _player->m_UnderwaterState & UNDERWATERSTATE_UNDERWATER)
-    {
-        //the player is in the water but their face is above water, no breath bar needed.
-        if ((movement_info.position.z + _player->m_noseLevel) > pSession->m_wLevel)
-        {
-            _player->m_UnderwaterState &= ~UNDERWATERSTATE_UNDERWATER;
-            _player->SendMirrorTimer(MIRROR_TYPE_BREATH, _player->m_UnderwaterTime, _player->m_UnderwaterMaxTime, 10);
-        }
-    }
-
-    // player is flagged as not in the water and is flagged as under the water
-    if (!(_player->m_UnderwaterState & UNDERWATERSTATE_SWIMMING) && _player->m_UnderwaterState & UNDERWATERSTATE_UNDERWATER)
-    {
-        //the player is out of the water, no breath bar needed.
-        if ((movement_info.position.z + _player->m_noseLevel) > pSession->m_wLevel)
-        {
-            _player->m_UnderwaterState &= ~UNDERWATERSTATE_UNDERWATER;
-            _player->SendMirrorTimer(MIRROR_TYPE_BREATH, _player->m_UnderwaterTime, _player->m_UnderwaterMaxTime, 10);
-        }
-    }
 }
 #endif
 
@@ -449,8 +351,7 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvData)
     /************************************************************************/
     /* Breathing System                                                     */
     /************************************************************************/
-    // TODO Restructure and implement
-    _HandleBreathing(movement_info, _player, this);
+    _player->handleBreathing(movement_info, this);
 
     /************************************************************************/
     /* Remove Spells                                                        */
@@ -569,7 +470,7 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvPacket)
 {
     CHECK_INWORLD_RETURN
 
-    if (/*_player->getCharmedByGuid() || */_player->GetPlayerStatus() == TRANSFER_PENDING || _player->isOnTaxi() || _player->getDeathState() == JUST_DIED)
+    if (/*_player->getCharmedByGuid() || */_player->isTransferPending() || _player->isOnTaxi() || _player->getDeathState() == JUST_DIED)
         return;
 
     // spell cancel on movement, for now only fishing is added
@@ -870,7 +771,7 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvPacket)
     /************************************************************************/
     /* Breathing System                                                     */
     /************************************************************************/
-    _HandleBreathing(movement_info, _player, this);
+    _player->handleBreathing(movement_info, this);
 
     /************************************************************************/
     /* Remove Spells                                                        */
@@ -945,7 +846,7 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvPacket)
     if (m_MoverGuid != mover->getGuid())
         return;
 
-    if (mover->getCharmedByGuid() || !mover->IsInWorld() || mover->GetPlayerStatus() == TRANSFER_PENDING || mover->isOnTaxi())
+    if (mover->getCharmedByGuid() || !mover->IsInWorld() || mover->isTransferPending() || mover->isOnTaxi())
     {
         return;
     }
@@ -1314,7 +1215,7 @@ void WorldSession::handleMountSpecialAnimOpcode(WorldPacket& /*recvPacket*/)
 
 void WorldSession::handleMoveWorldportAckOpcode(WorldPacket& /*recvPacket*/)
 {
-    _player->SetPlayerStatus(NONE);
+    _player->setTransferStatus(TRANSFER_NONE);
     if (_player->IsInWorld())
         return;
 
@@ -1357,7 +1258,7 @@ void WorldSession::handleMoveTeleportAckOpcode(WorldPacket& recvPacket)
     {
         if (worldConfig.antiHack.isTeleportHackCheckEnabled && !(HasGMPermissions() && worldConfig.antiHack.isAntiHackCheckDisabledForGm))
         {
-            if (_player->GetPlayerStatus() != TRANSFER_PENDING)
+            if (!_player->isTransferPending())
             {
                 sCheatLog.writefromsession(this, "Used Teleporthack 1, disconnecting.");
                 Disconnect();
@@ -1372,7 +1273,7 @@ void WorldSession::handleMoveTeleportAckOpcode(WorldPacket& recvPacket)
             }
         }
 
-        _player->SetPlayerStatus(NONE);
+        _player->setTransferStatus(TRANSFER_NONE);
         _player->SpeedCheatReset();
 
         for (auto summon : _player->GetSummons())

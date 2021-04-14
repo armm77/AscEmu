@@ -807,6 +807,17 @@ public:
 
     bool isInCity() const;
 
+    void initialiseNoseLevel();
+
+    bool m_isWaterBreathingEnabled = false;
+    uint32_t m_underwaterTime = 180000;
+    uint32_t m_underwaterMaxTime = 180000;
+    uint32_t m_underwaterState = 0;
+
+    void setTransferStatus(uint8_t status);
+    uint8_t getTransferStatus() const;
+    bool isTransferPending() const;
+
 protected:
 
     bool m_isMoving = false;
@@ -816,6 +827,10 @@ protected:
     bool m_isJumping = false;
 
     uint32_t m_areaId = 0;
+
+    float m_noseLevel = .0f;
+
+    uint8_t m_transferStatus = TRANSFER_NONE;
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Basic
@@ -827,8 +842,6 @@ public:
     void setInitialDisplayIds(uint8_t gender, uint8_t race);
 
     void applyLevelInfo(uint32_t newLevel);
-
-    bool isTransferPending() const;
 
     virtual bool isClassMage();
     virtual bool isClassDeathKnight();
@@ -1048,6 +1061,8 @@ public:
 
     bool m_isGmInvisible = false;
 
+    Creature* m_formationMaster = nullptr;
+
 private:
 
     bool m_disableAppearing = false;
@@ -1194,9 +1209,16 @@ public:
     QuestLogEntry* getQuestLogByQuestId(uint32_t questId) const;
     QuestLogEntry* getQuestLogBySlotId(uint32_t slotId) const;
 
+    void addQuestIdToFinishedDailies(uint32_t questId);
+    std::set<uint32_t> getFinishedDailies() const;
+    bool hasQuestInFinishedDailies(uint32_t questId) const;
+    void resetFinishedDailies();
 
 private:
     QuestLogEntry* m_questlog[MAX_QUEST_LOG_SIZE] = {nullptr};
+
+    mutable std::mutex m_mutextDailies;
+    std::set<uint32_t> m_finishedDailies = {};
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Social
@@ -1366,9 +1388,6 @@ public:
         void FillRandomBattlegroundReward(bool wonBattleground, uint32 &honorPoints, uint32 &arenaPoints);
         void ApplyRandomBattlegroundReward(bool wonBattleground);
 
-        LfgMatch* m_lfgMatch;
-        uint32 m_lfgInviterGuid;
-
         // Scripting
         void SendChatMessage(uint8 type, uint32 lang, const char* msg, uint32 delay = 0) override;
         void SendChatMessageToPlayer(uint8 type, uint32 lang, const char* msg, Player* plr) override;
@@ -1474,16 +1493,6 @@ public:
         uint32 m_taxiMapChangeNode;
 
         /////////////////////////////////////////////////////////////////////////////////////////
-        // Breathing
-        /////////////////////////////////////////////////////////////////////////////////////////
-        ///
-        void SetNoseLevel();
-        float m_noseLevel;
-        bool m_bUnlimitedBreath;
-        uint32 m_UnderwaterTime;
-        uint32 m_UnderwaterState;
-
-        /////////////////////////////////////////////////////////////////////////////////////////
         // Quests
         /////////////////////////////////////////////////////////////////////////////////////////
         uint32 GetQuestSharer() { return m_questSharer; }
@@ -1491,8 +1500,7 @@ public:
         void SetQuestSharer(uint32 guid) { m_questSharer = guid; }
 
         void PushToRemovedQuests(uint32 questid) { m_removequests.insert(questid);}
-        void PushToFinishedDailies(uint32 questid) { DailyMutex.Acquire(); m_finishedDailies.insert(questid); DailyMutex.Release();}
-        bool HasFinishedDaily(uint32 questid) { return (m_finishedDailies.find(questid) == m_finishedDailies.end() ? false : true); }
+        
         void AddToFinishedQuests(uint32 quest_id);
         void AreaExploredOrEventHappens(uint32 questId);   // scriptdev2
 
@@ -1515,25 +1523,11 @@ public:
 
         std::set<uint32> m_removequests;
         std::set<uint32> m_finishedQuests;
-        Mutex DailyMutex;
-        std::set<uint32> m_finishedDailies;
         uint32 m_questSharer;
         std::set<uint32> quest_spells;
         std::set<uint32> quest_mobs;
 
         void EventPortToGM(Player* p);
-
-        /////////////////////////////////////////////////////////////////////////////////////////
-        // Selection/Target
-        /////////////////////////////////////////////////////////////////////////////////////////
-        const uint64 & GetSelection() const { return m_curSelection; }
-        const uint64 & GetTarget() const { return m_curTarget; }
-        void SetSelection(const uint64 & guid) { m_curSelection = guid; }
-        void SetTarget(const uint64 & guid) { m_curTarget = guid; }
-protected:
-        uint64 m_curTarget;
-        uint64 m_curSelection;
-public:
 
         /////////////////////////////////////////////////////////////////////////////////////////
         // Spells
@@ -1872,23 +1866,11 @@ public:
         bool m_bgIsRbg;
         bool m_bgIsRbgWon;
 
-        /////////////////////////////////////////////////////////////////////////////////////////
-        // Soulstone stuff
-        /////////////////////////////////////////////////////////////////////////////////////////
-    public:
-
-        uint32 SoulStone;
-        uint32 SoulStoneReceiver;
-        void removeSoulStone();
-
-        uint32 GetSoulStoneReceiver() { return SoulStoneReceiver; }
-        void SetSoulStoneReceiver(uint32 StoneGUID) { SoulStoneReceiver = StoneGUID; }
-        uint32 GetSoulStone() { return SoulStone; }
-        void SetSoulStone(uint32 StoneID) { SoulStone = StoneID; }
 
         /////////////////////////////////////////////////////////////////////////////////////////
         // Visible objects
         /////////////////////////////////////////////////////////////////////////////////////////
+    public:
         bool IsVisible(uint64 pObj) { return !(m_visibleObjects.find(pObj) == m_visibleObjects.end()); }
         void addToInRangeObjects(Object* pObj);
         void onRemoveInRangeObject(Object* pObj);
@@ -1986,9 +1968,6 @@ public:
         
         uint32 GetTalentResetTimes() { return m_talentresettimes; }
         void SetTalentResetTimes(uint32 value) { m_talentresettimes = value; }
-
-        void SetPlayerStatus(uint8 pStatus) { m_status = pStatus; }
-    uint8 GetPlayerStatus() const;
 
         uint32 m_nextSave;
 
@@ -2103,7 +2082,6 @@ public:
         void _EventCharmAttack();
         
         void SoftDisconnect();
-        uint64 m_CurrentCharm;
 
         void ClearCooldownsOnLine(uint32 skill_line, uint32 called_from);
 
@@ -2178,7 +2156,7 @@ public:
         void AddSummonSpell(uint32 Entry, uint32 SpellID);
         void RemoveSummonSpell(uint32 Entry, uint32 SpellID);
         std::set<uint32>* GetSummonSpells(uint32 Entry);
-        uint32 m_UnderwaterMaxTime;
+
         uint32 m_UnderwaterLastDmg;
         
         uint32 m_resurrectHealth, m_resurrectMana;
@@ -2189,7 +2167,6 @@ public:
         // DBC stuff
         DBC::Structures::ChrRacesEntry const* myRace;
         DBC::Structures::ChrClassesEntry const* myClass;
-        Creature* linkTarget;
 
         bool SafeTeleport(uint32 MapID, uint32 InstanceID, float X, float Y, float Z, float O);
         bool SafeTeleport(uint32 MapID, uint32 InstanceID, const LocationVector & vec);
@@ -2353,8 +2330,6 @@ public:
         uint32 weapon_proficiency;
         // Talents
         uint32 m_talentresettimes;
-        // STATUS
-        uint8 m_status;
         // Raid
         uint8 m_targetIcon;
 
