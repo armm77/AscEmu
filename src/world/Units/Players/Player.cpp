@@ -846,10 +846,6 @@ void Player::sendMoveSetSpeedPaket(UnitSpeedType speed_type, float speed)
     SendMessageToSet(&data, true);
 }
 
-void Player::handleFall(MovementInfo const& /*movement_info*/)
-{
-}
-
 bool Player::isSpellFitByClassAndRace(uint32_t /*spell_id*/)
 {
     return false;
@@ -1039,75 +1035,6 @@ void Player::sendMoveSetSpeedPaket(UnitSpeedType speed_type, float speed)
     SendMessageToSet(&data, true);
 }
 
-
-void Player::handleFall(MovementInfo const& movementInfo)
-{
-    if (!z_axisposition)
-    {
-        z_axisposition = movementInfo.getPosition()->z;
-    }
-
-    uint32 falldistance = float2int32(z_axisposition - movementInfo.getPosition()->z);
-    if (z_axisposition <= movementInfo.getPosition()->z)
-    {
-        falldistance = 1;
-    }
-
-    if (static_cast<int>(falldistance) > m_safeFall)
-    {
-        falldistance -= m_safeFall;
-    }
-    else
-    {
-        falldistance = 1;
-    }
-
-    if (isAlive() && !bInvincible && (falldistance > 12) && !m_noFallDamage && ((!m_cheats.hasGodModeCheat && (UNIXTIME >= m_fallDisabledUntil))))
-    {
-        auto health_loss = static_cast<uint32_t>(getHealth() * (falldistance - 12) * 0.017f);
-
-        if (health_loss >= getHealth())
-        {
-            health_loss = getHealth();
-        }
-        else if ((falldistance >= 65))
-        {
-            GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_FALL_WITHOUT_DYING, falldistance, GetDrunkenstateByValue(GetDrunkValue()), 0);
-        }
-
-        sendEnvironmentalDamageLogPacket(getGuid(), DAMAGE_FALL, health_loss);
-        addSimpleEnvironmentalDamageBatchEvent(DAMAGE_FALL, health_loss);
-    }
-
-    z_axisposition = 0.0f;
-}
-
-void Player::handleAuraInterruptForMovementFlags(MovementInfo const& movementInfo)
-{
-    uint32_t auraInterruptFlags = 0;
-    if (movementInfo.hasMovementFlag(MOVEFLAG_MOTION_MASK))
-    {
-        auraInterruptFlags |= AURA_INTERRUPT_ON_MOVEMENT;
-    }
-
-    if (!(movementInfo.hasMovementFlag(MOVEFLAG_SWIMMING)) || movementInfo.hasMovementFlag(MOVEFLAG_FALLING))
-    {
-        auraInterruptFlags |= AURA_INTERRUPT_ON_LEAVE_WATER;
-    }
-
-    if (movementInfo.hasMovementFlag(MOVEFLAG_SWIMMING))
-    {
-        auraInterruptFlags |= AURA_INTERRUPT_ON_ENTER_WATER;
-    }
-
-    if ((movementInfo.hasMovementFlag(MOVEFLAG_TURNING_MASK)) || m_isTurning)
-    {
-        auraInterruptFlags |= AURA_INTERRUPT_ON_TURNING;
-    }
-
-    RemoveAurasByInterruptFlag(auraInterruptFlags);
-}
-
 bool Player::isSpellFitByClassAndRace(uint32_t spell_id)
 {
     auto racemask = getRaceMask();
@@ -1140,6 +1067,32 @@ bool Player::isSpellFitByClassAndRace(uint32_t spell_id)
 }
 
 #endif
+
+void Player::handleAuraInterruptForMovementFlags(MovementInfo const& movementInfo)
+{
+    uint32_t auraInterruptFlags = 0;
+    if (movementInfo.hasMovementFlag(MOVEFLAG_MOTION_MASK))
+    {
+        auraInterruptFlags |= AURA_INTERRUPT_ON_MOVEMENT;
+    }
+
+    if (!(movementInfo.hasMovementFlag(MOVEFLAG_SWIMMING)) || movementInfo.hasMovementFlag(MOVEFLAG_FALLING))
+    {
+        auraInterruptFlags |= AURA_INTERRUPT_ON_LEAVE_WATER;
+    }
+
+    if (movementInfo.hasMovementFlag(MOVEFLAG_SWIMMING))
+    {
+        auraInterruptFlags |= AURA_INTERRUPT_ON_ENTER_WATER;
+    }
+
+    if ((movementInfo.hasMovementFlag(MOVEFLAG_TURNING_MASK)) || m_isTurning)
+    {
+        auraInterruptFlags |= AURA_INTERRUPT_ON_TURNING;
+    }
+
+    RemoveAurasByInterruptFlag(auraInterruptFlags);
+}
 
 void Player::handleBreathing(MovementInfo const& movementInfo, WorldSession* session)
 {
