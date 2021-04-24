@@ -339,7 +339,7 @@ OUTPACKET_RESULT WorldSocket::_OutPacket(uint32_t opcode, size_t len, const void
         return OUTPACKET_RESULT_NO_ROOM_IN_BUFFER;
     }
 
-    switch (opcode)
+    /*switch (opcode)
     {
     //case SMSG_POWER_UPDATE:
     //case SMSG_ITEM_TIME_UPDATE:
@@ -350,7 +350,7 @@ OUTPACKET_RESULT WorldSocket::_OutPacket(uint32_t opcode, size_t len, const void
     //case SMSG_SPELL_START:
     //case SMSG_SPELL_FAILURE:
     //case SMSG_CAST_FAILED:
-    case SMSG_MOVE_SET_CAN_FLY:
+    //case SMSG_MOVE_SET_CAN_FLY:
     //case SMSG_TIME_SYNC_REQ:
     //case SMSG_UPDATE_OBJECT:
     //case SMSG_UPDATE_WORLD_STATE:
@@ -375,7 +375,7 @@ OUTPACKET_RESULT WorldSocket::_OutPacket(uint32_t opcode, size_t len, const void
     //case SMSG_FEATURE_SYSTEM_STATUS:
     //case SMSG_LOGIN_VERIFY_WORLD:
         return OUTPACKET_RESULT_NOT_CONNECTED;
-    }
+    }*/
 
     // Packet logger :)
     sWorldPacketLog.logPacket(static_cast<uint32_t>(len), opcode, static_cast<const uint8_t*>(data), 1, (mSession ? mSession->GetAccountId() : 0));
@@ -741,7 +741,7 @@ void WorldSocket::InformationRetreiveCallback(WorldPacket & recvData, uint32 req
     // Set session properties
     pSession->SetClientBuild(mClientBuild);
 
-#if VERSION_STRING == Cata
+#if VERSION_STRING >= Cata
     pSession->readAddonInfoPacket(mAddonInfoBuffer);
 #endif
 

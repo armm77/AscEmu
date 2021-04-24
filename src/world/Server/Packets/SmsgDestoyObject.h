@@ -14,7 +14,7 @@ namespace AscEmu::Packets
     {
     public:
 
-        uint64_t guid;
+        WoWGuid guid;
 
         SmsgDestroyObject() : SmsgDestroyObject(0)
         {
@@ -29,9 +29,36 @@ namespace AscEmu::Packets
     protected:
         bool internalSerialise(WorldPacket& packet) override
         {
+#if VERSION_STRING < Mop
             packet << guid;
 #if VERSION_STRING >= WotLK
             packet << uint8_t(0);
+#endif
+#else
+
+            packet.writeBit(guid[3]);
+            packet.writeBit(guid[2]);
+            packet.writeBit(guid[4]);
+            packet.writeBit(guid[1]);
+
+            packet << uint8_t(0);
+
+            packet.writeBit(guid[7]);
+            packet.writeBit(guid[0]);
+            packet.writeBit(guid[6]);
+            packet.writeBit(guid[5]);
+
+            packet.flushBits();
+
+            packet.WriteByteSeq(guid[0]);
+            packet.WriteByteSeq(guid[4]);
+            packet.WriteByteSeq(guid[7]);
+            packet.WriteByteSeq(guid[2]);
+            packet.WriteByteSeq(guid[6]);
+            packet.WriteByteSeq(guid[3]);
+            packet.WriteByteSeq(guid[1]);
+            packet.WriteByteSeq(guid[5]);
+
 #endif
             return true;
         }

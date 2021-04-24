@@ -113,6 +113,8 @@
 #include "Server/Packets/SmsgSetPhaseShift.h"
 #include "Server/Packets/SmsgContactList.h"
 #include "Server/Packets/SmsgCharacterLoginFailed.h"
+#include "Server/Packets/SmsgSetFactionStanding.h"
+#include "Server/Packets/SmsgSetFactionVisible.h"
 
 using namespace AscEmu::Packets;
 using namespace MapManagement::AreaManagement;
@@ -1898,6 +1900,121 @@ void Player::_SetUpdateBits(UpdateMask* updateMask, Player* target) const
 
 void Player::InitVisibleUpdateBits()
 {
+#if VERSION_STRING == Mop
+
+    Player::m_visibleUpdateMask.SetCount(getSizeOfStructure(WoWPlayer));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, guid) +1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, data));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, data) + 1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, raw_parts));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, entry));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, dynamic_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, scale_x));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charm_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charm_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, summon_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, summon_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charmed_by_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, charmed_by_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, target_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, target_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, health));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_3));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_4));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, power_5));
+
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_health));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_3));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_4));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, max_power_5));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, virtual_item_slot_display[0]));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, virtual_item_slot_display[1]));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, virtual_item_slot_display[2]));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, level));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, faction_template));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, field_bytes_0));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, unit_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, unit_flags_2));
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, base_attack_time[0]));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, base_attack_time[1]) + 1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, bounding_radius));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, combat_reach));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, display_id));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, native_display_id));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, mount_display_id));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, field_bytes_1));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, pet_number));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, pet_name_timestamp));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_object_guid) + 1);
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, channel_spell));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, mod_cast_speed));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, dynamic_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, npc_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, hover_height));
+
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_flags));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_bytes));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_bytes_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, player_bytes_3));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, guild_timestamp));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, duel_team));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, duel_arbiter));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, duel_arbiter) + 1);
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, guild_rank));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, guild_level));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, base_mana));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, field_bytes_2));
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWUnit, aura_state));
+
+    // Players visible items are not inventory stuff
+    for (uint16 i = 0; i < EQUIPMENT_SLOT_END; ++i)
+    {
+
+        //VLack: for 3.1.1 "* 18" is a bad idea, now it's "* 2"; but this could have been 
+        //calculated based on UpdateFields.h! This is PLAYER_VISIBLE_ITEM_LENGTH
+        uint32 offset = i * 2;
+
+
+        // item entry
+        Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, visible_items) + offset);
+        // enchant
+        Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, visible_items) + 1 + offset);
+    }
+
+    //VLack: we have to send our quest list to the members of our group all the time for quest sharing's "who's on that quest" feature to work (in the quest log this way a number will be shown before the quest's name).
+    //Unfortunately we don't have code for doing this only on our group's members, so everyone will receive it. The non-group member's client will do whatever it wants with it, probably wasting a few CPU cycles, but that's fine with me.
+
+    uint16_t questIdOffset = 5;
+
+    for (uint16 i = getOffsetForStructuredField(WoWPlayer, quests); i < getOffsetForStructuredField(WoWPlayer, visible_items); i += questIdOffset)
+    {
+        Player::m_visibleUpdateMask.SetBit(i);
+    }
+
+    Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, chosen_title));
+
+#else
     Player::m_visibleUpdateMask.SetCount(getSizeOfStructure(WoWPlayer));
     Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWObject, guid));
 #if VERSION_STRING < Cata
@@ -2019,6 +2136,7 @@ void Player::InitVisibleUpdateBits()
 
 #if VERSION_STRING != Classic
     Player::m_visibleUpdateMask.SetBit(getOffsetForStructuredField(WoWPlayer, chosen_title) );
+#endif
 #endif
 }
 
@@ -3618,6 +3736,26 @@ void Player::OnPushToWorld()
         resetTalents();
         resettalents = false;
     }
+#if VERSION_STRING == Mop
+    UpdateVisibility();
+
+    WorldPacket data(SMSG_LOAD_CUF_PROFILES, 1);
+    data.writeBits(0, 20);
+    data.flushBits();
+    SendPacket(&data);
+
+    data.Initialize(SMSG_BATTLE_PET_JOURNAL);
+    data.writeBits(0, 19);
+    data.writeBit(1);
+    data.writeBits(0, 25);
+    data.flushBits();
+    data << uint16_t(0);
+    SendPacket(&data);
+
+    data.Initialize(SMSG_BATTLE_PET_JOURNAL_LOCK_ACQUIRED);
+    SendPacket(&data);
+
+#endif
 }
 #endif
 
@@ -5407,12 +5545,16 @@ bool Player::removeDeletedSpell(uint32 SpellID)
 
 void Player::EventActivateGameObject(GameObject* obj)
 {
+#if VERSION_STRING < Mop
     obj->BuildFieldUpdatePacket(this, getOffsetForStructuredField(struct WoWGameObject, dynamic), 1 | 8);
+#endif
 }
 
 void Player::EventDeActivateGameObject(GameObject* obj)
 {
+#if VERSION_STRING < Mop
     obj->BuildFieldUpdatePacket(this, getOffsetForStructuredField(struct WoWGameObject, dynamic), 0);
+#endif
 }
 
 void Player::EventTimedQuestExpire(uint32 questid)
@@ -10345,7 +10487,7 @@ void Player::SendTeleportPacket(float x, float y, float z, float o)
     if (getObjectTypeId() == TYPEID_UNIT)
         SetPosition(pos);
 
-    ObjectGuid guid = getGuid();
+    WoWGuid guid = getGuid();
 
     WorldPacket data(SMSG_MOVE_UPDATE_TELEPORT, 38);
     obj_movement_info.writeMovementInfo(data, SMSG_MOVE_UPDATE_TELEPORT);
@@ -10889,6 +11031,70 @@ void Player::SendLoot(uint64 guid, uint8 loot_type, uint32 mapid)
 
 void Player::SendInitialLogonPackets()
 {
+    LogDebug("Player %s gets prepared for login.", getName().c_str());
+
+#if VERSION_STRING == Mop
+    m_session->SendPacket(SmsgBindPointUpdate(getBindPosition(), getBindMapId(), getBindZoneId()).serialise().get());
+
+    smsg_TalentsInfo(false);
+
+    WorldPacket data(SMSG_WORLD_SERVER_INFO, 4 + 4 + 1 + 1);
+    data.writeBit(0);
+    data.writeBit(0);
+    data.writeBit(0);
+    data.writeBit(0);
+    data.flushBits();
+
+    data << uint8(0);
+    data << uint32(0);       // reset weekly quest time
+    data << uint32(0);
+    GetSession()->SendPacket(&data);
+
+    smsg_InitialSpells();
+
+    m_session->SendPacket(SmsgSendUnlearnSpells().serialise().get());
+
+    sendActionBars(false);
+
+    smsg_InitialFactions();
+
+    data.Initialize(SMSG_LOAD_EQUIPMENT_SET);
+    data.writeBits(0, 19);
+    GetSession()->SendPacket(&data);
+
+    m_session->SendPacket(SmsgLoginSetTimespeed(Util::getGameTime(), 0.0166666669777748f).serialise().get());
+
+    data.Initialize(SMSG_SET_FORCED_REACTIONS, 1 + 4 + 4);
+    data.writeBits(0, 6);
+    data.flushBits();
+    GetSession()->SendPacket(&data);
+
+    data.Initialize(SMSG_SETUP_CURRENCY, 3 + 1 + 4 + 4 + 4 + 4);
+    data.writeBits(0, 21);
+    GetSession()->SendPacket(&data);
+
+    WoWGuid guid = getGuid();
+    data.Initialize(SMSG_MOVE_SET_ACTIVE_MOVER);
+    data.writeBit(guid[5]);
+    data.writeBit(guid[1]);
+    data.writeBit(guid[4]);
+    data.writeBit(guid[2]);
+    data.writeBit(guid[3]);
+    data.writeBit(guid[7]);
+    data.writeBit(guid[0]);
+    data.writeBit(guid[6]);
+
+    data.WriteByteSeq(guid[4]);
+    data.WriteByteSeq(guid[6]);
+    data.WriteByteSeq(guid[2]);
+    data.WriteByteSeq(guid[0]);
+    data.WriteByteSeq(guid[3]);
+    data.WriteByteSeq(guid[7]);
+    data.WriteByteSeq(guid[5]);
+    data.WriteByteSeq(guid[1]);
+    GetSession()->SendPacket(&data);
+
+#else
     m_session->SendPacket(SmsgBindPointUpdate(getBindPosition(), getBindMapId(), getBindZoneId()).serialise().get());
 
     sendSetProficiencyPacket(4, armor_proficiency);
@@ -10919,6 +11125,7 @@ void Player::SendInitialLogonPackets()
 
 #if VERSION_STRING > TBC
     m_session->SendPacket(SmsgUpdateWorldState(0xC77, worldConfig.arena.arenaProgress, 0xF3D, worldConfig.arena.arenaSeason).serialise().get());
+#endif
 #endif
 
     LOG_DETAIL("WORLD: Sent initial logon packets for %s.", getName().c_str());
@@ -11051,3 +11258,487 @@ void Player::SendInitialWorldstates()
 #endif
 }
 // end L15420 12/11/2018 Zyres
+
+Standing Player::GetReputationRankFromStanding(int32 Standing_)
+{
+    if (Standing_ >= 42000)
+        return STANDING_EXALTED;
+    else if (Standing_ >= 21000)
+        return STANDING_REVERED;
+    else if (Standing_ >= 9000)
+        return STANDING_HONORED;
+    else if (Standing_ >= 3000)
+        return STANDING_FRIENDLY;
+    else if (Standing_ >= 0)
+        return STANDING_NEUTRAL;
+    else if (Standing_ > -3000)
+        return STANDING_UNFRIENDLY;
+    else if (Standing_ > -6000)
+        return STANDING_HOSTILE;
+    return STANDING_HATED;
+}
+
+inline bool CanToggleAtWar(uint8 flag) { return (flag & FACTION_FLAG_DISABLE_ATWAR) == 0; }
+inline bool AtWar(uint8 flag) { return (flag & FACTION_FLAG_AT_WAR) != 0; }
+inline bool ForcedInvisible(uint8 flag) { return (flag & FACTION_FLAG_FORCED_INVISIBLE) != 0; }
+inline bool Visible(uint8 flag) { return (flag & FACTION_FLAG_VISIBLE) != 0; }
+inline bool Hidden(uint8 flag) { return (flag & FACTION_FLAG_HIDDEN) != 0; }
+inline bool Inactive(uint8 flag) { return (flag & FACTION_FLAG_INACTIVE) != 0; }
+
+inline bool SetFlagAtWar(uint8& flag, bool set)
+{
+    if (set && !AtWar(flag))
+        flag |= FACTION_FLAG_AT_WAR;
+    else if (!set && AtWar(flag))
+        flag &= ~FACTION_FLAG_AT_WAR;
+    else
+        return false;
+
+    return true;
+}
+
+inline bool SetFlagVisible(uint8& flag, bool set)
+{
+    if (ForcedInvisible(flag) || Hidden(flag))
+        return false;
+    else if (set && !Visible(flag))
+        flag |= FACTION_FLAG_VISIBLE;
+    else if (!set && Visible(flag))
+        flag &= ~FACTION_FLAG_VISIBLE;
+    else
+        return false;
+
+    return true;
+}
+
+inline bool SetFlagInactive(uint8& flag, bool set)
+{
+    if (set && !Inactive(flag))
+        flag |= FACTION_FLAG_INACTIVE;
+    else if (!set && Inactive(flag))
+        flag &= ~FACTION_FLAG_INACTIVE;
+    else
+        return false;
+
+    return true;
+}
+
+inline bool RankChanged(int32 Standing, int32 Change)
+{
+    return (Player::GetReputationRankFromStanding(Standing) != Player::GetReputationRankFromStanding(Standing + Change));
+}
+
+inline bool RankChangedFlat(int32 Standing, int32 NewStanding)
+{
+    return (Player::GetReputationRankFromStanding(Standing) != Player::GetReputationRankFromStanding(NewStanding));
+}
+
+void Player::smsg_InitialFactions()
+{
+#if VERSION_STRING == Mop
+    const uint16_t factionCount = 256;
+    ByteBuffer buffer;
+    uint32_t a = 0;
+
+    WorldPacket data(SMSG_INITIALIZE_FACTIONS, factionCount * (1 + 4) + 32);
+    /*for (uint32 i = 0; i < 128; ++i)
+    {
+        FactionReputation* rep = reputationByListId[i];
+        if (rep == nullptr)
+        {
+            data << uint8_t(0);
+            data << uint32_t(0);
+            buffer.writeBit(0);
+        }
+        else
+        {
+            data << rep->flag;
+            data << rep->CalcStanding();
+            buffer.writeBit(0);
+        }
+    }*/
+
+    for (; a != factionCount; ++a)
+    {
+        data << uint8_t(0);
+        data << uint32_t(0);
+        buffer.writeBit(0);
+    }
+
+    buffer.flushBits();
+
+    data.append(buffer);
+#else
+    WorldPacket data(SMSG_INITIALIZE_FACTIONS, 764);
+    data << uint32(128);
+    FactionReputation* rep;
+    for (uint8 i = 0; i < 128; ++i)
+    {
+        rep = reputationByListId[i];
+        if (rep == NULL)
+        {
+            data << uint8(0);
+            data << uint32(0);
+        }
+        else
+        {
+            data << rep->flag;
+            data << rep->CalcStanding();
+        }
+    }
+#endif
+    m_session->SendPacket(&data);
+}
+
+void Player::_InitialReputation()
+{
+    DBC::Structures::FactionEntry const* f;
+    for (uint32 i = 0; i < sFactionStore.GetNumRows(); i++)
+    {
+        f = sFactionStore.LookupEntry(i);
+        AddNewFaction(f, 0, true);
+    }
+}
+
+int32 Player::GetStanding(uint32 Faction)
+{
+    ReputationMap::iterator itr = m_reputation.find(Faction);
+    if (itr != m_reputation.end())
+        return itr->second->standing;
+    return 0;
+}
+
+int32 Player::GetBaseStanding(uint32 Faction)
+{
+    ReputationMap::iterator itr = m_reputation.find(Faction);
+    if (itr != m_reputation.end())
+        return itr->second->baseStanding;
+    return 0;
+}
+
+void Player::SetStanding(uint32 Faction, int32 Value)
+{
+    const int32 minReputation = -42000;      //   0/36000 Hated
+    const int32 exaltedReputation = 42000;   //   0/1000  Exalted
+    const int32 maxReputation = 42999;       // 999/1000  Exalted
+    int32 newValue = Value;
+    DBC::Structures::FactionEntry const* f = sFactionStore.LookupEntry(Faction);
+    if (f == NULL || f->RepListId < 0)
+        return;
+    ReputationMap::iterator itr = m_reputation.find(Faction);
+
+    if (newValue < minReputation)
+        newValue = minReputation;
+    else if (newValue > maxReputation)
+        newValue = maxReputation;
+
+    if (itr == m_reputation.end())
+    {
+        if (!AddNewFaction(f, newValue, false))
+            return;
+
+        itr = m_reputation.find(Faction);
+#if VERSION_STRING > TBC
+        if (itr->second->standing >= 42000)   // check if we are exalted now
+            m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_EXALTED_REPUTATION, 1, 0, 0);   // increment # of exalted
+
+        m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_REPUTATION, f->ID, itr->second->standing, 0);
+#endif
+        UpdateInrangeSetsBasedOnReputation();
+        OnModStanding(f, itr->second);
+    }
+    else
+    {
+        // Assign it.
+        if (RankChangedFlat(itr->second->standing, newValue))
+        {
+#if VERSION_STRING > TBC
+            if (itr->second->standing - newValue >= exaltedReputation) // somehow we lost exalted status
+                m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_EXALTED_REPUTATION, -1, 0, 0); // decrement # of exalted
+            else if (newValue >= exaltedReputation) // check if we are exalted now
+                m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_EXALTED_REPUTATION, 1, 0, 0); // increment # of exalted
+#endif
+            itr->second->standing = newValue;
+            UpdateInrangeSetsBasedOnReputation();
+#if VERSION_STRING > TBC
+            m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_REPUTATION, f->ID, Value, 0);
+#endif
+        }
+        else
+            itr->second->standing = newValue;
+
+        OnModStanding(f, itr->second);
+    }
+}
+
+Standing Player::GetStandingRank(uint32 Faction)
+{
+    return Standing(GetReputationRankFromStanding(GetStanding(Faction)));
+}
+
+bool Player::IsHostileBasedOnReputation(DBC::Structures::FactionEntry const* dbc)
+{
+    if (dbc->RepListId < 0 || dbc->RepListId >= 128)
+        return false;
+
+    FactionReputation* rep = reputationByListId[dbc->RepListId];
+    if (rep == NULL)
+        return false;
+
+    // forced reactions take precedence
+    std::map<uint32, uint32>::iterator itr = m_forcedReactions.find(dbc->ID);
+    if (itr != m_forcedReactions.end())
+        return (itr->second <= STANDING_HOSTILE);
+
+    return (AtWar(rep->flag) || GetReputationRankFromStanding(rep->standing) <= STANDING_HOSTILE);
+}
+
+void Player::ModStanding(uint32 Faction, int32 Value)
+{
+    const int32 minReputation = -42000;      //   0/36000 Hated
+    const int32 exaltedReputation = 42000;   //   0/1000  Exalted
+    const int32 maxReputation = 42999;       // 999/1000  Exalted
+
+    // WE ARE THE CHAMPIONS MY FRIENDS! WE KEEP ON FIGHTING 'TILL THE END!
+    //
+    // If we are in a lvl80 instance or heroic, or raid and we have a championing tabard on,
+    // we get reputation after the faction determined by the worn tabard.
+    if ((GetMapMgr()->GetMapInfo()->minlevel == 80 || (GetMapMgr()->iInstanceMode == MODE_HEROIC && GetMapMgr()->GetMapInfo()->minlevel_heroic == 80)) && ChampioningFactionID != 0)
+        Faction = ChampioningFactionID;
+
+    DBC::Structures::FactionEntry const* f = sFactionStore.LookupEntry(Faction);
+    int32 newValue = Value;
+    if (f == NULL || f->RepListId < 0)
+        return;
+    ReputationMap::iterator itr = m_reputation.find(Faction);
+
+    if (itr == m_reputation.end())
+    {
+        if (newValue < minReputation)
+            newValue = minReputation;
+        else if (newValue > maxReputation)
+            newValue = maxReputation;
+
+        if (!AddNewFaction(f, newValue, false))
+            return;
+
+        itr = m_reputation.find(Faction);
+#if VERSION_STRING > TBC
+        if (itr->second->standing >= 42000)   // check if we are exalted now
+            m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_EXALTED_REPUTATION, 1, 0, 0);   // increment # of exalted
+
+        m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_REPUTATION, f->ID, itr->second->standing, 0);
+#endif
+        UpdateInrangeSetsBasedOnReputation();
+        OnModStanding(f, itr->second);
+    }
+    else
+    {
+        if (pctReputationMod > 0)
+        {
+            newValue = Value + (Value * pctReputationMod / 100);
+        }
+        // Increment it.
+        if (RankChanged(itr->second->standing, newValue))
+        {
+            itr->second->standing += newValue;
+            UpdateInrangeSetsBasedOnReputation();
+#if VERSION_STRING > TBC
+            m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_REPUTATION, f->ID, itr->second->standing, 0);
+            if (itr->second->standing >= exaltedReputation) // check if we are exalted now
+                m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_EXALTED_REPUTATION, 1, 0, 0); // increment # of exalted
+            else if (itr->second->standing - newValue >= exaltedReputation) // somehow we lost exalted status
+                m_achievementMgr.UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_EXALTED_REPUTATION, -1, 0, 0); // decrement # of exalted
+#endif
+        }
+        else
+            itr->second->standing += newValue;
+
+        if (itr->second->standing < minReputation)
+            itr->second->standing = minReputation;
+        else if (itr->second->standing > maxReputation)
+            itr->second->standing = maxReputation;
+        OnModStanding(f, itr->second);
+    }
+}
+
+void Player::SetAtWar(uint32 Faction, bool Set)
+{
+    if (Faction >= 128)
+        return;
+
+    FactionReputation* rep = reputationByListId[Faction];
+    if (rep == NULL)
+        return;
+
+    if (GetReputationRankFromStanding(rep->standing) <= STANDING_HOSTILE && !Set)     // At this point we have to be at war.
+        return;
+
+    if (!CanToggleAtWar(rep->flag))
+        return;
+
+    if (SetFlagAtWar(rep->flag, Set))
+    {
+        UpdateInrangeSetsBasedOnReputation();
+    }
+}
+
+void Player::UpdateInrangeSetsBasedOnReputation()
+{
+    // This function assumes that the opp faction set for player = the opp faction set for the unit.
+    for (const auto& itr : getInRangeObjectsSet())
+    {
+        if (!itr || !itr->isCreatureOrPlayer())
+            continue;
+
+        Unit* pUnit = static_cast<Unit*>(itr);
+        if (pUnit->m_factionEntry == nullptr || pUnit->m_factionEntry->RepListId < 0)
+            continue;
+
+        bool rep_value = IsHostileBasedOnReputation(pUnit->m_factionEntry);
+        bool enemy_current = isObjectInInRangeOppositeFactionSet(pUnit);
+
+        if (rep_value && !enemy_current)   // We are now enemies.
+            addInRangeOppositeFaction(pUnit);
+        else if (!rep_value && enemy_current)
+            addInRangeOppositeFaction(pUnit);
+    }
+}
+
+void Player::Reputation_OnKilledUnit(Unit* pUnit, bool InnerLoop)
+{
+
+    // add rep for on kill
+    if (!pUnit->isCreature() || pUnit->isPet() || pUnit->isCritter())
+        return;
+
+    Group* m_Group = getGroup();
+
+    // Why would this be accessed if the group didn't exist?
+    if (!InnerLoop && m_Group != NULL)
+    {
+        /* loop the rep for group members */
+        m_Group->getLock().Acquire();
+        GroupMembersSet::iterator it;
+        for (uint32 i = 0; i < m_Group->GetSubGroupCount(); i++)
+        {
+            for (it = m_Group->GetSubGroup(i)->GetGroupMembersBegin(); it != m_Group->GetSubGroup(i)->GetGroupMembersEnd(); ++it)
+            {
+                if ((*it)->m_loggedInPlayer && (*it)->m_loggedInPlayer->isInRange(this, 100.0f))
+                    (*it)->m_loggedInPlayer->Reputation_OnKilledUnit(pUnit, true);
+            }
+        }
+        m_Group->getLock().Release();
+        return;
+    }
+
+    uint32 team = getTeam();
+    ReputationModifier* modifier = sObjectMgr.GetReputationModifier(pUnit->getEntry(), pUnit->m_factionEntry->ID);
+    if (modifier != nullptr)
+    {
+        // Apply this data.
+        for (std::vector<ReputationMod>::iterator itr = modifier->mods.begin(); itr != modifier->mods.end(); ++itr)
+        {
+            if (!(*itr).faction[team])
+                continue;
+
+            /* rep limit? */
+            if (!IS_INSTANCE(GetMapId()) || (IS_INSTANCE(GetMapId()) && this->m_dungeonDifficulty != MODE_HEROIC))
+            {
+                if ((*itr).replimit)
+                {
+                    if (GetStanding((*itr).faction[team]) >= (int32)(*itr).replimit)
+                        continue;
+                }
+            }
+            ModStanding(itr->faction[team], float2int32(itr->value * worldConfig.getFloatRate(RATE_KILLREPUTATION)));
+        }
+    }
+    else
+    {
+        if (IS_INSTANCE(GetMapId()) && sObjectMgr.HandleInstanceReputationModifiers(this, pUnit))
+            return;
+
+        if (pUnit->m_factionEntry->RepListId < 0)
+            return;
+
+        int32 change = int32(-5.0f * worldConfig.getFloatRate(RATE_KILLREPUTATION));
+        ModStanding(pUnit->m_factionEntry->ID, change);
+    }
+}
+
+void Player::Reputation_OnTalk(DBC::Structures::FactionEntry const* dbc)
+{
+    // set faction visible if not visible
+    if (dbc == NULL || dbc->RepListId < 0)
+        return;
+
+    FactionReputation* rep = reputationByListId[dbc->RepListId];
+    if (rep == NULL)
+        return;
+
+    if (SetFlagVisible(rep->flag, true) && IsInWorld())
+    {
+        SendPacket(AscEmu::Packets::SmsgSetFactionVisible(dbc->RepListId).serialise().get());
+    }
+}
+
+void Player::SetFactionInactive(uint32 faction, bool /*set*/)
+{
+    FactionReputation* rep = reputationByListId[faction];
+    if (rep == NULL)
+        return;
+}
+
+bool Player::AddNewFaction(DBC::Structures::FactionEntry const* dbc, int32 standing, bool base)    // if (base) standing = baseRepValue
+{
+    if (dbc == NULL || dbc->RepListId < 0)
+        return false;
+
+    uint32 RaceMask = getRaceMask();
+    uint32 ClassMask = getClassMask();
+    for (uint8 i = 0; i < 4; i++)
+    {
+        if ((dbc->RaceMask[i] & RaceMask || (dbc->RaceMask[i] == 0 && dbc->ClassMask[i] != 0)) && (dbc->ClassMask[i] & ClassMask || dbc->ClassMask[i] == 0))
+        {
+            FactionReputation* rep = new FactionReputation;
+            rep->flag = static_cast<uint8>(dbc->repFlags[i]);
+            rep->baseStanding = dbc->baseRepValue[i];
+            rep->standing = (base) ? dbc->baseRepValue[i] : standing;
+            m_reputation[dbc->ID] = rep;
+            reputationByListId[dbc->RepListId] = rep;
+            return true;
+        }
+    }
+    return false;
+}
+
+void Player::OnModStanding(DBC::Structures::FactionEntry const* dbc, FactionReputation* rep)
+{
+    if (SetFlagVisible(rep->flag, true) && IsInWorld())
+    {
+        SendPacket(AscEmu::Packets::SmsgSetFactionVisible(dbc->RepListId).serialise().get());
+    }
+
+    SetFlagAtWar(rep->flag, (GetReputationRankFromStanding(rep->standing) <= STANDING_HOSTILE));
+
+    if (Visible(rep->flag) && IsInWorld())
+    {
+        SendPacket(AscEmu::Packets::SmsgSetFactionStanding(dbc->RepListId, rep->CalcStanding()).serialise().get());
+    }
+}
+
+uint32 Player::GetExaltedCount(void)
+{
+    const int32 exaltedReputation = 42000;
+    uint32 ec = 0;
+
+    ReputationMap::iterator itr = m_reputation.begin();
+    while (itr != m_reputation.end())
+    {
+        if (itr->second->standing >= exaltedReputation)
+            ++ec;
+        ++itr;
+    }
+    return ec;
+}

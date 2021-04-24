@@ -1142,7 +1142,7 @@ void WorldSession::handleTimeSyncRespOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleObjectUpdateFailedOpcode(WorldPacket& recvPacket)
 {
-    ObjectGuid guid;
+    WoWGuid guid;
 
 #if VERSION_STRING == Cata
     guid[6] = recvPacket.readBit();
@@ -1187,7 +1187,7 @@ void WorldSession::handleObjectUpdateFailedOpcode(WorldPacket& recvPacket)
     if (_player == nullptr)
         return;
 
-    if (_player->getGuid() == guid)
+    if (_player->getGuid() == guid.getRawGuid())
     {
         LogoutPlayer(true);
         return;
@@ -1376,7 +1376,7 @@ void WorldSession::handleRequestHotfix(WorldPacket& recvPacket)
 
     uint32_t count = recvPacket.readBits(23);
 
-    ObjectGuid* guids = new ObjectGuid[count];
+    WoWGuid* guids = new WoWGuid[count];
     for (uint32_t i = 0; i < count; ++i)
     {
         guids[i][0] = recvPacket.readBit();
@@ -1420,9 +1420,9 @@ void WorldSession::handleRequestHotfix(WorldPacket& recvPacket)
     uint32_t type;
     recvPacket >> type;
 
-    uint32_t count = recvPacket.readBits(23);
+    uint32_t count = recvPacket.readBits(21);
 
-    ObjectGuid* guids = new ObjectGuid[count];
+    WoWGuid* guids = new WoWGuid[count];
     for (uint32_t i = 0; i < count; ++i)
     {
         guids[i][6] = recvPacket.readBit();
@@ -1461,6 +1461,14 @@ void WorldSession::handleRequestHotfix(WorldPacket& recvPacket)
                 recvPacket.clear();
                 break;
         }*/
+
+        WorldPacket data(SMSG_DB_REPLY, 16);
+        data << uint32_t(entry);
+        data << uint32_t(time(NULL));
+        data << uint32_t(type);
+        data << uint32_t(0);
+
+        SendPacket(&data);
     }
 #endif
 }
@@ -2011,8 +2019,11 @@ void WorldSession::readAddonInfoPacket(ByteBuffer &recvPacket)
             unpackedInfo >> unknown;
 
             LOG_DEBUG("AddOn: %s (CRC: 0x%x) - enabled: 0x%x - Unknown2: 0x%x", addonName.c_str(), crc, enabledState, unknown);
-
+#if VERSION_STRING < Mop
             AddonEntry addon(addonName, enabledState, crc, 2, true);
+#else
+            AddonEntry addon(addonName, true, crc, 2, enabledState);
+#endif
 
             SavedAddon const* savedAddon = sAddonMgr.getAddonInfoForAddonName(addonName);
             if (savedAddon)
@@ -2042,6 +2053,7 @@ void WorldSession::readAddonInfoPacket(ByteBuffer &recvPacket)
 
 void WorldSession::sendAddonInfo()
 {
+#if VERSION_STRING < Mop
     WorldPacket data(SMSG_ADDON_INFO, 4);
     for (auto itr : m_addonList)
     {
@@ -2081,6 +2093,59 @@ void WorldSession::sendAddonInfo()
     }
 
     SendPacket(&data);
+#else
+    WorldPacket data(SMSG_ADDON_INFO, 1000);
+
+    BannedAddonList const* bannedAddons = sAddonMgr.getBannedAddonsList();
+
+    data.writeBits(static_cast<uint32_t>(bannedAddons->size()), 18);
+    data.writeBits(static_cast<uint32_t>(m_addonList.size()), 23);
+
+    for (auto itr : m_addonList)
+    {
+        data.writeBit(0); // Has URL
+        data.writeBit(itr.enabled);
+        data.writeBit(!itr.usePublicKeyOrCRC);
+    }
+
+    data.flushBits();
+
+    for (auto itr : m_addonList)
+    {
+        if (!itr.usePublicKeyOrCRC)
+        {
+            size_t pos = data.wpos();
+            for (int i = 0; i < 256; i++)
+                data << uint8_t(0);
+
+            for (int i = 0; i < 256; i++)
+                data.put(pos + publicKeyOrder[i], PublicKey[i]);
+        }
+
+        if (itr.enabled)
+        {
+            data << uint8_t(itr.enabled);
+            data << uint32_t(0);
+        }
+
+        data << uint8(itr.state);
+    }
+
+    m_addonList.clear();
+
+    for (auto itr = bannedAddons->begin(); itr != bannedAddons->end(); ++itr)
+    {
+        data << uint32_t(itr->id);
+        data << uint32_t(1);  // banned?
+
+        for (int32 i = 0; i < 8; i++)
+            data << uint32(0);
+
+        data << uint32_t(itr->timestamp);
+    }
+
+    SendPacket(&data);
+#endif
 }
 
 bool WorldSession::isAddonRegistered(const std::string& addon_name) const
