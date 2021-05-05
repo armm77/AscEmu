@@ -70,7 +70,6 @@ bool QuestMgr::isRepeatableQuestFinished(Player* plr, QuestProperties const* qst
 
 uint32 QuestMgr::PlayerMeetsReqs(Player* plr, QuestProperties const* qst, bool skiplevelcheck)
 {
-    std::list<uint32>::iterator itr;
     uint32 status;
 
     if (!sQuestMgr.IsQuestRepeatable(qst) && !sQuestMgr.IsQuestDaily(qst))
@@ -661,8 +660,7 @@ void QuestMgr::BuildQuestDetails(WorldPacket* data, QuestProperties const* qst, 
 #endif
 
 #else
-MySQLStructure::LocalesQuest const* lq = (language > 0) ? sMySQLStore.getLocalizedQuest(qst->id, language) : nullptr;
-    std::map<uint32_t, uint8_t>::const_iterator itr;
+    MySQLStructure::LocalesQuest const* lq = (language > 0) ? sMySQLStore.getLocalizedQuest(qst->id, language) : nullptr;
 
     std::string questEndText = "";
     std::string questGiverTextWindow = "";

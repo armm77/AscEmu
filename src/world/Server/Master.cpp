@@ -56,7 +56,7 @@ ConfigMgr Config;
 
 // DB version
 static const char* REQUIRED_CHAR_DB_VERSION = "20201216-00_rename_event_properties";
-static const char* REQUIRED_WORLD_DB_VERSION = "20210501-01_gossip_menu_option";
+static const char* REQUIRED_WORLD_DB_VERSION = "20210501-02_creature_spawn";
 
 void Master::_OnSignal(int s)
 {
@@ -668,17 +668,6 @@ bool Master::LoadWorldConfiguration(char* config_file)
         return false;
     }
 
-#if !defined(WIN32) && defined(__DEBUG__)
-    if (!worldConfig.log.disableCrashdump)
-    {
-        char cmd[1024];
-        char banner[1024];
-        snprintf(banner, 1024, BANNER, BUILD_TAG, BUILD_REVISION, CONFIG, PLATFORM_TEXT, ARCH);
-        snprintf(cmd, 1024, "./crashreport -r %d -d \'%s\'", BUILD_REVISION, banner);
-        system(cmd);
-    }
-    unlink("worldserver.uptime");
-#endif
     return true;
 }
 
@@ -687,9 +676,9 @@ void Master::OpenCheatLogFiles()
     bool useTimeStamp = worldConfig.log.enableTimeStamp;
     std::string logDir = worldConfig.log.extendedLogsDir;
 
-    Anticheat_Log = new SessionLog(AELog::GetFormattedFileName(logDir.c_str(), "cheaters", useTimeStamp).c_str(), false);
-    GMCommand_Log = new SessionLog(AELog::GetFormattedFileName(logDir.c_str(), "gmcommands", useTimeStamp).c_str(), false);
-    Player_Log = new SessionLog(AELog::GetFormattedFileName(logDir.c_str(), "players", useTimeStamp).c_str(), false);
+    Anticheat_Log = new SessionLog(AELog::GetFormattedFileName(logDir, "cheaters", useTimeStamp).c_str(), false);
+    GMCommand_Log = new SessionLog(AELog::GetFormattedFileName(logDir, "gmcommands", useTimeStamp).c_str(), false);
+    Player_Log = new SessionLog(AELog::GetFormattedFileName(logDir, "players", useTimeStamp).c_str(), false);
 
     if (Anticheat_Log->isSessionLogOpen())
     {

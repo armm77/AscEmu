@@ -1151,6 +1151,19 @@ private:
     BGEntryData m_bgEntryData;
 
     //////////////////////////////////////////////////////////////////////////////////////////
+    // Charter
+public:
+
+    void unsetCharter(uint8_t charterType);
+    Charter* getCharter(uint8_t charterType);
+
+    bool canSignCharter(Charter* charter, Player* requester);
+    void initialiseCharters();
+
+private:
+    Charter* m_charters[NUM_CHARTER_TYPES] = {nullptr};
+
+    //////////////////////////////////////////////////////////////////////////////////////////
     // Guild
 public:
 
@@ -1182,6 +1195,19 @@ public:
 
 private:
     uint32_t m_GroupInviter = 0;
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // ArenaTeam
+public:
+
+    void setArenaTeam(uint8_t type, ArenaTeam* arenaTeam);
+    ArenaTeam* getArenaTeam(uint8_t type);
+
+    bool isInArenaTeam(uint8_t type);
+    void initialiseArenaTeam();
+
+private:
+    ArenaTeam* m_arenaTeams[NUM_ARENA_TEAM_TYPES] = {nullptr};
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Quests
@@ -1445,8 +1471,6 @@ public:
         void ModifyBonuses(uint32 type, int32 val, bool apply);
         void CalcExpertise();
         std::map<uint32, uint32> m_wratings;
-
-        ArenaTeam* m_arenaTeams[NUM_ARENA_TEAM_TYPES];
 
         /////////////////////////////////////////////////////////////////////////////////////////
         // Taxi
@@ -2191,8 +2215,7 @@ public:
         void OnWorldPortAck();
         uint32 m_TeleportState;
         bool m_beingPushed;
-        bool CanSignCharter(Charter* charter, Player* requester);
-        Charter* m_charters[NUM_CHARTER_TYPES];
+        
         uint32 flying_aura;
         bool resend_speed;
         uint32 login_flags;
