@@ -1,24 +1,23 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Management/Battleground/Battleground.h"
+#include "Management/Battleground/Battleground.hpp"
 #include "AlteracValleyDefinitions.h"
 
-class AlteracValley : public CBattleground
+class AlteracValley : public Battleground
 {
 protected:
-
     std::list<GameObject*> m_gates;
     uint32_t m_reinforcements[2];
     bool m_nearingVictory[2];
     std::map<Creature*, std::set<uint32_t> > Get_m_resurrectMap() const { return m_resurrectMap; }
-public:
 
-    AlteracValley(MapMgr* mgr, uint32_t id, uint32_t lgroup, uint32_t t);
+public:
+    AlteracValley(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t);
     ~AlteracValley();
 
     void EventAssaultControlPoint(uint32_t x);
@@ -39,7 +38,7 @@ public:
     LocationVector GetStartingCoords(uint32_t Team) override;
     void DropFlag(Player* plr);
 
-    static CBattleground* Create(MapMgr* m, uint32_t i, uint32_t l, uint32_t t) { return new AlteracValley(m, i, l, t); }
+    static Battleground* Create(BattlegroundMap* m, uint32_t i, uint32_t l, uint32_t t) { return new AlteracValley(m, i, l, t); }
 
     const char* GetName() { return "Alterac Valley"; }
     void OnStart() override;
@@ -97,8 +96,7 @@ public:
         // spirit guides
         Creature* m_spiritGuide;
 
-public:
-
+    public:
         friend class AlteracValley;
 
         // constructor
@@ -125,6 +123,5 @@ public:
     };
 
 protected:
-
     AVNode* m_nodes[AV_NUM_CONTROL_POINTS];
 };

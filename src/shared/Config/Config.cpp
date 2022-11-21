@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,13 +7,9 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Config.h"
 #include "Logging/Logger.hpp"
 #include "Util.hpp"
+#include <stdexcept>
 
-
-ConfigFile::ConfigFile() {}
-
-ConfigFile::~ConfigFile() {}
-
-bool ConfigFile::openAndLoadConfigFile(std::string configFileName)
+bool ConfigFile::openAndLoadConfigFile(const std::string& configFileName)
 {
     mSettings.clear();
 
@@ -92,7 +88,7 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
                 if (lineOffset == std::string::npos)    // skip entire line
                     continue;
 
-                lineOffset = currentLine.find("#", 0);
+                lineOffset = currentLine.find('#', 0);
                 if (lineOffset == std::string::npos)    // skip entire line
                     continue;
 
@@ -107,7 +103,7 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
                 if (isInMultilineQuote)
                 {
                     // find the end of the quote block
-                    lineOffset = currentLine.find("\"");
+                    lineOffset = currentLine.find('\"');
                     if (lineOffset == std::string::npos)
                     {
                         // append the whole line to the quote
@@ -121,7 +117,7 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
                     currentLine.erase(0, lineOffset + 1);
 
                     // append the setting to the config section
-                    if (currentSection == "" || currentSettingVariable == "")
+                    if (currentSection.empty() || currentSettingVariable.empty())
                     {
                         sLogger.failure("Quote without variable.");
                         return false;
@@ -134,8 +130,8 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
                     currentSectionMap[getSettingHash(currentSettingVariable)] = currentValueSettingStruct;
 
                     // no longer the var or in a quote
-                    currentSettingValue = "";
-                    currentSettingVariable = "";
+                    currentSettingValue.clear();
+                    currentSettingVariable.clear();
                     isInMultilineQuote = false;
                 }
 
@@ -145,10 +141,10 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
                     continue;
 
                 // looking for variable '=' is our seperator
-                lineOffset = currentLine.find("=");
+                lineOffset = currentLine.find('=');
                 if (lineOffset != std::string::npos)
                 {
-                    ASSERT(currentSettingVariable == "");
+                    ASSERT(currentSettingVariable.empty());
                     currentSettingVariable = currentLine.substr(0, lineOffset);
 
                     // remove spaces from the end of the variable
@@ -159,14 +155,14 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
                 }
 
                 // look for opening quote. this signifies the start of a value
-                lineOffset = currentLine.find("\"");
+                lineOffset = currentLine.find('\"');
                 if (lineOffset != std::string::npos)
                 {
-                    ASSERT(currentSettingValue == "");
-                    ASSERT(currentSettingVariable != "");
+                    ASSERT(currentSettingValue.empty())
+                    ASSERT(!currentSettingVariable.empty())
 
                     // find the ending quote
-                    lineEnding = currentLine.find("\"", lineOffset + 1);
+                    lineEnding = currentLine.find('\"', lineOffset + 1);
                     if (lineEnding != std::string::npos)
                     {
                         // the closing quote is on the same line
@@ -182,8 +178,8 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
                         currentSectionMap[getSettingHash(currentSettingVariable)] = currentValueSettingStruct;
 
                         // no longer the var or in a quote
-                        currentSettingValue = "";
-                        currentSettingVariable = "";
+                        currentSettingValue.clear();
+                        currentSettingVariable.clear();
                         isInMultilineQuote = false;
 
                         // go find other definitions on this line
@@ -201,7 +197,7 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
                 }
 
                 // check end of the section
-                lineOffset = currentLine.find(">");
+                lineOffset = currentLine.find('>');
                 if (lineOffset != std::string::npos)
                 {
                     currentLine.erase(0, lineOffset + 1);
@@ -213,15 +209,15 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
 
                     // cleanup for next parse
                     currentSectionMap.clear();
-                    currentSettingValue = "";
-                    currentSettingVariable = "";
-                    currentSection = "";
+                    currentSettingValue.clear();
+                    currentSettingVariable.clear();
+                    currentSection.clear();
                 }
             }
             else
             {
                 // check for start of a section since we are not in one
-                lineOffset = currentLine.find("<");
+                lineOffset = currentLine.find('<');
                 if (lineOffset != std::string::npos)
                 {
                     isInSectionBlock = true;
@@ -229,7 +225,7 @@ bool ConfigFile::parseConfigValues(std::string fileBufferString)
                     currentLine.erase(0, lineOffset + 1);
 
                     // find the section name
-                    lineOffset = currentLine.find(" ");
+                    lineOffset = currentLine.find(' ');
                     if (lineOffset != std::string::npos)
                     {
                         currentSection = currentLine.substr(0, lineOffset);
@@ -286,18 +282,18 @@ void ConfigFile::removeSpacesInString(std::string& str)
 
 void ConfigFile::removeAllSpacesInString(std::string& str)
 {
-    std::string::size_type off = str.find(" ");
+    std::string::size_type off = str.find(' ');
     while (off != std::string::npos)
     {
         str.erase(off, 1);
-        off = str.find(" ");
+        off = str.find(' ');
     }
 
-    off = str.find("\t");
+    off = str.find('\t');
     while (off != std::string::npos)
     {
         str.erase(off, 1);
-        off = str.find("\t");
+        off = str.find('\t');
     }
 }
 
@@ -355,7 +351,7 @@ void ConfigFile::applySettingToStore(std::string& str, ConfigValueSetting& setti
     }
 }
 
-uint32_t ConfigFile::getSettingHash(std::string settingString)
+uint32_t ConfigFile::getSettingHash(const std::string& settingString)
 {
     size_t stringLength = settingString.size();
     uint32_t returnHash = 0;
@@ -368,7 +364,7 @@ uint32_t ConfigFile::getSettingHash(std::string settingString)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Get functions
-ConfigFile::ConfigValueSetting* ConfigFile::getSavedSetting(std::string sectionName, std::string confName)
+ConfigFile::ConfigValueSetting* ConfigFile::getSavedSetting(const std::string& sectionName, const std::string& confName)
 {
     uint32_t sectionHash = getSettingHash(sectionName);
     uint32_t configHash = getSettingHash(confName);
@@ -381,11 +377,12 @@ ConfigFile::ConfigValueSetting* ConfigFile::getSavedSetting(std::string sectionN
             return &(it2->second);
     }
 
-    sLogger.failure("Could not load config value: [%s].[%s]", sectionName.c_str(), confName.c_str());
-    return nullptr;
+    std::string error = "Could not load config value: [" + sectionName + "].[" + confName + "]";
+
+    throw std::invalid_argument(error);
 }
 
-std::string ConfigFile::getStringDefault(std::string sectionName, std::string confName, std::string defaultString)
+std::string ConfigFile::getStringDefault(const std::string& sectionName, const std::string& confName, const std::string& defaultString)
 {
     ConfigValueSetting* confSetting = getSavedSetting(sectionName, confName);
     if (confSetting == nullptr)
@@ -394,7 +391,7 @@ std::string ConfigFile::getStringDefault(std::string sectionName, std::string co
     return confSetting->asString;
 }
 
-bool ConfigFile::getBoolDefault(std::string sectionName, std::string confName, bool defaultBool)
+bool ConfigFile::getBoolDefault(const std::string& sectionName, const std::string& confName, bool defaultBool)
 {
     ConfigValueSetting* confSetting = getSavedSetting(sectionName, confName);
     if (confSetting == nullptr)
@@ -403,7 +400,7 @@ bool ConfigFile::getBoolDefault(std::string sectionName, std::string confName, b
     return confSetting->asBool;
 }
 
-int ConfigFile::getIntDefault(std::string sectionName, std::string confName, int defaultInt)
+int ConfigFile::getIntDefault(const std::string& sectionName, const std::string& confName, int defaultInt)
 {
     ConfigValueSetting* confSetting = getSavedSetting(sectionName, confName);
     if (confSetting == nullptr)
@@ -412,7 +409,7 @@ int ConfigFile::getIntDefault(std::string sectionName, std::string confName, int
     return confSetting->asInt;
 }
 
-float ConfigFile::getFloatDefault(std::string sectionName, std::string confName, float defaultFloat)
+float ConfigFile::getFloatDefault(const std::string& sectionName, const std::string& confName, float defaultFloat)
 {
     ConfigValueSetting* confSetting = getSavedSetting(sectionName, confName);
     if (confSetting == nullptr)
@@ -421,74 +418,116 @@ float ConfigFile::getFloatDefault(std::string sectionName, std::string confName,
     return confSetting->asFloat;
 }
 
-bool ConfigFile::tryGetBool(std::string sectionName, std::string confName, bool * b)
+bool ConfigFile::tryGetBool(const std::string& sectionName, const std::string& confName, bool * b)
 {
-    const auto setting = getSavedSetting(sectionName, confName);
-    if (!setting)
+    try
     {
-        return false;
+        if (const auto setting = getSavedSetting(sectionName, confName))
+        {
+            *b = setting->asBool;
+            return true;
+        }
     }
 
-    *b = setting->asBool;
-    return true;
+    catch (std::invalid_argument& e)
+    {
+        sLogger.failure("%s", e.what());
+        ASSERT(false)
+    }
+    return false;
 }
 
-bool ConfigFile::tryGetFloat(std::string sectionName, std::string confName, float* f)
+bool ConfigFile::tryGetFloat(const std::string& sectionName, const std::string& confName, float* f)
 {
-    const auto setting = getSavedSetting(sectionName, confName);
-    if (!setting)
+    try
     {
-        return false;
+        if (const auto setting = getSavedSetting(sectionName, confName))
+        {
+            *f = setting->asFloat;
+            return true;
+        }
     }
 
-    *f = setting->asFloat;
-    return true;
+    catch (std::invalid_argument& e)
+    {
+        sLogger.failure("%s", e.what());
+        ASSERT(false)
+    }
+    return false;
 }
 
-bool ConfigFile::tryGetInt(std::string sectionName, std::string confName, int* i)
+bool ConfigFile::tryGetInt(const std::string& sectionName, const std::string& confName, int* i)
 {
-    const auto setting = getSavedSetting(sectionName, confName);
-    if (!setting)
+    try
     {
-        return false;
+        if (const auto setting = getSavedSetting(sectionName, confName))
+        {
+            *i = setting->asInt;
+            return true;
+        }
     }
 
-    *i = setting->asInt;
-    return true;
+    catch (std::invalid_argument& e)
+    {
+        sLogger.failure("%s", e.what());
+        ASSERT(false)
+    }
+    return false;
 }
 
-bool ConfigFile::tryGetInt(std::string sectionName, std::string confName, uint8_t* i)
+bool ConfigFile::tryGetInt(const std::string& sectionName, const std::string& confName, uint8_t* i)
 {
-    const auto setting = getSavedSetting(sectionName, confName);
-    if (!setting)
+    try
     {
-        return false;
+        if (const auto setting = getSavedSetting(sectionName, confName))
+        {
+            *i = setting->asInt;
+            return true;
+        }
     }
 
-    *i = setting->asInt;
-    return true;
+    catch (std::invalid_argument& e)
+    {
+        sLogger.failure("%s", e.what());
+        ASSERT(false)
+    }
+    return false;
 }
 
-bool ConfigFile::tryGetInt(std::string sectionName, std::string confName, uint32_t* i)
+bool ConfigFile::tryGetInt(const std::string& sectionName, const std::string& confName, uint32_t* i)
 {
-    const auto setting = getSavedSetting(sectionName, confName);
-    if (!setting)
+    try
     {
-        return false;
+        if (const auto setting = getSavedSetting(sectionName, confName))
+        {
+            *i = setting->asInt;
+            return true;
+        }
     }
 
-    *i = setting->asInt;
-    return true;
+    catch (std::invalid_argument& e)
+    {
+        sLogger.failure("%s", e.what());
+        ASSERT(false)
+    }
+    return false;
 }
 
-bool ConfigFile::tryGetString(std::string sectionName, std::string confName, std::string* s)
+bool ConfigFile::tryGetString(const std::string& sectionName, const std::string& confName, std::string* s)
 {
-    const auto setting = getSavedSetting(sectionName, confName);
-    if (!setting)
+    try
     {
-        return false;
+        if (const auto setting = getSavedSetting(sectionName, confName))
+        {
+            *s = setting->asString;
+            return true;
+        }
     }
 
-    *s = setting->asString;
-    return true;
+    catch (std::invalid_argument& e)
+    {
+        sLogger.failure("%s", e.what());
+        ASSERT(false)
+    }
+    return false;
 }

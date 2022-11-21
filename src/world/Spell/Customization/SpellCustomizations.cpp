@@ -1,14 +1,13 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Spell/SpellMgr.h"
-#include "Spell/Definitions/AuraEffects.h"
-#include "Spell/Definitions/DiminishingGroup.h"
-#include "Spell/Definitions/SpellDamageType.h"
-#include "Spell/Definitions/SpellEffects.h"
-#include "Spell/Definitions/SpellIsFlags.h"
+#include "Spell/SpellMgr.hpp"
+#include "Spell/Definitions/AuraEffects.hpp"
+#include "Spell/Definitions/DiminishingGroup.hpp"
+#include "Spell/Definitions/SpellEffects.hpp"
+#include "Spell/Definitions/SpellIsFlags.hpp"
 
 //\brief: This file includes all old setted custom values or spell.dbc overwrite values
 // If possible, these should be get rid of or moved under appropriate class (like that diminishing group)
@@ -459,11 +458,7 @@ uint32_t SpellMgr::getDiminishingGroup(uint32_t id) const
         case 57094:
         case 58861:
         //SPELL_HASH_IMPACT
-        case 11103:
         case 12355:
-        case 12357:
-        case 12358:
-        case 64343:
         //SPELL_HASH_CHEAP_SHOT
         case 1833:
         case 6409:
@@ -801,8 +796,11 @@ void SpellMgr::setSpellEffectAmplitude(SpellInfo* sp)
             continue;
 
         if (sp->getEffectApplyAuraName(i) == 0 &&
-            (sp->getEffectApplyAuraName(i) == SPELL_AURA_PERIODIC_TRIGGER_SPELL ||
-                sp->getEffectApplyAuraName(i) == SPELL_AURA_PERIODIC_TRIGGER_SPELL_WITH_VALUE))
+            (sp->getEffectApplyAuraName(i) == SPELL_AURA_PERIODIC_TRIGGER_SPELL
+#if VERSION_STRING >= TBC
+                || sp->getEffectApplyAuraName(i) == SPELL_AURA_PERIODIC_TRIGGER_SPELL_WITH_VALUE
+#endif
+            ))
         {
             sp->setEffectAmplitude(1000, i);
 

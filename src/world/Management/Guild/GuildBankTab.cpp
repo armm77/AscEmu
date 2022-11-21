@@ -1,15 +1,19 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Guild.hpp"
 #include "GuildBankTab.hpp"
 #include "Server/MainServerDefines.h"
-#include "Management/Item.h"
-#include "Objects/ObjectMgr.h"
+#include "Objects/Item.hpp"
+#include "Management/ObjectMgr.h"
+
+#if VERSION_STRING < Cata
 #include "Server/Packets/MsgQueryGuildBankText.h"
+#else
 #include "Server/Packets/SmsgGuildBankQueryTextResult.h"
+#endif
 
 using namespace AscEmu::Packets;
 
@@ -46,9 +50,9 @@ void GuildBankTab::removeBankTabItemFromDB(bool removeItemsFromDB)
     {
         if (Item* pItem = mItems[slotId])
         {
-            pItem->RemoveFromWorld();
+            pItem->removeFromWorld();
             if (removeItemsFromDB)
-                pItem->DeleteFromDB();
+                pItem->deleteFromDB();
 
             delete pItem;
             pItem = nullptr;
@@ -93,7 +97,7 @@ bool GuildBankTab::writeSlotPacket(WorldPacket& data, uint8_t slotId, bool ignor
         if (uint32_t random = pItem->getRandomPropertiesId())
         {
             data << uint32_t(random);
-            data << uint32_t(pItem->GenerateRandomSuffixFactor(pItem->getItemProperties()));
+            data << uint32_t(pItem->generateRandomSuffixFactor(pItem->getItemProperties()));
         }
         else
         {
@@ -148,9 +152,9 @@ void GuildBankTab::setText(std::string const& text)
 void GuildBankTab::sendText(Guild const* guild, WorldSession* session) const
 {
     if (session)
-        sLogger.debug("sendText %s: Tabid: %u, Text: %s", session->GetPlayer()->getName().c_str(), static_cast<uint32_t>(mTabId), mText.c_str());
+        sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "sendText % s: Tabid: % u, Text : % s", session->GetPlayer()->getName().c_str(), static_cast<uint32_t>(mTabId), mText.c_str());
     else
-        sLogger.debug("sendText (Broadcast): Tabid: %u, Text: %s", static_cast<uint32_t>(mTabId), mText.c_str());
+            sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "sendText (Broadcast): Tabid: %u, Text: %s", static_cast<uint32_t>(mTabId), mText.c_str());
 
 #if VERSION_STRING < Cata
     if (session)
@@ -195,7 +199,7 @@ bool GuildBankTab::setItem(uint8_t slotId, Item* item)
         uint32_t slot_id = 0;
         if (slotId == 0 || slotId == UNDEFINED_TAB_SLOT)
         {
-            for (int i = 0; i < MAX_GUILD_BANK_SLOTS; ++i)
+            for (uint8_t i = 0; i < MAX_GUILD_BANK_SLOTS; ++i)
             {
                 if (mItems[i] == nullptr)
                 {

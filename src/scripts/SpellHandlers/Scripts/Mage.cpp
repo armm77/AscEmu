@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,21 +7,25 @@ This file is released under the MIT license. See README-MIT for more information
 
 enum MageSpells
 {
+    SPELL_ARCANE_MISSILES_PROC  = 79683,
+    SPELL_DEEP_FREEZE_DAMAGE    = 71757,
     SPELL_GLYPH_OF_THE_PENGUIN  = 52648,
     SPELL_HOT_STREAK_BUFF       = 48108,
     SPELL_HOT_STREAK_R1         = 44445,
     SPELL_HOT_STREAK_R2         = 44446,
     SPELL_HOT_STREAK_R3         = 44448,
+    SPELL_IMPACT_DUMMY          = 64343,
+    SPELL_IMPACT_STUN           = 12355,
+    SPELL_INVISIBILITY          = 66,
+    SPELL_INVISIBILITY_REAL     = 32612,
     SPELL_MASTER_OF_ELEMENTS_R1 = 29074,
     SPELL_MASTER_OF_ELEMENTS_R2 = 29075,
     SPELL_MASTER_OF_ELEMENTS_R3 = 29076,
     SPELL_MASTER_OF_ELEMENTS    = 29077,
     SPELL_POLYMORPH_R1          = 118,
-#if VERSION_STRING < Cata
     SPELL_POLYMORPH_R2          = 12824,
     SPELL_POLYMORPH_R3          = 12825,
     SPELL_POLYMORPH_R4          = 12826,
-#endif
     SPELL_POLYMORPH_TURTLE      = 28271,
     SPELL_POLYMORPH_PIG         = 28272,
     SPELL_POLYMORPH_SERPENT     = 61025,
@@ -32,6 +36,30 @@ enum MageSpells
     ICON_POLYMORPH_SHEEP        = 82,
     CREATURE_CHILLY             = 29726, // Penguin NPC for Glyph of the Penguin
 };
+
+#if VERSION_STRING >= Cata
+class ArcaneMissilesProc : public SpellScript
+{
+public:
+    uint32_t calcProcChance(SpellProc* /*proc*/, Unit* /*victim*/, SpellInfo const* /*castingSpell*/) override
+    {
+        // DBC data says 100% but ingame tooltip says 40%
+        return 40;
+    }
+};
+#endif
+
+#if VERSION_STRING >= WotLK
+class DeepFreezeDamage : public SpellScript
+{
+public:
+    bool canProc(SpellProc* /*spellProc*/, Unit* /*victim*/, SpellInfo const* /*castingSpell*/, DamageInfo /*damageInfo*/) override
+    {
+        // TODO: prevent proc for now, fix this later
+        return false;
+    }
+};
+#endif
 
 #if VERSION_STRING >= WotLK
 class HotStreakDummy : public SpellScript
@@ -86,6 +114,94 @@ private:
     uint8_t critsInRow = 0;
 };
 #endif
+
+#if VERSION_STRING < Mop
+#if VERSION_STRING >= WotLK
+class ImpactDummy : public SpellScript
+{
+public:
+    bool canProc(SpellProc* /*spellProc*/, Unit* /*victim*/, SpellInfo const* /*castingSpell*/, DamageInfo damageInfo) override
+    {
+        if (damageInfo.weaponType == RANGED)
+            return false;
+
+        return damageInfo.fullDamage > 0;
+    }
+
+    SpellScriptExecuteState beforeAuraEffect(Aura* aur, AuraEffectModifier* /*aurEff*/, bool apply) override
+    {
+        // Override default action
+        if (apply)
+        {
+            auto spellProc = aur->getOwner()->addProcTriggerSpell(sSpellMgr.getSpellInfo(SPELL_IMPACT_STUN), aur, aur->getCasterGuid());
+            // If this proc is not skipped in next ::handleProc event and it was procced by Fire Blast,
+            // the same Fire Blast, that created this aura, will consume this aura
+            if (spellProc != nullptr)
+                spellProc->skipOnNextHandleProc(true);
+        }
+        else
+        {
+            aur->getOwner()->removeProcTriggerSpell(SPELL_IMPACT_STUN, aur->getCasterGuid());
+        }
+
+        return SpellScriptExecuteState::EXECUTE_PREVENT;
+    }
+};
+#endif
+
+class Impact : public SpellScript
+{
+public:
+    void onCreateSpellProc(SpellProc* proc, Object* /*obj*/) override
+    {
+        // TODO: classic and tbc masks
+#if VERSION_STRING >= WotLK
+        // Should proc only from Fire Blast
+        proc->setProcClassMask(EFF_INDEX_0, 0x2);
+#endif
+    }
+
+#if VERSION_STRING < WotLK
+    bool canProc(SpellProc* /*spellProc*/, Unit* /*victim*/, SpellInfo const* /*castingSpell*/, DamageInfo damageInfo) override
+    {
+        if (damageInfo.weaponType == RANGED)
+            return false;
+
+        return damageInfo.fullDamage > 0;
+    }
+#endif
+};
+#endif
+
+class Invisibility : public SpellScript
+{
+public:
+    // TODO: missing periodic threat reduction
+
+    SpellScriptExecuteState beforeSpellEffect(Spell* spell, uint8_t /*effIndex*/) override
+    {
+        if (spell->getUnitCaster() == nullptr)
+            return SpellScriptExecuteState::EXECUTE_PREVENT;
+
+        const auto spellDuration = spell->getDuration();
+        if (spellDuration == 0)
+        {
+            // Prismatic Cloak 3/3 reduces duration to 0 and invisibility should be applied instantly
+            spell->getUnitCaster()->castSpell(spell->getUnitCaster(), sSpellMgr.getSpellInfo(SPELL_INVISIBILITY_REAL), true);
+            return SpellScriptExecuteState::EXECUTE_PREVENT;
+        }
+
+        return SpellScriptExecuteState::EXECUTE_OK;
+    }
+
+    void onAuraRemove(Aura* aur, AuraRemoveMode mode) override
+    {
+        if (mode != AURA_REMOVE_ON_EXPIRE)
+            return;
+
+        aur->getOwner()->castSpell(aur->getOwner(), sSpellMgr.getSpellInfo(SPELL_INVISIBILITY_REAL), true);
+    }
+};
 
 #if VERSION_STRING < Mop
 class MasterOfElementsDummy : public SpellScript
@@ -157,13 +273,17 @@ public:
             for (uint8_t i = 0; i < MAX_SPELL_EFFECTS; ++i)
             {
                 const auto aurEff = originalAura->getAuraEffect(i);
-                if (aurEff.getAuraEffectType() == SPELL_AURA_NONE)
+                if (aurEff->getAuraEffectType() == SPELL_AURA_NONE)
                     continue;
 
-                if (aurEff.getAuraEffectType() == SPELL_AURA_PERIODIC_TRIGGER_SPELL ||
-                    aurEff.getAuraEffectType() == SPELL_AURA_PERIODIC_TRIGGER_SPELL_WITH_VALUE)
+#if VERSION_STRING == Classic
+                if (aurEff->getAuraEffectType() == SPELL_AURA_PERIODIC_TRIGGER_SPELL)
+#else
+                if (aurEff->getAuraEffectType() == SPELL_AURA_PERIODIC_TRIGGER_SPELL ||
+                    aurEff->getAuraEffectType() == SPELL_AURA_PERIODIC_TRIGGER_SPELL_WITH_VALUE)
+#endif
                 {
-                    ticks = originalAura->getPeriodicTickCountForEffect(aurEff.getEffectIndex());
+                    ticks = originalAura->getPeriodicTickCountForEffect(aurEff->getEffectIndex());
                     break;
                 }
             }
@@ -186,7 +306,7 @@ public:
 
     SpellScriptExecuteState onCastProcSpell(SpellProc* /*spellProc*/, Unit* /*caster*/, Unit* /*victim*/, Spell* spell) override
     {
-        spell->forced_basepoints[EFF_INDEX_0] = manaReturn;
+        spell->forced_basepoints.set(EFF_INDEX_0, manaReturn);
         manaReturn = 0;
         return SpellScriptExecuteState::EXECUTE_OK;
     }
@@ -210,7 +330,7 @@ public:
             // Dismount player on aura apply
             // TODO: should also dismount creatures
             if (aur->getPlayerOwner() != nullptr)
-                aur->getPlayerOwner()->Dismount();
+                aur->getPlayerOwner()->dismount();
 
             // Add this unitstate only for player polymorph spells
             // Mostly polymorphs casted by creatures won't regenerate health
@@ -218,7 +338,7 @@ public:
 
             // Glyph of the Penguin
             const auto caster = aur->GetUnitCaster();
-            if (caster != nullptr && caster->HasAura(SPELL_GLYPH_OF_THE_PENGUIN) && aur->getSpellInfo()->getSpellIconID() == ICON_POLYMORPH_SHEEP)
+            if (caster != nullptr && caster->hasAurasWithId(SPELL_GLYPH_OF_THE_PENGUIN) && aur->getSpellInfo()->getSpellIconID() == ICON_POLYMORPH_SHEEP)
             {
                 // Override misc value (Sheep) with Penguin npc
                 aurEff->setEffectMiscValue(CREATURE_CHILLY);
@@ -238,6 +358,14 @@ void setupMageSpells(ScriptMgr* mgr)
     // Call legacy script setup
     SetupLegacyMageSpells(mgr);
 
+#if VERSION_STRING >= Cata
+    mgr->register_spell_script(SPELL_ARCANE_MISSILES_PROC, new ArcaneMissilesProc);
+#endif
+
+#if VERSION_STRING >= WotLK
+    mgr->register_spell_script(SPELL_DEEP_FREEZE_DAMAGE, new DeepFreezeDamage);
+#endif
+
 #if VERSION_STRING >= WotLK
     uint32_t hotStreakIds[] =
     {
@@ -249,6 +377,15 @@ void setupMageSpells(ScriptMgr* mgr)
     mgr->register_spell_script(hotStreakIds, new HotStreakDummy);
     mgr->register_spell_script(SPELL_HOT_STREAK_BUFF, new HotStreak);
 #endif
+
+#if VERSION_STRING < Mop
+#if VERSION_STRING >= WotLK
+    mgr->register_spell_script(SPELL_IMPACT_DUMMY, new ImpactDummy);
+#endif
+    mgr->register_spell_script(SPELL_IMPACT_STUN, new Impact);
+#endif
+
+    mgr->register_spell_script(SPELL_INVISIBILITY, new Invisibility);
 
 #if VERSION_STRING < Mop
     uint32_t masterOfElementsId[] =

@@ -1,15 +1,15 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
+#include "Chat/ChatHandler.hpp"
 #include "Server/Packets/CmsgGuildQuery.h"
 #include "Server/Packets/SmsgGuildCommandResult.h"
 #include "Server/Packets/CmsgGuildInvite.h"
 #include "Management/Guild/GuildMgr.hpp"
-#include "Objects/ObjectMgr.h"
-#include "Server/Packets/SmsgGuildInfo.h"
+#include "Management/ObjectMgr.h"
 #include "Server/Packets/MsgSaveGuildEmblem.h"
 #include "Server/Packets/CmsgGuildBankBuyTab.h"
 #include "Server/Packets/MsgGuildBankLogQuery.h"
@@ -21,20 +21,14 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgGuildRemove.h"
 #include "Server/Packets/CmsgGuildPromote.h"
 #include "Server/Packets/CmsgGuildDemote.h"
-#include "Server/Packets/CmsgGuildSetPublicNote.h"
-#include "Server/Packets/CmsgGuildSetOfficerNote.h"
-#include "Server/Packets/CmsgGuildSetNote.h"
-#include "Server/Packets/CmsgGuildDelRank.h"
 #include "Server/Packets/CmsgGuildBankWithdrawMoney.h"
 #include "Server/Packets/CmsgGuildBankDepositMoney.h"
 #include "Server/Packets/CmsgGuildBankUpdateTab.h"
 #include "Server/Packets/CmsgGuildBankSwapItems.h"
-#include "Server/Packets/MsgQueryGuildBankText.h"
-#include "Server/Packets/CmsgGuildBankQueryText.h"
 #include "Server/Packets/CmsgGuildBankQueryTab.h"
 #include "Server/Packets/CmsgGuildBankerActivate.h"
 #include "Server/Packets/CmsgGuildSetRank.h"
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Server/Packets/CmsgPetitionShowSignatures.h"
 #include "Server/Packets/SmsgPetitionShowSignatures.h"
 #include "Server/Packets/CmsgOfferPetition.h"
@@ -50,10 +44,19 @@ This file is released under the MIT license. See README-MIT for more information
 #include "scripts/InstanceScripts/Setup.h"
 #include "Storage/WorldStrings.h"
 
-#if VERSION_STRING == Cata
-#include "GameCata/Management/GuildFinderMgr.h"
-#elif VERSION_STRING == Mop
-#include "GameMop/Management/GuildFinderMgr.h"
+#if VERSION_STRING < Cata
+#include "Server/Packets/SmsgGuildInfo.h"
+#include "Server/Packets/CmsgGuildSetPublicNote.h"
+#include "Server/Packets/CmsgGuildSetOfficerNote.h"
+#include "Server/Packets/MsgQueryGuildBankText.h"
+#else
+#include "Server/Packets/CmsgGuildBankQueryText.h"
+#include "Server/Packets/CmsgGuildDelRank.h"
+#include "Server/Packets/CmsgGuildSetNote.h"
+#endif
+
+#if VERSION_STRING >= Cata
+#include "Management/Guild/GuildFinderMgr.hpp"
 #endif
 
 using namespace AscEmu::Packets;
@@ -84,7 +87,7 @@ void WorldSession::handleInviteToGuild(WorldPacket& recvPacket)
         return;
 
     if (Guild* guild = _player->getGuild())
-        guild->sendGuildInvitePacket(_player->GetSession(), srlPacket.name);
+        guild->sendGuildInvitePacket(_player->getSession(), srlPacket.name);
 }
 
 #if VERSION_STRING < Cata
@@ -193,7 +196,7 @@ void WorldSession::handleSetGuildBankText(WorldPacket& recvPacket)
         return;
 
     if (Guild* guild = _player->getGuild())
-        guild->setBankTabText(static_cast<uint8_t>(srlPacket.tabId), srlPacket.text);
+        guild->setBankTabText(srlPacket.tabId, srlPacket.text);
 }
 
 void WorldSession::handleGuildLeader(WorldPacket& recvPacket)
@@ -202,7 +205,7 @@ void WorldSession::handleGuildLeader(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name.c_str());
+    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name);
     if (targetPlayerInfo == nullptr)
     {
         SendPacket(SmsgGuildCommandResult(GC_TYPE_CREATE, srlPacket.name, GC_ERROR_PLAYER_NOT_FOUND_S).serialise().get());
@@ -250,7 +253,7 @@ void WorldSession::handleGuildRemove(WorldPacket& recvPacket)
         return;
 
 #if VERSION_STRING < Cata
-    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name.c_str());
+    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name);
     if (targetPlayerInfo == nullptr)
         return;
 
@@ -270,7 +273,7 @@ void WorldSession::handleGuildPromote(WorldPacket& recvPacket)
         return;
 
 #if VERSION_STRING < Cata
-    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name.c_str());
+    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name);
     if (targetPlayerInfo == nullptr)
         return;
 
@@ -290,7 +293,7 @@ void WorldSession::handleGuildDemote(WorldPacket& recvPacket)
         return;
 
 #if VERSION_STRING < Cata
-    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name.c_str());
+    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name);
     if (targetPlayerInfo == nullptr)
         return;
 
@@ -309,7 +312,7 @@ void WorldSession::handleGuildSetPublicNote(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.targetName.c_str());
+    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.targetName);
     if (targetPlayerInfo == nullptr)
         return;
 
@@ -323,7 +326,7 @@ void WorldSession::handleGuildSetOfficerNote(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.targetName.c_str());
+    const auto targetPlayerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.targetName);
     if (targetPlayerInfo == nullptr)
         return;
 
@@ -461,7 +464,7 @@ void WorldSession::handleGuildBankerActivate(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto gameObject = _player->GetMapMgr()->GetGameObject(srlPacket.guid.getGuidLow());
+    const auto gameObject = _player->getWorldMap()->getGameObject(srlPacket.guid.getGuidLow());
     if (gameObject == nullptr)
         return;
 
@@ -503,7 +506,7 @@ void WorldSession::handleCharterShowSignatures(WorldPacket& recvPacket)
         return;
 
     if (Charter* charter = sObjectMgr.GetCharterByItemGuid(srlPacket.itemGuid))
-        _player->GetSession()->SendPacket(SmsgPetitionShowSignatures(srlPacket.itemGuid, charter->GetLeader(), charter->GetID(), static_cast<uint8_t>(charter->SignatureCount),
+        _player->getSession()->SendPacket(SmsgPetitionShowSignatures(srlPacket.itemGuid, charter->GetLeader(), charter->GetID(), static_cast<uint8_t>(charter->SignatureCount),
             charter->Slots, charter->Signatures).serialise().get());
 }
 
@@ -513,27 +516,27 @@ void WorldSession::handleCharterOffer(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    Player* pTarget = _player->GetMapMgr()->GetPlayer(srlPacket.playerGuid.getGuidLow());
+    Player* pTarget = _player->getWorldMap()->getPlayer(srlPacket.playerGuid.getGuidLow());
     Charter* pCharter = sObjectMgr.GetCharterByItemGuid(srlPacket.itemGuid);
     if (pCharter == nullptr)
     {
-        SendNotification(_player->GetSession()->LocalizedWorldSrv(ServerString::SS_ITEM_NOT_FOUND));
+        SendNotification(_player->getSession()->LocalizedWorldSrv(ServerString::SS_ITEM_NOT_FOUND));
         return;
     }
 
     if (pTarget == nullptr || pTarget->getTeam() != _player->getTeam() || (pTarget == _player && !worldConfig.player.isInterfactionGuildEnabled))
     {
-        SendNotification(_player->GetSession()->LocalizedWorldSrv(ServerString::SS_TARGET_WRONG_FACTION));
+        SendNotification(_player->getSession()->LocalizedWorldSrv(ServerString::SS_TARGET_WRONG_FACTION));
         return;
     }
 
     if (!pTarget->canSignCharter(pCharter, _player))
     {
-        SendNotification(_player->GetSession()->LocalizedWorldSrv(ServerString::SS_CANNOT_SIGN_MORE_REASONS));
+        SendNotification(_player->getSession()->LocalizedWorldSrv(ServerString::SS_CANNOT_SIGN_MORE_REASONS));
         return;
     }
 
-    pTarget->GetSession()->SendPacket(SmsgPetitionShowSignatures(srlPacket.itemGuid, pCharter->GetLeader(), pCharter->GetID(), static_cast<uint8_t>(pCharter->SignatureCount),
+    pTarget->getSession()->SendPacket(SmsgPetitionShowSignatures(srlPacket.itemGuid, pCharter->GetLeader(), pCharter->GetID(), static_cast<uint8_t>(pCharter->SignatureCount),
         pCharter->Slots, pCharter->Signatures).serialise().get());
 }
 
@@ -558,7 +561,7 @@ void WorldSession::handleCharterSign(WorldPacket& recvPacket)
         {
             if (charter->Signatures[i] == _player->getGuid())
             {
-                SendNotification(_player->GetSession()->LocalizedWorldSrv(ServerString::SS_ALREADY_SIGNED_CHARTER));
+                SendNotification(_player->getSession()->LocalizedWorldSrv(ServerString::SS_ALREADY_SIGNED_CHARTER));
                 SendPacket(SmsgPetitionSignResult(srlPacket.itemGuid, _player->getGuid(), PetitionSignResult::AlreadySigned).serialise().get());
                 return;
             }
@@ -570,13 +573,13 @@ void WorldSession::handleCharterSign(WorldPacket& recvPacket)
         charter->AddSignature(_player->getGuidLow());
         charter->SaveToDB();
         _player->m_charters[charter->CharterType] = charter;
-        _player->SaveToDB(false);
+        _player->saveToDB(false);
 
-        Player* player = _player->GetMapMgr()->GetPlayer(charter->GetLeader());
+        Player* player = _player->getWorldMap()->getPlayer(charter->GetLeader());
         if (player == nullptr)
             return;
 
-        player->SendPacket(SmsgPetitionSignResult(srlPacket.itemGuid, _player->getGuid(), PetitionSignResult::OK).serialise().get());
+        player->sendPacket(SmsgPetitionSignResult(srlPacket.itemGuid, _player->getGuid(), PetitionSignResult::OK).serialise().get());
         SendPacket(SmsgPetitionSignResult(srlPacket.itemGuid, uint64_t(charter->GetLeader()), PetitionSignResult::OK).serialise().get());
     }
 }
@@ -593,7 +596,7 @@ void WorldSession::handleCharterDecline(WorldPacket& recvPacket)
 
     Player* player = sObjectMgr.GetPlayer(charter->GetLeader());
     if (player)
-        player->GetSession()->SendPacket(MsgPetitionDecline(_player->getGuid()).serialise().get());
+        player->getSession()->SendPacket(MsgPetitionDecline(_player->getGuid()).serialise().get());
 }
 
 void WorldSession::handleCharterRename(WorldPacket& recvPacket)
@@ -637,7 +640,7 @@ void WorldSession::handleCharterTurnInCharter(WorldPacket& recvPacket)
         if (playerCharter == nullptr)
             return;
 
-        if (playerCharter->SignatureCount < playerCharter->GetNumberOfSlotsByType() && worldConfig.guild.requireAllSignatures && !_player->GetSession()->HasGMPermissions())
+        if (playerCharter->SignatureCount < playerCharter->GetNumberOfSlotsByType() && worldConfig.guild.requireAllSignatures && !_player->getSession()->HasGMPermissions())
         {
             Guild::sendTurnInPetitionResult(this, PETITION_ERROR_NEED_MORE_SIGNATURES);
             return;
@@ -679,13 +682,13 @@ void WorldSession::handleCharterTurnInCharter(WorldPacket& recvPacket)
                 return;
         }
 
-        if (_player->getArenaTeam(charter->CharterType - 1) != nullptr)
+        if (_player->getArenaTeam(charter->CharterType - 1U) != nullptr)
         {
             sChatHandler.SystemMessage(this, LocalizedWorldSrv(ServerString::SS_ALREADY_ARENA_TEAM));
             return;
         }
 
-        if (charter->SignatureCount < charter->GetNumberOfSlotsByType() && !_player->GetSession()->HasGMPermissions())
+        if (charter->SignatureCount < charter->GetNumberOfSlotsByType() && !_player->getSession()->HasGMPermissions())
         {
             ///\ todo: missing correct error message for arena charters
             Guild::sendTurnInPetitionResult(this, PETITION_ERROR_NEED_MORE_SIGNATURES);
@@ -704,11 +707,11 @@ void WorldSession::handleCharterTurnInCharter(WorldPacket& recvPacket)
 
         sObjectMgr.AddArenaTeam(arenaTeam);
         sObjectMgr.UpdateArenaTeamRankings();
-        arenaTeam->AddMember(_player->m_playerInfo);
+        arenaTeam->addMember(_player->m_playerInfo);
 
         for (uint32_t i = 0; i < charter->SignatureCount; ++i)
-            if (PlayerInfo* info = sObjectMgr.GetPlayerInfo(charter->Signatures[i]))
-                arenaTeam->AddMember(info);
+            if (CachedCharacterInfo* info = sObjectMgr.GetPlayerInfo(charter->Signatures[i]))
+                arenaTeam->addMember(info);
 
         _player->getItemInterface()->SafeFullRemoveItemByGuid(srlPacket.itemGuid);
         _player->m_charters[charter->CharterType] = nullptr;
@@ -735,7 +738,7 @@ void WorldSession::handleCharterBuy(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    Creature* creature = _player->GetMapMgr()->GetCreature(srlPacket.creatureGuid.getGuidLow());
+    Creature* creature = _player->getWorldMap()->getCreature(srlPacket.creatureGuid.getGuidLow());
     if (!creature)
     {
         Disconnect();
@@ -750,26 +753,26 @@ void WorldSession::handleCharterBuy(WorldPacket& recvPacket)
         const auto arena_type = static_cast<uint8_t>(srlPacket.arenaIndex - 1);
         if (_player->getArenaTeam(arena_type))
         {
-            SendNotification(_player->GetSession()->LocalizedWorldSrv(ServerString::SS_ALREADY_ARENA_TEAM));
+            SendNotification(_player->getSession()->LocalizedWorldSrv(ServerString::SS_ALREADY_ARENA_TEAM));
             return;
         }
 
         ArenaTeam* arenaTeam = sObjectMgr.GetArenaTeamByName(srlPacket.name, arena_type);
         if (arenaTeam != nullptr)
         {
-            sChatHandler.SystemMessage(this, _player->GetSession()->LocalizedWorldSrv(ServerString::SS_PETITION_NAME_ALREADY_USED));
+            sChatHandler.SystemMessage(this, _player->getSession()->LocalizedWorldSrv(ServerString::SS_PETITION_NAME_ALREADY_USED));
             return;
         }
 
         if (sObjectMgr.GetCharterByName(srlPacket.name, static_cast<CharterTypes>(srlPacket.arenaIndex)))
         {
-            sChatHandler.SystemMessage(this, _player->GetSession()->LocalizedWorldSrv(ServerString::SS_PETITION_NAME_ALREADY_USED));
+            sChatHandler.SystemMessage(this, _player->getSession()->LocalizedWorldSrv(ServerString::SS_PETITION_NAME_ALREADY_USED));
             return;
         }
 
         if (_player->m_charters[srlPacket.arenaIndex])
         {
-            SendNotification(_player->GetSession()->LocalizedWorldSrv(ServerString::SS_ALREADY_ARENA_CHARTER));
+            SendNotification(_player->getSession()->LocalizedWorldSrv(ServerString::SS_ALREADY_ARENA_CHARTER));
             return;
         }
 
@@ -824,7 +827,7 @@ void WorldSession::handleCharterBuy(WorldPacket& recvPacket)
             if (!_player->getItemInterface()->AddItemToFreeSlot(item))
             {
                 charter->Destroy();
-                item->DeleteMe();
+                item->deleteMe();
                 return;
             }
 
@@ -835,7 +838,7 @@ void WorldSession::handleCharterBuy(WorldPacket& recvPacket)
 
             _player->modCoinage(-static_cast<int32_t>(costs[arena_type]));
             _player->m_charters[srlPacket.arenaIndex] = charter;
-            _player->SaveToDB(false);
+            _player->saveToDB(false);
         }
     }
     else
@@ -850,13 +853,13 @@ void WorldSession::handleCharterBuy(WorldPacket& recvPacket)
         Charter* charter = sObjectMgr.GetCharterByName(srlPacket.name, CHARTER_TYPE_GUILD);
         if (guild != nullptr || charter != nullptr)
         {
-            SendNotification(_player->GetSession()->LocalizedWorldSrv(ServerString::SS_GUILD_NAME_ALREADY_IN_USE));
+            SendNotification(_player->getSession()->LocalizedWorldSrv(ServerString::SS_GUILD_NAME_ALREADY_IN_USE));
             return;
         }
 
         if (_player->m_charters[CHARTER_TYPE_GUILD])
         {
-            SendNotification(_player->GetSession()->LocalizedWorldSrv(ServerString::SS_ALREADY_GUILD_CHARTER));
+            SendNotification(_player->getSession()->LocalizedWorldSrv(ServerString::SS_ALREADY_GUILD_CHARTER));
             return;
         }
 
@@ -898,7 +901,7 @@ void WorldSession::handleCharterBuy(WorldPacket& recvPacket)
             if (!_player->getItemInterface()->AddItemToFreeSlot(item))
             {
                 guildCharter->Destroy();
-                item->DeleteMe();
+                item->deleteMe();
                 return;
             }
 
@@ -909,7 +912,7 @@ void WorldSession::handleCharterBuy(WorldPacket& recvPacket)
 
             _player->m_charters[CHARTER_TYPE_GUILD] = guildCharter;
             _player->modCoinage(-1000);
-            _player->SaveToDB(false);
+            _player->saveToDB(false);
         }
     }
 }
@@ -1296,7 +1299,7 @@ void WorldSession::handleGuildFinderBrowse(WorldPacket& recvPacket)
     if (guildCount == 0)
     {
         WorldPacket packet(SMSG_LF_GUILD_BROWSE_UPDATED, 0);
-        player->SendPacket(&packet);
+        player->sendPacket(&packet);
         return;
     }
 
@@ -1370,7 +1373,7 @@ void WorldSession::handleGuildFinderBrowse(WorldPacket& recvPacket)
     data.flushBits();
     data.append(bufferData);
 
-    player->SendPacket(&data);
+    player->sendPacket(&data);
 }
 
 void WorldSession::handleGuildFinderDeclineRecruit(WorldPacket& recvPacket)
@@ -1466,7 +1469,7 @@ void WorldSession::handleGuildFinderGetApplications(WorldPacket& /*recvPacket*/)
     }
     data << uint32_t(10 - sGuildFinderMgr.countRequestsFromPlayer(_player->getGuidLow()));
 
-    _player->SendPacket(&data);
+    _player->sendPacket(&data);
 }
 
 void WorldSession::handleGuildFinderGetRecruits(WorldPacket& recvPacket)
@@ -1490,7 +1493,7 @@ void WorldSession::handleGuildFinderGetRecruits(WorldPacket& recvPacket)
         MembershipRequest request = *itr;
         WoWGuid playerGuid(request.getPlayerGUID(), 0, HIGHGUID_TYPE_PLAYER);
 
-        PlayerInfo* info = sObjectMgr.GetPlayerInfo(request.getPlayerGUID());
+        CachedCharacterInfo* info = sObjectMgr.GetPlayerInfo(request.getPlayerGUID());
         std::string name = info->name;
 
         data.writeBits(request.getComment().size(), 11);
@@ -1539,7 +1542,7 @@ void WorldSession::handleGuildFinderGetRecruits(WorldPacket& recvPacket)
     data.append(dataBuffer);
     data << uint32_t(time(nullptr));
 
-    player->SendPacket(&data);
+    player->sendPacket(&data);
 }
 
 void WorldSession::handleGuildFinderPostRequest(WorldPacket& /*recvPacket*/)
@@ -1581,7 +1584,7 @@ void WorldSession::handleGuildFinderPostRequest(WorldPacket& /*recvPacket*/)
         data.flushBits();
     }
 
-    player->GetSession()->SendPacket(&data);
+    player->getSession()->SendPacket(&data);
 }
 
 void WorldSession::handleGuildFinderRemoveRecruit(WorldPacket& recvPacket)

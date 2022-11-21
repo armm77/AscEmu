@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Management/TaxiMgr.h"
 #include "Storage/MySQLDataStore.hpp"
 #include "Server/Packets/CmsgTaxiQueryAvailableNodes.h"
@@ -14,7 +14,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/SmsgActivatetaxireply.h"
 #include "Server/Packets/CmsgActivatetaxiexpress.h"
 #include "Server/Packets/CmsgActivatetaxi.h"
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Server/Packets/SmsgNewTaxiPath.h"
 
 using namespace AscEmu::Packets;
@@ -30,9 +30,9 @@ void WorldSession::sendTaxiList(Creature* creature)
     const auto field = static_cast<uint8_t>((nearestNode - 1) / 32);
     const uint32_t subMask = 1 << ((nearestNode - 1) % 32);
 
-    if (!(_player->GetTaximask(field) & subMask) && !_player->m_cheats.hasTaxiCheat)
+    if (!(_player->getTaxiMask(field) & subMask) && !_player->m_cheats.hasTaxiCheat)
     {
-        _player->SetTaximask(field, (subMask | _player->GetTaximask(field)));
+        _player->setTaxiMask(field, (subMask | _player->getTaxiMask(field)));
 
         SendPacket(SmsgNewTaxiPath().serialise().get());
 
@@ -46,7 +46,7 @@ void WorldSession::sendTaxiList(Creature* creature)
     if (!_player->m_cheats.hasTaxiCheat)
     {
         for (uint32_t i = 0; i < DBC_TAXI_MASK_SIZE; ++i)
-            tmpTaxiNodeMask[i] &= _player->GetTaximask(i);
+            tmpTaxiNodeMask[i] &= _player->getTaxiMask(i);
     }
 
     std::array<uint32_t, DBC_TAXI_MASK_SIZE> taxiMask{};
@@ -60,7 +60,7 @@ uint8_t isTaximaskKnown(Player* player, uint32_t nearestNode)
     const auto field = static_cast<uint8_t>((nearestNode - 1) / 32);
     const uint32_t submask = 1 << ((nearestNode - 1) % 32);
 
-    if ((player->GetTaximask(field) & submask) != submask)
+    if ((player->getTaxiMask(field) & submask) != submask)
         return 0;
 
     return 1;
@@ -68,8 +68,6 @@ uint8_t isTaximaskKnown(Player* player, uint32_t nearestNode)
 
 void WorldSession::handleTaxiNodeStatusQueryOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgTaxinodeStatusQuery srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -86,30 +84,26 @@ void WorldSession::handleTaxiNodeStatusQueryOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleTaxiQueryAvaibleNodesOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgTaxiQueryAvailableNodes srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
     sLogger.debug("WORLD: Received CMSG_TAXIQUERYAVAILABLENODES");
 
-    if (const auto creature = _player->GetMapMgr()->GetCreature(srlPacket.creatureGuid.getGuidLowPart()))
+    if (const auto creature = _player->getWorldMap()->getCreature(srlPacket.creatureGuid.getGuidLowPart()))
         sendTaxiList(creature);
 }
 
 void WorldSession::handleEnabletaxiOpcode(WorldPacket& recvPacket)
 {
 #if VERSION_STRING > TBC
-    CHECK_INWORLD_RETURN
-
     CmsgEnabletaxi srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
     sLogger.debug("WORLD: Received CMSG_ENABLETAXI");
 
-    if (const auto creature = _player->GetMapMgr()->GetCreature(srlPacket.creatureGuid.getGuidLowPart()))
+    if (const auto creature = _player->getWorldMap()->getCreature(srlPacket.creatureGuid.getGuidLowPart()))
         sendTaxiList(creature);
 #endif
 }
@@ -134,13 +128,11 @@ uint32_t getMountForNode(Player* player, TaxiNode* taxiNode)
 
 void WorldSession::handleActivateTaxiOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgActivatetaxi srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_ACTIVATETAXI");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_ACTIVATETAXI");
 
     if (_player->hasUnitFlags(UNIT_FLAG_LOCK_PLAYER))
         return;
@@ -155,7 +147,7 @@ void WorldSession::handleActivateTaxiOpcode(WorldPacket& recvPacket)
     const auto field = static_cast<uint8_t>((currentNode - 1) / 32);
     const uint32_t subMask = 1 << ((currentNode - 1) % 32);
 
-    if ((_player->GetTaximask(field) & subMask) != subMask)
+    if ((_player->getTaxiMask(field) & subMask) != subMask)
     {
         SendPacket(SmsgActivatetaxireply(TaxiNodeError::UnspecificError).serialise().get());
         return;
@@ -180,20 +172,18 @@ void WorldSession::handleActivateTaxiOpcode(WorldPacket& recvPacket)
         _player->interruptSpellWithSpellType(CurrentSpellType(i));
 
     const uint32_t modelId = getMountForNode(_player, taxiNode);
-    _player->taxi_model_id = modelId;
+    _player->m_taxiMountDisplayId = modelId;
 
-    _player->TaxiStart(taxiPath, modelId, 0);
+    _player->startTaxiPath(taxiPath, modelId, 0);
 }
 
 void WorldSession::handleMultipleActivateTaxiOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgActivatetaxiexpress srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_ACTIVATETAXIEXPRESS");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_ACTIVATETAXIEXPRESS");
 
     if (_player->hasUnitFlags(UNIT_FLAG_LOCK_PLAYER))
         return;
@@ -216,7 +206,7 @@ void WorldSession::handleMultipleActivateTaxiOpcode(WorldPacket& recvPacket)
     const auto field = static_cast<uint8_t>((currentNode - 1) / 32);
     const uint32_t subMask = 1 << ((currentNode - 1) % 32);
 
-    if ((_player->GetTaximask(field) & subMask) != subMask)
+    if ((_player->getTaxiMask(field) & subMask) != subMask)
     {
         SendPacket(SmsgActivatetaxireply(TaxiNodeError::UnspecificError).serialise().get());
         return;
@@ -245,7 +235,7 @@ void WorldSession::handleMultipleActivateTaxiOpcode(WorldPacket& recvPacket)
     }
 
     const uint32_t modelId = getMountForNode(_player, taxiNode);
-    _player->taxi_model_id = modelId;
+    _player->m_taxiMountDisplayId = modelId;
 
     SendPacket(SmsgActivatetaxireply(TaxiNodeError::Ok).serialise().get());
 
@@ -259,5 +249,5 @@ void WorldSession::handleMultipleActivateTaxiOpcode(WorldPacket& recvPacket)
         _player->m_taxiPaths.push_back(additionalTaxiPath);
     }
 
-    _player->TaxiStart(taxiPath, modelId, 0);
+    _player->startTaxiPath(taxiPath, modelId, 0);
 }

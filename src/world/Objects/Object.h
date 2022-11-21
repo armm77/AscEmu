@@ -1,58 +1,43 @@
 /*
- * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
- * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
- * Copyright (C) 2005-2007 Ascent Team
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- */
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+This file is released under the MIT license. See README-MIT for more information.
+*/
 
-#ifndef OBJECT_H
-#define OBJECT_H
+#pragma once
 
 #include "ObjectDefines.h"
-
-#include "Server/UpdateFieldInclude.h"
 #include "Server/UpdateMask.h"
 #include "CommonTypes.hpp"
 #include "Server/EventableObject.h"
-#include "Server/IUpdatable.h"
 
 #include <set>
 #include <map>
+#include <mutex>
+#include <shared_mutex>
 
 #include "WoWGuid.h"
-#include "../shared/LocationVector.h"
+#include <LocationVector.h>
 #include "Storage/MySQLStructures.h"
 #include "Storage/DBC/DBCStructures.hpp"
+
 #if VERSION_STRING >= Cata
     #include "Storage/DB2/DB2Structures.h"
 #endif
-#include "../shared/CommonDefines.hpp"
+#include <CommonDefines.hpp>
 #include "WorldPacket.h"
 #include "Units/Creatures/CreatureDefines.hpp"
 #include "Data/WoWObject.hpp"
 #include "MovementInfo.h"
-#include "Spell/Definitions/School.h"
+#include "Spell/Definitions/ProcFlags.hpp"
+#include "Spell/Definitions/School.hpp"
+#include "Units/UnitDefines.hpp"
+#include "Units/Creatures/Summons/SummonDefines.hpp"
+#include "ObjectDefines.h"
 
 struct WoWObject;
-
 class SpellInfo;
-
 struct FactionDBC;
 struct AuraEffectModifier;
-
 class Unit;
 class Group;
 class Transporter;
@@ -61,11 +46,14 @@ class ByteBuffer;
 class WorldSession;
 class Player;
 class MapCell;
-class MapMgr;
+class WorldMap;
+class InstanceMap;
+class BattlegroundMap;
 class ObjectContainer;
 class DynamicObject;
 class Creature;
 class GameObject;
+class Summon;
 class Pet;
 class Spell;
 class Aura;
@@ -73,8 +61,8 @@ class UpdateMask;
 class EventableObject;
 
 #define MAX_INTERACTION_RANGE 5.0f
+float const DEFAULT_COLLISION_HEIGHT = 2.03128f; // Most common value in dbc
 
-// MIT Start
 enum CurrentSpellType : uint8_t
 {
     CURRENT_MELEE_SPELL         = 0,
@@ -99,6 +87,9 @@ struct DamageInfo
     bool isCritical = false;
     bool isPeriodic = false;
 
+    uint32_t attackerProcFlags = PROC_NULL;
+    uint32_t victimProcFlags = PROC_NULL;
+
     uint8_t getSchoolTypeFromMask() const
     {
         for (uint8_t i = 0; i < TOTAL_SPELL_SCHOOLS; ++i)
@@ -112,8 +103,46 @@ struct DamageInfo
     }
 };
 
-class SERVER_DECL Object : public EventableObject, public IUpdatable
+class SERVER_DECL Object : public EventableObject
 {
+public:
+
+    Object();
+    virtual ~Object();
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Essential functions (mostly inherited by other classes)
+
+    // updated by EventableObject
+    void Update(unsigned long /*time_passed*/) {}
+
+    // adds/queues object to world and links WorldMap to it if possible
+    virtual void AddToWorld();
+
+    // adds/queues objext to world and links WorldMap to it
+    virtual void AddToWorld(WorldMap* pMapMgr);
+
+    // Unlike addtoworld it pushes it directly ignoring add pool this can only be called from the thread of WorldMap!
+    void PushToWorld(WorldMap*);
+
+    // removes object from world and queue
+    virtual void RemoveFromWorld(bool free_guid);
+
+    // True if object exists in world, else false
+    bool IsInWorld() const { return m_WorldMap != NULL; }
+
+    // is called BEFORE pushing the Object in the game world
+    virtual void OnPrePushToWorld() {}
+
+    // is called AFTER pushing the Object in the game world
+    virtual void OnPushToWorld() {}
+
+    // is called BEFORE removing the Object from the game world
+    virtual void OnPreRemoveFromWorld() {}
+
+    // is called AFTER removing the Object from the game world
+    virtual void OnRemoveFromWorld() {}
+
     //////////////////////////////////////////////////////////////////////////////////////////
     // Object values
 
@@ -122,7 +151,7 @@ protected:
     {
         uint8_t* wow_data_ptr;
         WoWObject* wow_data;
-        uint32_t* m_uint32Values;
+        uint32_t* m_uint32Values = nullptr;
     };
 
     bool skipping_updates = false;
@@ -166,6 +195,19 @@ public:
     void setEntry(uint32_t entry);
     uint32_t getEntry() const;
 
+#if VERSION_STRING >= Mop
+    uint32_t getDynamicField() const;
+    uint16_t getDynamicFlags() const;
+    int16_t getDynamicPathProgress() const;
+    void setDynamicField(uint32_t dynamic);
+    void setDynamicField(uint16_t dynamicFlags, int16_t pathProgress);
+    void setDynamicFlags(uint16_t dynamicFlags);
+    void addDynamicFlags(uint16_t dynamicFlags);
+    void removeDynamicFlags(uint16_t dynamicFlags);
+    bool hasDynamicFlags(uint16_t dynamicFlags) const;
+    void setDynamicPathProgress(int16_t pathProgress);
+#endif
+
     float getScale() const;
     void setScale(float scaleX);
 
@@ -176,10 +218,15 @@ public:
     //! This includes any nested objects we have, inventory for example.
     virtual uint32_t buildCreateUpdateBlockForPlayer(ByteBuffer* data, Player* target);
 
+    // Forces update for WoWData field
+    void forceBuildUpdateValueForField(uint32_t field, Player* target);
+    // Forces update for multiple WoWData fields
+    void forceBuildUpdateValueForFields(uint32_t const* fields, Player* target);
+
     //////////////////////////////////////////////////////////////////////////////////////////
     // Object Type Id
 protected:
-    uint8_t m_objectTypeId;
+    uint8_t m_objectTypeId = TYPEID_UNIT;
 
 public:
     uint8_t getObjectTypeId() const;
@@ -196,6 +243,7 @@ public:
     virtual bool isTotem() const { return false; }
     virtual bool isSummon() const { return false; }
     virtual bool isVehicle() const { return false; }
+    virtual bool isTransporter() const { return false; }
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Position functions
@@ -204,12 +252,11 @@ public:
 
     float getDistanceSq(LocationVector target) const;
     float getDistanceSq(float x, float y, float z) const;
-    Player* asPlayer();
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Spell functions
 private:
-    Spell* m_currentSpell[CURRENT_SPELL_MAX];
+    Spell* m_currentSpell[CURRENT_SPELL_MAX] = {nullptr};
 
     std::map<Spell*, bool> m_travelingSpells;
     std::list<Spell*> m_garbageSpells;
@@ -250,6 +297,10 @@ private:
     std::vector<Object*> mInRangeOppositeFactionSet;
     std::vector<Object*> mInRangeSameFactionSet;
 
+    mutable std::mutex m_inRangeSetMutex;
+    mutable std::mutex m_inRangeFactionSetMutex;
+    mutable std::shared_mutex m_inRangePlayerSetMutex;
+
 public:
     // general
     virtual void clearInRangeSets();
@@ -259,33 +310,31 @@ public:
     void removeSelfFromInrangeSets();
 
     // Objects
-    std::vector<Object*> getInRangeObjectsSet();
+    std::vector<Object*> getInRangeObjectsSet() const;
 
-    bool hasInRangeObjects();
-    size_t getInRangeObjectsCount();
+    bool hasInRangeObjects() const;
+    size_t getInRangeObjectsCount() const;
 
-    bool isObjectInInRangeObjectsSet(Object* pObj);
+    bool isObjectInInRangeObjectsSet(Object* pObj) const;
     void removeObjectFromInRangeObjectsSet(Object* pObj);
 
     // Players
-    std::vector<Object*> getInRangePlayersSet();
-
-    size_t getInRangePlayersCount();
-
+    std::vector<Object*> getInRangePlayersSet() const;
+    size_t getInRangePlayersCount() const;
 
     // Opposite Faction
-    std::vector<Object*> getInRangeOppositeFactionSet();
+    std::vector<Object*> getInRangeOppositeFactionSet() const;
 
-    bool isObjectInInRangeOppositeFactionSet(Object* pObj);
+    bool isObjectInInRangeOppositeFactionSet(Object* pObj) const;
     void updateInRangeOppositeFactionSet();
 
     void addInRangeOppositeFaction(Object* obj);
     void removeObjectFromInRangeOppositeFactionSet(Object* obj);
 
     // same faction
-    std::vector<Object*> getInRangeSameFactionSet();
+    std::vector<Object*> getInRangeSameFactionSet() const;
 
-    bool isObjectInInRangeSameFactionSet(Object* pObj);
+    bool isObjectInInRangeSameFactionSet(Object* pObj) const;
     void updateInRangeSameFactionSet();
 
     void addInRangeSameFaction(Object* obj);
@@ -294,39 +343,22 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////////
     // Owner
 
-    // Returns player charmer, player owner or self
+    // Returns unit charmer or unit owner
+    virtual Unit* getUnitOwner();
+    // Returns unit charmer, unit owner or self
+    virtual Unit* getUnitOwnerOrSelf();
+    // Returns player charmer and player owner
     virtual Player* getPlayerOwner();
+    // Returns player charmer, player owner or self
+    virtual Player* getPlayerOwnerOrSelf();
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Misc
 
     void sendGameobjectDespawnAnim();
 
-    // MIT End
-
-        Object();
-        virtual ~Object();
-
-        void Update(unsigned long /*time_passed*/) {}
-
-        // True if object exists in world, else false
-        bool IsInWorld() { return m_mapMgr != NULL; }
-        virtual void AddToWorld();
-        virtual void AddToWorld(MapMgr* pMapMgr);
-        void PushToWorld(MapMgr*);
-        virtual void RemoveFromWorld(bool free_guid);
-
-        // Virtual method that is called, BEFORE pushing the Object in the game world
-        virtual void OnPrePushToWorld() {}
-
-        // Virtual method that is called, AFTER pushing the Object in the game world
-        virtual void OnPushToWorld() {}
-
-        // Virtual method that is called, BEFORE removing the Object from the game world
-        virtual void OnPreRemoveFromWorld() {}
-
-        // Virtual method that is called, AFTER removing the Object from the game world
-        virtual void OnRemoveFromWorld() {}
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // AGPL Starts
 
         // Guid always comes first
 
@@ -361,8 +393,11 @@ public:
         const float & GetSpawnO() const { return m_spawnLocation.o; }
         LocationVector GetSpawnPosition() const { return m_spawnLocation; }
 
-        ::DBC::Structures::AreaTableEntry const* GetArea();
+        ::DBC::Structures::AreaTableEntry const* GetArea() const;
 
+        void getPosition(float &x, float &y) const { x = GetPositionX(); y = GetPositionY(); }
+        void getPosition(float &x, float &y, float &z) const { getPosition(x, y); z = GetPositionZ(); }
+        void getPosition(float &x, float &y, float &z, float &o) const { getPosition(x, y, z); o = GetOrientation(); }
         LocationVector GetPosition() const { return LocationVector(m_position); }
         LocationVector & GetPositionNC() { return m_position; }
         LocationVector* GetPositionV() { return &m_position; }
@@ -381,6 +416,50 @@ public:
         uint8 GetTransSeat() const { return obj_movement_info.transport_seat; }
 #endif
 
+        Player* ToPlayer() { if (isPlayer()) return reinterpret_cast<Player*>(this); else return nullptr; }
+        Player const* ToPlayer() const { if (isPlayer()) return (Player*)this; else return nullptr; }
+        Creature* ToCreature() { if (isCreature()) return reinterpret_cast<Creature*>(this); else return nullptr; }
+        Creature const* ToCreature() const { if (isCreature()) return (Creature*)this; else return nullptr; }
+        Summon* ToSummon() { if (isSummon()) return reinterpret_cast<Summon*>(this); else return nullptr; }
+        Summon const* ToSummon() const { if (isSummon()) return (Summon*)this; else return nullptr; }
+        Unit* ToUnit() { if (isCreatureOrPlayer()) return reinterpret_cast<Unit*>(this); else return nullptr; }
+        Unit const* ToUnit() const { if (isCreatureOrPlayer()) return (Unit*)this; else return nullptr; }
+        GameObject* ToGameObject() { if (isGameObject()) return reinterpret_cast<GameObject*>(this); else return nullptr; }
+        GameObject const* ToGameObject() const { if (isGameObject()) return (GameObject*)this; else return nullptr; }
+
+        float getExactDist2dSq(const float x, const float y) const
+        {
+            float dx = x - GetPositionX();
+            float dy = y - GetPositionY();
+            return dx * dx + dy * dy;
+        }
+        float getExactDist2dSq(LocationVector const& pos) const { return getExactDist2dSq(pos.x, pos.y); }
+        float getExactDist2dSq(LocationVector const* pos) const { return getExactDist2dSq(*pos); }
+
+        float getExactDist2d(const float x, const float y) const { return std::sqrt(getExactDist2dSq(x, y)); }
+        float getExactDist2d(LocationVector const& pos) const { return getExactDist2d(pos.x, pos.y); }
+        float getExactDist2d(LocationVector const* pos) const { return getExactDist2d(*pos); }
+
+        float getExactDistSq(float x, float y, float z) const
+        {
+            float dz = z - GetPositionZ();
+            return getExactDist2dSq(x, y) + dz * dz;
+        }
+        float getExactDistSq(LocationVector const& pos) const { return getExactDistSq(pos.x, pos.y, pos.z); }
+        float getExactDistSq(LocationVector const* pos) const { return getExactDistSq(*pos); }
+
+        float getExactDist(float x, float y, float z) const { return std::sqrt(getExactDistSq(x, y, z)); }
+        float getExactDist(LocationVector const& pos) const { return getExactDist(pos.x, pos.y, pos.z); }
+        float getExactDist(LocationVector const* pos) const { return getExactDist(*pos); }
+
+        float getDistance(Object const* obj) const;
+        float getDistance(LocationVector const& pos) const;
+        float getDistance(float x, float y, float z) const;
+        float getDistance2d(Object const* obj) const;
+        float getDistance2d(float x, float y) const;
+
+        float getDistanceZ(Object const* obj) const;
+
         // Distance Calculation
         float CalcDistance(Object* Ob);
         float CalcDistance(float ObX, float ObY, float ObZ);
@@ -393,27 +472,27 @@ public:
         bool IsWithinLOSInMap(Object* obj);
         bool IsWithinLOS(LocationVector location);
 
-        // Only for MapMgr use
+        // Only for WorldMap use
         MapCell* GetMapCell() const;
-    uint32 GetMapCellX() { return m_mapCell_x; }
-    uint32 GetMapCellY() { return m_mapCell_y; }
-        // Only for MapMgr use
+        uint32 GetMapCellX() { return m_mapCell_x; }
+        uint32 GetMapCellY() { return m_mapCell_y; }
+        // Only for WorldMap use
         void SetMapCell(MapCell* cell);
-        // Only for MapMgr use
-        MapMgr* GetMapMgr() const { return m_mapMgr; }
+        // Only for WorldMap use
+        WorldMap* getWorldMap() const { return m_WorldMap; }
 
-        Object* GetMapMgrObject(const uint64 & guid);
-        Pet* GetMapMgrPet(const uint64 & guid);
-        Unit* GetMapMgrUnit(const uint64 & guid);
-        Player* GetMapMgrPlayer(const uint64 & guid);
-        Creature* GetMapMgrCreature(const uint64 & guid);
-        GameObject* GetMapMgrGameObject(const uint64 & guid);
-        DynamicObject* GetMapMgrDynamicObject(const uint64 & guid);
+        Object* getWorldMapObject(const uint64_t & guid);
+        Pet* getWorldMapPet(const uint64_t & guid);
+        Unit* getWorldMapUnit(const uint64_t & guid);
+        Player* getWorldMapPlayer(const uint64_t & guid);
+        Creature* getWorldMapCreature(const uint64_t & guid);
+        GameObject* getWorldMapGameObject(const uint64_t & guid);
+        DynamicObject* getWorldMapDynamicObject(const uint64_t & guid);
 
         void SetMapId(uint32 newMap) { m_mapId = newMap; }
         void SetZoneId(uint32 newZone);
 
-    uint32 GetMapId() const { return m_mapId; }
+        uint32 GetMapId() const { return m_mapId; }
         const uint32 & GetZoneId() const { return m_zoneId; }
 
         void SetNewGuid(uint32 Guid)
@@ -431,8 +510,9 @@ public:
 
         bool HasUpdateField(uint32 index)
         {
-            ARCEMU_ASSERT(index < m_valuesCount)
-            return m_updateMask.GetBit(index);
+            if (index < m_valuesCount)
+                return m_updateMask.GetBit(index);
+            return false;
         }
 
         // Use this to check if a object is in range of another
@@ -462,6 +542,37 @@ public:
         }
         float getAbsoluteAngle(LocationVector const& pos) { return getAbsoluteAngle(pos.x, pos.y); }
         float getAbsoluteAngle(Object const* obj) { return getAbsoluteAngle(obj->GetPosition()); }
+        float getAbsoluteAngle(LocationVector const* pos) const { return getAbsoluteAngle(pos->x, pos->y); }
+        float toAbsoluteAngle(float relAngle) const { return normalizeOrientation(relAngle + GetOrientation()); }
+
+        float toRelativeAngle(float absAngle) const { return normalizeOrientation(absAngle - GetOrientation()); }
+        float getRelativeAngle(Object const* obj) { return getRelativeAngle(obj->GetPosition()); }
+        float getRelativeAngle(float x, float y) const { return toRelativeAngle(getAbsoluteAngle(x, y)); }
+        float getRelativeAngle(LocationVector const& pos) const { return toRelativeAngle(getAbsoluteAngle(pos.x, pos.y)); }
+        float getRelativeAngle(LocationVector const* pos) const { return toRelativeAngle(getAbsoluteAngle(pos)); }
+
+        bool isInDist2d(LocationVector const& pos, float dist) const { return pos.getExactDist2dSq(pos) < dist * dist; }
+        bool isInDist(Object* pos, float dist) { return GetPosition().getExactDistSq(pos->GetPositionX(), pos->GetPositionY(), pos->GetPositionZ()) < dist * dist; }
+        bool isInDist(LocationVector const& pos, float dist) { return pos.getExactDistSq(pos) < dist * dist; }
+
+        void getNearPoint2D(Object* searcher, float& x, float& y, float distance, float absAngle);
+        void getNearPoint(Object* searcher, float& x, float& y, float& z, float distance2d, float absAngle);
+        void getClosePoint(float& x, float& y, float& z, float size, float distance2d = 0, float relAngle = 0);
+
+        LocationVector getHitSpherePointFor(LocationVector const& dest);
+        void getHitSpherePointFor(LocationVector const& dest, float& x, float& y, float& z) const;
+        LocationVector getHitSpherePointFor(LocationVector const& dest) const;
+        void updateAllowedPositionZ(float x, float y, float &z, float* groundZ = nullptr);
+        float getMapWaterOrGroundLevel(float x, float y, float z, float* ground = nullptr);
+        float getFloorZ();
+        float getMapHeight(LocationVector pos, bool vmap = true, float distanceToSearch = 50.0f);
+        void movePositionToFirstCollision(LocationVector &pos, float dist, float angle);
+        LocationVector getFirstCollisionPosition(float dist, float angle);
+
+        virtual float getCombatReach() const { return 0.0f; } // overridden (only) in Unit
+
+        GameObject* summonGameObject(uint32_t entryID, LocationVector pos, QuaternionData const& rot, uint32_t spawnTime = 0, GOSummonType summonType = GO_SUMMON_TIMED_OR_CORPSE_DESPAWN);
+        Creature* summonCreature(uint32_t entry, LocationVector position, CreatureSummonDespawnType despawnType = MANUAL_DESPAWN, uint32_t duration = 0, uint32_t spellId = 0);
 
         float getDistanceSq(Object* obj)
         {
@@ -482,8 +593,10 @@ public:
             return m_position.Distance2DSq(obj->m_position);
         }
 
+        virtual float getCollisionHeight() const { return 0.0f; }
+
         //////////////////////////////////////////////////////////////////////////////////////////
-        // void OutPacket(uint16 opcode, uint16 len, const void *data)
+        // void outPacket(uint16 opcode, uint16 len, const void *data)
         // Sends a packet to the Player
         //
         // \param uint16 opcode      -   opcode of the packet
@@ -493,10 +606,10 @@ public:
         // \return none
         //
         //////////////////////////////////////////////////////////////////////////////////////////
-        virtual void OutPacket(uint16_t /*opcode*/, uint16_t /*len*/, const void* /*data*/) {};
+        virtual void outPacket(uint16_t /*opcode*/, uint16_t /*len*/, const void* /*data*/) {};
 
         //////////////////////////////////////////////////////////////////////////////////////////
-        // void SendPacket(WorldPacket *packet)
+        // void sendPacket(WorldPacket *packet)
         //  Sends a packet to the Player
         //
         // \param WorldPAcket *packet      -     the packet that needs to be sent
@@ -504,14 +617,13 @@ public:
         // \return none
         //
         //////////////////////////////////////////////////////////////////////////////////////////
-        virtual void SendPacket(WorldPacket* /*packet*/) {};
+        virtual void sendPacket(WorldPacket* /*packet*/) {};
 
-        void SendCreatureChatMessageInRange(Creature* creature, uint32_t textId);
-        void SendMonsterSayMessageInRange(Creature* creature, MySQLStructure::NpcMonsterSay* npcMonsterSay, int randChoice, uint32_t event);
+        void SendCreatureChatMessageInRange(Creature* creature, uint32_t textId, Unit* target = nullptr);
 
-        virtual void SendMessageToSet(WorldPacket* data, bool self, bool myteam_only = false);
-        //void SendMessageToSet(StackBufferBase* data, bool self) { OutPacketToSet(data->GetOpcode(), static_cast<uint16>(data->GetSize()), data->GetBufferPointer(), self); }
-        virtual void OutPacketToSet(uint16 Opcode, uint16 Len, const void* Data, bool self);
+        virtual void sendMessageToSet(WorldPacket* data, bool self, bool myteam_only = false);
+        virtual void sendMessageToSet(WorldPacket* data, Player const* /*skipp*/);
+        virtual void outPacketToSet(uint16 Opcode, uint16 Len, const void* Data, bool self);
 
         //////////////////////////////////////////////////////////////////////////////////////////
         // void SendAIReaction(uint32 reaction = 2)
@@ -541,9 +653,9 @@ public:
 
         MovementInfo obj_movement_info;
 
-        uint32 m_phase;         // This stores the phase, if two objects have the same bit set, then they can see each other. The default phase is 0x1.
+        uint32 m_phase = 1;         // This stores the phase, if two objects have the same bit set, then they can see each other. The default phase is 0x1.
 
-    uint32 GetPhase() { return m_phase; }
+    uint32 GetPhase() const { return m_phase; }
         virtual void Phase(uint8 command = PHASE_SET, uint32 newphase = 1);
 
         // SpellLog packets just to keep the code cleaner and better to read
@@ -553,8 +665,10 @@ public:
         void setServersideFaction();
         uint32 getServersideFaction();
 
-        DBC::Structures::FactionTemplateEntry const* m_factionTemplate;
-        DBC::Structures::FactionEntry const* m_factionEntry;
+        DBC::Structures::FactionTemplateEntry const* m_factionTemplate = nullptr;
+        DBC::Structures::FactionEntry const* m_factionEntry = nullptr;
+
+        bool isNeutralToAll() const;
 
         void SetInstanceID(int32 instance) { m_instanceId = instance; }
         int32 GetInstanceID() { return m_instanceId; }
@@ -564,16 +678,16 @@ public:
         // Object activation
     private:
 
-        bool Active;
+        bool Active = false;
     public:
 
         bool IsActive() { return Active; }
         virtual bool CanActivate();
-        virtual void Activate(MapMgr* mgr);
-        virtual void Deactivate(MapMgr* mgr);
+        virtual void Activate(WorldMap* mgr);
+        virtual void deactivate(WorldMap* mgr);
         // Player is in pvp queue.
-        bool m_inQueue;
-        void SetMapMgr(MapMgr* mgr) { m_mapMgr = mgr; }
+        bool m_inQueue = false;
+        void SetMapMgr(WorldMap* mgr) { m_WorldMap = mgr; }
 
         void Delete()
         {
@@ -596,9 +710,9 @@ public:
         void _Create(uint32 mapid, float x, float y, float z, float ang);
 
         // Mark values that need updating for specified player.
-        virtual void _SetUpdateBits(UpdateMask* updateMask, Player* target) const;
+        virtual void setUpdateBits(UpdateMask* updateMask, Player* target) const;
         // Mark values that player should get when he/she/it sees object for first time.
-        virtual void _SetCreateBits(UpdateMask* updateMask, Player* target) const;
+        virtual void setCreateBits(UpdateMask* updateMask, Player* target) const;
 
         // Create updates that player will see
 #if VERSION_STRING < WotLK
@@ -607,7 +721,7 @@ public:
         void buildMovementUpdate(ByteBuffer* data, uint16_t updateFlags, Player* target);
 #endif
 
-        void buildValuesUpdate(ByteBuffer* data, UpdateMask* updateMask, Player* target);
+        void buildValuesUpdate(uint8_t updateType, ByteBuffer* data, UpdateMask* updateMask, Player* target);
 
         // WoWGuid class
         WoWGuid m_wowGuid;
@@ -618,39 +732,42 @@ public:
         //update flag
         uint16 m_updateFlag;
 
+        float m_staticFloorZ = -100000.0f;
+
         // Zone id.
-        uint32 m_zoneId;
+        uint32 m_zoneId = 0;
         // Continent/map id.
-        uint32 m_mapId;
+        uint32 m_mapId = MAPID_NOT_IN_WORLD;
         // Map manager
-        MapMgr* m_mapMgr;
+        WorldMap* m_WorldMap = nullptr;
         // Current map cell row and column
-        uint32 m_mapCell_x, m_mapCell_y;
+        uint32 m_mapCell_x = uint32(-1);
+        uint32 m_mapCell_y = uint32(-1);
 
         // Main Function called by isInFront();
         bool inArc(float Position1X, float Position1Y, float FOV, float Orientation, float Position2X, float Position2Y);
 
-        LocationVector m_position;
+        LocationVector m_position = {0, 0, 0, 0};
         LocationVector m_lastMapUpdatePosition;
-        LocationVector m_spawnLocation;
+        LocationVector m_spawnLocation = { 0, 0, 0, 0 };
 
         // Number of properties
-        uint16 m_valuesCount;
+        uint16 m_valuesCount = 0;
 
         // List of object properties that need updating.
         UpdateMask m_updateMask;
 
         // True if object was updated
-        bool m_objectUpdated;
+        bool m_objectUpdated = false;
 
-        int32 m_instanceId;
+        int32 m_instanceId = INSTANCEID_NOT_IN_WORLD;
 
         // Transporters
-        Transporter* m_transport;
+        Transporter* m_transport = nullptr;
 
     public:
 
-        bool m_loadedFromDB;
+        bool m_loadedFromDB = false;
 
         // Andy's crap
         std::set<Spell*> m_pendingSpells;
@@ -659,5 +776,3 @@ public:
         bool GetRandomPoint(float rad, float & outx, float & outy, float & outz) { return GetPoint(Util::getRandomFloat(float(M_PI * 2)), rad, outx, outy, outz); }
         bool GetRandomPoint(float rad, LocationVector & out) { return GetRandomPoint(rad, out.x, out.y, out.z); }
 };
-
-#endif // OBJECT_H

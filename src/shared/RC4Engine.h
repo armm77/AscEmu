@@ -19,6 +19,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "CommonTypes.hpp"
+
 class RC4Engine
 {
         unsigned char perm[256];
@@ -33,10 +35,10 @@ class RC4Engine
             Setup(keybytes, keylen);
         }
 
-        RC4Engine() : Initialized(false), index1(0), index2(0) {}
+        RC4Engine() : index1(0), index2(0), Initialized(false) {}
 
         //! Destructor
-        ~RC4Engine() { }
+        ~RC4Engine() = default;
 
         //! Initializes permutation, etc.
         void Setup(const unsigned char* keybytes, const unsigned int keylen)

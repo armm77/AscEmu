@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/Packets/CmsgClearTradeItem.h"
 #include "Server/Packets/CmsgInitiateTrade.h"
 #include "Server/Packets/SmsgTradeStatus.h"
@@ -13,14 +13,15 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/MainServerDefines.h"
 #include "Server/World.h"
 #include "Server/WorldSession.h"
-#include "Spell/Definitions/SpellCastTargetFlags.h"
-#include "Units/Players/Player.h"
-#include "Units/Players/PlayerDefines.hpp"
-#include "Units/UnitDefines.hpp"
-#include "Map/MapMgr.h"
-#include "Objects/ObjectMgr.h"
-#include "Management/Container.h"
+#include "Spell/Definitions/SpellCastTargetFlags.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Objects/Units/Players/PlayerDefines.hpp"
+#include "Objects/Units/UnitDefines.hpp"
+#include "Map/Management/MapMgr.hpp"
+#include "Management/ObjectMgr.h"
+#include "Objects/Container.h"
 #include "Management/ItemInterface.h"
+#include "Spell/SpellMgr.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -31,7 +32,7 @@ void WorldSession::handleInitiateTradeOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto playerTarget = _player->GetMapMgrPlayer(srlPacket.guid.getGuidLow());
+    const auto playerTarget = _player->getWorldMapPlayer(srlPacket.guid.getGuidLow());
 #else
     ObjectGuid targetGuid;
 
@@ -53,7 +54,7 @@ void WorldSession::handleInitiateTradeOpcode(WorldPacket& recvPacket)
     recvPacket.ReadByteSeq(targetGuid[6]);
     recvPacket.ReadByteSeq(targetGuid[0]);
 
-    const auto playerTarget = _player->GetMapMgrPlayer(static_cast<uint32_t>(targetGuid));
+    const auto playerTarget = _player->getWorldMapPlayer(static_cast<uint32_t>(targetGuid));
 #endif
 
     if (_player->m_TradeData != nullptr)
@@ -80,13 +81,13 @@ void WorldSession::handleInitiateTradeOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (_player->hasUnitStateFlag(UNIT_STATE_STUN))
+    if (_player->hasUnitStateFlag(UNIT_STATE_STUNNED))
     {
         sendTradeResult(TRADE_STATUS_YOU_STUNNED);
         return;
     }
 
-    if (playerTarget->hasUnitStateFlag(UNIT_STATE_STUN))
+    if (playerTarget->hasUnitStateFlag(UNIT_STATE_STUNNED))
     {
         sendTradeResult(TRADE_STATUS_TARGET_STUNNED);
         return;
@@ -110,7 +111,7 @@ void WorldSession::handleInitiateTradeOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (playerTarget->GetSession()->LoggingOut)
+    if (playerTarget->getSession()->LoggingOut)
     {
         sendTradeResult(TRADE_STATUS_TARGET_LOGOUT);
         return;
@@ -153,7 +154,7 @@ void WorldSession::handleInitiateTradeOpcode(WorldPacket& recvPacket)
 
     data << uint32_t(0);              // unk
 
-    playerTarget->GetSession()->SendPacket(&data);
+    playerTarget->getSession()->SendPacket(&data);
 #endif
 }
 
@@ -173,7 +174,7 @@ void WorldSession::handleBeginTradeOpcode(WorldPacket& /*recvPacket*/)
     }
 
     sendTradeResult(TRADE_STATUS_INITIATED);
-    tradeData->getTradeTarget()->GetSession()->sendTradeResult(TRADE_STATUS_INITIATED);
+    tradeData->getTradeTarget()->getSession()->sendTradeResult(TRADE_STATUS_INITIATED);
 }
 
 void WorldSession::handleSetTradeGold(WorldPacket& recvPacket)
@@ -262,7 +263,7 @@ void WorldSession::handleAcceptTrade(WorldPacket& /*recvPacket*/)
                 }
             }
 
-            if (tradeItem->getItemProperties()->Bonding == ITEM_BIND_ON_PICKUP || tradeItem->getItemProperties()->Bonding == ITEM_BIND_QUEST)
+            if (!tradeItem->isTradeableWith(tradeTarget))
             {
                 _player->cancelTrade(true);
                 return;
@@ -283,7 +284,7 @@ void WorldSession::handleAcceptTrade(WorldPacket& /*recvPacket*/)
                 }
             }
 
-            if (tradeItem->getItemProperties()->Bonding == ITEM_BIND_ON_PICKUP || tradeItem->getItemProperties()->Bonding == ITEM_BIND_QUEST)
+            if (!tradeItem->isTradeableWith(tradeTarget))
             {
                 tradeTarget->cancelTrade(true);
                 return;
@@ -303,7 +304,7 @@ void WorldSession::handleAcceptTrade(WorldPacket& /*recvPacket*/)
     // If trade target has not accepted, do not proceed
     if (!targetTradeData->isTradeAccepted())
     {
-        tradeTarget->GetSession()->sendTradeResult(TRADE_STATUS_ACCEPTED);
+        tradeTarget->getSession()->sendTradeResult(TRADE_STATUS_ACCEPTED);
         return;
     }
 
@@ -316,7 +317,7 @@ void WorldSession::handleAcceptTrade(WorldPacket& /*recvPacket*/)
         targetTradeItems[i] = targetTradeData->getTradeItem(TradeSlots(i));
     }
 
-    tradeTarget->GetSession()->sendTradeResult(TRADE_STATUS_ACCEPTED);
+    tradeTarget->getSession()->sendTradeResult(TRADE_STATUS_ACCEPTED);
 
     // Check player's spell on the lowest item
     Spell* playerSpell = nullptr;
@@ -393,11 +394,21 @@ void WorldSession::handleAcceptTrade(WorldPacket& /*recvPacket*/)
         {
             tradeItems[i]->setGiftCreatorGuid(_player->getGuid());
             _player->getItemInterface()->SafeRemoveAndRetreiveItemByGuid(tradeItems[i]->getGuid(), true);
+
+#if VERSION_STRING >= WotLK
+            if (tradeItems[i]->hasFlags(ITEM_FLAG_BOP_TRADEABLE))
+                _player->getItemInterface()->removeTradeableItem(tradeItems[i]);
+#endif
         }
         if (targetTradeItems[i] != nullptr)
         {
             targetTradeItems[i]->setGiftCreatorGuid(tradeTarget->getGuid());
             tradeTarget->getItemInterface()->SafeRemoveAndRetreiveItemByGuid(targetTradeItems[i]->getGuid(), true);
+
+#if VERSION_STRING >= WotLK
+            if (targetTradeItems[i]->hasFlags(ITEM_FLAG_BOP_TRADEABLE))
+                tradeTarget->getItemInterface()->removeTradeableItem(targetTradeItems[i]);
+#endif
         }
     }
 
@@ -408,13 +419,23 @@ void WorldSession::handleAcceptTrade(WorldPacket& /*recvPacket*/)
         {
             tradeItems[i]->setOwner(tradeTarget);
             if (!tradeTarget->getItemInterface()->AddItemToFreeSlot(tradeItems[i]))
-                tradeItems[i]->DeleteMe();
+                tradeItems[i]->deleteMe();
+
+#if VERSION_STRING >= WotLK
+            if (tradeItems[i]->hasFlags(ITEM_FLAG_BOP_TRADEABLE))
+                tradeTarget->getItemInterface()->addTradeableItem(tradeItems[i]);
+#endif
         }
         if (targetTradeItems[i] != nullptr)
         {
             targetTradeItems[i]->setOwner(_player);
             if (!_player->getItemInterface()->AddItemToFreeSlot(targetTradeItems[i]))
-                targetTradeItems[i]->DeleteMe();
+                targetTradeItems[i]->deleteMe();
+
+#if VERSION_STRING >= WotLK
+            if (targetTradeItems[i]->hasFlags(ITEM_FLAG_BOP_TRADEABLE))
+                _player->getItemInterface()->addTradeableItem(targetTradeItems[i]);
+#endif
         }
     }
 
@@ -454,11 +475,11 @@ void WorldSession::handleAcceptTrade(WorldPacket& /*recvPacket*/)
     delete tradeTarget->m_TradeData;
     tradeTarget->m_TradeData = nullptr;
 
-    _player->GetSession()->sendTradeResult(TRADE_STATUS_COMPLETE);
-    tradeTarget->GetSession()->sendTradeResult(TRADE_STATUS_COMPLETE);
+    _player->getSession()->sendTradeResult(TRADE_STATUS_COMPLETE);
+    tradeTarget->getSession()->sendTradeResult(TRADE_STATUS_COMPLETE);
 
-    _player->SaveToDB(false);
-    tradeTarget->SaveToDB(false);
+    _player->saveToDB(false);
+    tradeTarget->saveToDB(false);
 }
 
 void WorldSession::handleCancelTrade(WorldPacket& /*recvPacket*/)
@@ -493,10 +514,12 @@ void WorldSession::handleSetTradeItem(WorldPacket& recvPacket)
         if (tradeItem->isAccountbound())
             return;
 
-        if (tradeItem->isSoulbound())
+        if (!tradeItem->isTradeableWith(tradeData->getTradeTarget()))
         {
             sCheatLog.writefromsession(this, "tried to cheat trade a soulbound item");
-            Disconnect();
+            // not a good idea since we can trade soulbound items if item flag is set. 
+            // Would Disconnect the Trader when the Trader is not on the allowedGuids list.
+            //Disconnect(); 
             return;
         }
     }
@@ -556,12 +579,12 @@ void WorldSession::handleBusyTrade(WorldPacket& /*recvPacket*/)
     const auto tradeData = _player->getTradeData();
     if (tradeData == nullptr)
     {
-        _player->GetSession()->sendTradeResult(TRADE_STATUS_PLAYER_NOT_FOUND);
+        _player->getSession()->sendTradeResult(TRADE_STATUS_PLAYER_NOT_FOUND);
         return;
     }
 
-    _player->GetSession()->sendTradeResult(TRADE_STATUS_PLAYER_BUSY);
-    tradeData->getTradeTarget()->GetSession()->sendTradeResult(TRADE_STATUS_PLAYER_BUSY);
+    _player->getSession()->sendTradeResult(TRADE_STATUS_PLAYER_BUSY);
+    tradeData->getTradeTarget()->getSession()->sendTradeResult(TRADE_STATUS_PLAYER_BUSY);
 
     _player->cancelTrade(false, true);
 }
@@ -571,12 +594,12 @@ void WorldSession::handleIgnoreTrade(WorldPacket& /*recvPacket*/)
     const auto tradeData = _player->getTradeData();
     if (tradeData == nullptr)
     {
-        _player->GetSession()->sendTradeResult(TRADE_STATUS_PLAYER_NOT_FOUND);
+        _player->getSession()->sendTradeResult(TRADE_STATUS_PLAYER_NOT_FOUND);
         return;
     }
 
-    _player->GetSession()->sendTradeResult(TRADE_STATUS_IGNORES_YOU);
-    tradeData->getTradeTarget()->GetSession()->sendTradeResult(TRADE_STATUS_IGNORES_YOU);
+    _player->getSession()->sendTradeResult(TRADE_STATUS_IGNORES_YOU);
+    tradeData->getTradeTarget()->getSession()->sendTradeResult(TRADE_STATUS_IGNORES_YOU);
 
     // Client sends this opcode after trade is created so TradeData must be cleaned
     _player->cancelTrade(false, true);
@@ -588,8 +611,8 @@ void WorldSession::handleUnacceptTrade(WorldPacket& /*recvPacket*/)
     if (tradeData == nullptr)
         return;
 
-    _player->GetSession()->sendTradeResult(TRADE_STATUS_UNACCEPTED);
-    tradeData->getTradeTarget()->GetSession()->sendTradeResult(TRADE_STATUS_UNACCEPTED);
+    _player->getSession()->sendTradeResult(TRADE_STATUS_UNACCEPTED);
+    tradeData->getTradeTarget()->getSession()->sendTradeResult(TRADE_STATUS_UNACCEPTED);
 
     _player->getTradeData()->setTradeAccepted(false, true);
 }
@@ -712,27 +735,27 @@ void WorldSession::sendTradeUpdate(bool tradeState /*= true*/)
         }
 
         ++itemCount;
-        const auto itemProperties = item->getItemProperties();
-        ARCEMU_ASSERT(itemProperties != nullptr);
+        if (const auto itemProperties = item->getItemProperties())
+        {
+            data << uint32_t(itemProperties->ItemId);
+            data << uint32_t(itemProperties->DisplayInfoID);
+            data << uint32_t(item->getStackCount());
+            data << uint32_t(item->hasFlags(ITEM_FLAG_WRAPPED) ? 1 : 0);
 
-        data << uint32_t(itemProperties->ItemId);
-        data << uint32_t(itemProperties->DisplayInfoID);
-        data << uint32_t(item->getStackCount());
-        data << uint32_t(item->hasFlags(ITEM_FLAG_WRAPPED) ? 1 : 0);
+            // Enchantment stuff
+            data << uint64_t(item->getGiftCreatorGuid());
+            data << uint32_t(item->getEnchantmentId(PERM_ENCHANTMENT_SLOT));
+            for (uint8_t ench = SOCK_ENCHANTMENT_SLOT1; ench < BONUS_ENCHANTMENT_SLOT; ++ench)
+                data << uint32_t(item->getEnchantmentId(ench));
 
-        // Enchantment stuff
-        data << uint64_t(item->getGiftCreatorGuid());
-        data << uint32_t(item->getEnchantmentId(PERM_ENCHANTMENT_SLOT));
-        for (uint8_t ench = SOCK_ENCHANTMENT_SLOT1; ench < BONUS_ENCHANTMENT_SLOT; ++ench)
-            data << uint32_t(item->getEnchantmentId(ench));
-
-        data << uint64_t(item->getCreatorGuid()); // Item creator
-        data << uint32_t(item->getSpellCharges(0)); // Spell charges
-        data << uint32_t(item->getPropertySeed());
-        data << uint32_t(item->getRandomPropertiesId());
-        data << uint32_t(itemProperties->LockId);
-        data << uint32_t(item->getMaxDurability());
-        data << uint32_t(item->getDurability());
+            data << uint64_t(item->getCreatorGuid()); // Item creator
+            data << uint32_t(item->getSpellCharges(0)); // Spell charges
+            data << uint32_t(item->getPropertySeed());
+            data << uint32_t(item->getRandomPropertiesId());
+            data << uint32_t(itemProperties->LockId);
+            data << uint32_t(item->getMaxDurability());
+            data << uint32_t(item->getDurability());
+        }
     }
 #else
     data << uint32_t(0);                  // unk

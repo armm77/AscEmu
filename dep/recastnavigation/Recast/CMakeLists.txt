@@ -1,10 +1,10 @@
-# Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 
 file(GLOB Recast_SRCS Source/*.cpp Include/*.h)
 
 include_directories(
-   ${CMAKE_CURRENT_SOURCE_DIR}/Include
-   ${ZLIB_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Include
+    ${ZLIB_INCLUDE_DIRS}
 )
 
 add_library(Recast STATIC ${Recast_SRCS})

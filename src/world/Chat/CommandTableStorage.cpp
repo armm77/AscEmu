@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/MainServerDefines.h"
 #include "ChatCommand.hpp"
 #include "CommandTableStorage.hpp"
@@ -19,61 +19,61 @@ ChatCommand* CommandTableStorage::GetSubCommandTable(const char* name)
 {
     if (!stricmp(name, "modify"))
         return _modifyCommandTable;
-    else if (!stricmp(name, "waypoint"))
+    if (!stricmp(name, "waypoint"))
         return _waypointCommandTable;
-    else if (!stricmp(name, "event"))
+    if (!stricmp(name, "event"))
         return _eventCommandTable;
-    else if (!stricmp(name, "debug"))
+    if (!stricmp(name, "debug"))
         return _debugCommandTable;
-    else if (!stricmp(name, "gmTicket"))
+    if (!stricmp(name, "gmTicket"))
         return _GMTicketCommandTable;
-    else if (!stricmp(name, "ticket"))
+    if (!stricmp(name, "ticket"))
         return _TicketCommandTable;
-    else if (!stricmp(name, "gobject"))
+    if (!stricmp(name, "gobject"))
         return _GameObjectCommandTable;
-    else if (!stricmp(name, "battleground"))
+    if (!stricmp(name, "battleground"))
         return _BattlegroundCommandTable;
-    else if (!stricmp(name, "npc"))
+    if (!stricmp(name, "npc"))
         return _NPCCommandTable;
-    else if (!stricmp(name, "cheat"))
+    if (!stricmp(name, "cheat"))
         return _CheatCommandTable;
-    else if (!stricmp(name, "account"))
+    if (!stricmp(name, "account"))
         return _accountCommandTable;
-    else if (!stricmp(name, "quest"))
+    if (!stricmp(name, "quest"))
         return _questCommandTable;
-    else if (!stricmp(name, "pet"))
+    if (!stricmp(name, "pet"))
         return _petCommandTable;
-    else if (!stricmp(name, "recall"))
+    if (!stricmp(name, "recall"))
         return _recallCommandTable;
-    else if (!stricmp(name, "guild"))
+    if (!stricmp(name, "guild"))
         return _GuildCommandTable;
-    else if (!stricmp(name, "gm"))
+    if (!stricmp(name, "gm"))
         return _gmCommandTable;
-    else if (!stricmp(name, "server"))
+    if (!stricmp(name, "server"))
         return _serverCommandTable;
-    else if (!stricmp(name, "character"))
+    if (!stricmp(name, "character"))
         return _characterCommandTable;
-    else if (!stricmp(name, "lookup"))
+    if (!stricmp(name, "lookup"))
         return _lookupCommandTable;
-    else if (!stricmp(name, "admin"))
+    if (!stricmp(name, "admin"))
         return _adminCommandTable;
-    else if (!stricmp(name, "kick"))
+    if (!stricmp(name, "kick"))
         return _kickCommandTable;
-    else if (!stricmp(name, "ban"))
+    if (!stricmp(name, "ban"))
         return _banCommandTable;
-    else if (!stricmp(name, "unban"))
+    if (!stricmp(name, "unban"))
         return _unbanCommandTable;
-    else if (!stricmp(name, "instance"))
+    if (!stricmp(name, "instance"))
         return _instanceCommandTable;
-    else if (!stricmp(name, "arena"))
+    if (!stricmp(name, "arena"))
         return _arenaCommandTable;
-    else if (!stricmp(name, "achieve"))
+    if (!stricmp(name, "achieve"))
         return _achievementCommandTable;
-    else if (!stricmp(name, "vehicle"))
+    if (!stricmp(name, "vehicle"))
         return _vehicleCommandTable;
-    else if (!stricmp(name, "transport"))
+    if (!stricmp(name, "transport"))
         return _transportCommandTable;
-    return 0;
+    return nullptr;
 }
 
 ChatCommand* CommandTableStorage::GetCharSubCommandTable(const char* name)
@@ -111,7 +111,7 @@ ChatCommand* CommandTableStorage::GetReloadCommandTable(const char* name)
 #define dupe_command_table(ct, dt) this->dt = (ChatCommand*)allocate_and_copy(sizeof(ct)/* / sizeof(ct[0])*/, ct)
 inline void* allocate_and_copy(uint32 len, void* pointer)
 {
-    void* data = (void*)malloc(len);
+    void* data = malloc(len);
     memcpy(data, pointer, len);
     return data;
 }
@@ -351,6 +351,7 @@ void CommandTableStorage::Init()
 
     static ChatCommand debugCommandTable[] =
     {
+        { "dumpscripts",      'd', &ChatHandler::HandleMoveHardcodedScriptsToDBCommand, "Dumps hardcoded aispells to cmdline for creatures on map X",nullptr },
         { "sendcreaturemove", 'd', &ChatHandler::HandleDebugSendCreatureMove, "Requests the target creature moves to you using movement manager.", nullptr },
         { "dopctdamage",        'z', &ChatHandler::HandleDoPercentDamageCommand,    "Do percent damage to creature target",                     nullptr },
         { "setscriptphase",     'z', &ChatHandler::HandleSetScriptPhaseCommand,     "ScriptPhase test",                                         nullptr },
@@ -381,13 +382,13 @@ void CommandTableStorage::Init()
         { "featherfall",        'd', &ChatHandler::HandleDebugFeatherFall,          "Toggles featherfall move for unit",                        nullptr },
         { "speed",              'd', &ChatHandler::HandleDebugSpeed,                "Sets move speed for unit. Usage: .debug speed <value>",    nullptr },
         { "castspell",          'd', &ChatHandler::HandleCastSpellCommand,          "Casts spell on target.",                                   nullptr },
-        { "castself",           'd', &ChatHandler::HandleCastSelfCommand,           "Target casts spell <spellId> on itself.",                  nullptr },
+        { "castself",           'd', &ChatHandler::HandleCastSelfCommand,           "Target casts spell <spellId> on itself.",                  nullptr },
         { "castspellne",        'd', &ChatHandler::HandleCastSpellNECommand,        "Casts spell by spellid on target (only plays animations)", nullptr },
         { "aggrorange",         'd', &ChatHandler::HandleAggroRangeCommand,         "Shows aggro Range of the selected Creature.",              nullptr },
-        { "knockback",          'd', &ChatHandler::HandleKnockBackCommand,          "Knocks you back by <balue>.",                              nullptr },
+        { "knockback",          'd', &ChatHandler::HandleKnockBackCommand,          "Knocks you back by <value>.",                              nullptr },
         { "fade",               'd', &ChatHandler::HandleFadeCommand,               "Calls ModThreatModifyer() with <value>.",                  nullptr },
         { "threatMod",          'd', &ChatHandler::HandleThreatModCommand,          "Calls ModGeneratedThreatModifyer() with <value>.",         nullptr },
-        { "calcThreat",         'd', &ChatHandler::HandleCalcThreatCommand,         "Calculates threat <dmg> <spellId>.",                       nullptr },
+        { "movefall",           'd', &ChatHandler::HandleMoveFallCommand,           "Makes the creature fall to the ground",                    nullptr },
         { "threatList",         'd', &ChatHandler::HandleThreatListCommand,         "Returns all AI_Targets of the selected Creature.",         nullptr },
         { "gettptime",          'd', &ChatHandler::HandleGetTransporterTime,        "Grabs transporter travel time",                            nullptr },
         { "itempushresult",     'd', &ChatHandler::HandleSendItemPushResult,        "Sends item push result",                                   nullptr },
@@ -423,21 +424,10 @@ void CommandTableStorage::Init()
     static ChatCommand waypointCommandTable[] =
     {
         { "add",                'w', &ChatHandler::HandleWayPointAddCommand,            "Add wp for selected creature at current pos.",     nullptr },
-        { "addfly",             'w', &ChatHandler::HandleWayPointAddFlyCommand,         "Adds a flying waypoint for selected creature.",    nullptr },
-        { "change",             'w', &ChatHandler::HandleWayPointChangeNumberCommand,   "Change wp ID for selected wp.",                    nullptr },
         { "delete",             'w', &ChatHandler::HandleWayPointDeleteCommand,         "Deletes selected wp.",                             nullptr },
         { "deleteall",          'w', &ChatHandler::HandleWayPointDeleteAllCommand,      "Deletes all waypoints of selected creature.",      nullptr },
-        { "emote",              'w', &ChatHandler::HandleWayPointEmoteCommand,          "Set emote ID for selected wp.",                    nullptr },
-        { "flags",              'w', &ChatHandler::HandleWayPointFlagsCommand,          "Set flags for selected wp.",                       nullptr },
-        { "generate",           'w', &ChatHandler::HandleWayPointGenerateCommand,       "Randomly generate <x> wps for selected creature.", nullptr },
         { "hide",               'w', &ChatHandler::HandleWayPointHideCommand,           "Hide wp's for selected creature.",                 nullptr },
-        { "info",               'w', &ChatHandler::HandleWayPointInfoCommand,           "Show info for selected wp.",                       nullptr },
-        { "movehere",           'w', &ChatHandler::HandleWayPpointMoveHereCommand,      "Moves the selected wp to your position.",          nullptr },
-        { "movetype",           'w', &ChatHandler::HandleWayPointMoveTypeCommand,       "Change movement type for selected wp.",            nullptr },
-        { "save",               'w', &ChatHandler::HandleWayPointSaveCommand,           "Save all waypoints for selected creature.",        nullptr },
         { "show",               'w', &ChatHandler::HandleWayPointShowCommand,           "Show wp's for selected creature <bool backwards>", nullptr },
-        { "skin",               'w', &ChatHandler::HandleWayPointSkinCommand,           "Sets Skin ID for selected wp.",                    nullptr },
-        { "waittime",           'w', &ChatHandler::HandleWayPointWaitCommand,           "Sets Wait time in ms for selected wp.",            nullptr },
         { nullptr,              '0', nullptr,                                           "",                                                 nullptr }
     };
     dupe_command_table(waypointCommandTable, _waypointCommandTable);
@@ -547,9 +537,9 @@ void CommandTableStorage::Init()
         { "formationmaster",    'm', &ChatHandler::HandleNpcSetFormationMasterCommand,  "Sets formation master.",                           nullptr },
         { "formationslave",     'm', &ChatHandler::HandleNpcSetFormationSlaveCommand,   "Sets formation slave with distance and angle",     nullptr },
         { "formationclear",     'm', &ChatHandler::HandleNpcSetFormationClearCommand,   "Removes formation from creature",                  nullptr },
-        { "ongameobject",       'n', &ChatHandler::HandleNpcSetOnGOCommand,             "Toggles onGameobject state.",                      nullptr },
         { "phase",              'n', &ChatHandler::HandleNpcSetPhaseCommand,            "Sets phase for selected creature",                 nullptr },
         { "standstate",         'm', &ChatHandler::HandleNpcSetStandstateCommand,       "Sets standstate for selected creature",            nullptr },
+        { "entry",              'm', &ChatHandler::HandleNpcChangeEntry,                "Sets a New Entry for selected creature",           nullptr },
         { nullptr,              '0', nullptr,                                           "",                                                 nullptr }
     };
     dupe_command_table(NPCSetCommandTable, _NPCSetCommandTable);
@@ -675,7 +665,7 @@ void CommandTableStorage::Init()
         { "items",              'z', &ChatHandler::HandleReloadItemsCommand,                "Reload items table",                           nullptr },
         { "itempages",          'z', &ChatHandler::HandleReloadItempagesCommand,            "Reload itempages table",                       nullptr },
         { "npc_script_text",    'z', &ChatHandler::HandleReloadNpcScriptTextCommand,        "Reload npc_script_text table",                 nullptr },
-        { "npc_text",           'z', &ChatHandler::HandleReloadNpcTextCommand,              "Reload npc_text table",                        nullptr },
+        { "npc_gossip_text",    'z', &ChatHandler::HandleReloadNpcTextCommand,              "Reload npc_gossip_text table",                 nullptr },
         { "pet_level_abilities",'z', &ChatHandler::HandleReloadPetLevelAbilitiesCommand,    "Reload pet_level_abilities table",             nullptr },
         { "player_xp_for_level",'z', &ChatHandler::HandleReloadPlayerXpForLevelCommand,     "Reload player_xp_for_level table",             nullptr },
         { "points_of_interest", 'z', &ChatHandler::HandleReloadPointsOfInterestCommand,     "Reload points_of_interest table",              nullptr },
@@ -781,7 +771,9 @@ void CommandTableStorage::Init()
         { "resetreputation",    'n', &ChatHandler::HandleCharResetReputationCommand,    "Resets reputation to start levels.",               nullptr },
         { "resetspells",        'n', &ChatHandler::HandleCharResetSpellsCommand,        "Resets all spells of selected player.",            nullptr },
         { "resettalents",       'n', &ChatHandler::HandleCharResetTalentsCommand,       "Resets all talents of selected player.",           nullptr },
+#if VERSION_STRING >= TBC // support classic
         { "resetskills",        'n', &ChatHandler::HandleCharResetSkillsCommand,        "Resets all skills.",                               nullptr },
+#endif
         { "removeitem",         'm', &ChatHandler::HandleCharRemoveItemCommand,         "Removes item x count y.",                          nullptr },
         { "advanceallskills",   'm', &ChatHandler::HandleAdvanceAllSkillsCommand,       "Advances all skills <x> points.",                  nullptr },
         { nullptr,              '0', nullptr,                                           "",                                                 nullptr }
@@ -873,11 +865,12 @@ void CommandTableStorage::Init()
     dupe_command_table(achievementCommandTable, _achievementCommandTable);
 
     static ChatCommand vehicleCommandTable[] = {
+#ifdef FT_VEHICLES
         { "ejectpassenger",     'm', &ChatHandler::HandleVehicleEjectPassengerCommand,      "Ejects the passenger from the specified seat",         nullptr },
         { "ejectallpassengers", 'm', &ChatHandler::HandleVehicleEjectAllPassengersCommand,  "Ejects all passengers from the vehicle",               nullptr },
         { "installaccessories", 'm', &ChatHandler::HandleVehicleInstallAccessoriesCommand,  "Installs the accessories for the selected vehicle",    nullptr },
-        { "removeaccessories",  'm', &ChatHandler::HandleVehicleRemoveAccessoriesCommand,   "Removes the accessories of the selected vehicle",      nullptr },
         { "addpassenger",       'm', &ChatHandler::HandleVehicleAddPassengerCommand,        "Adds a new NPC passenger to the vehicle",              nullptr },
+#endif
         { nullptr,              '0', nullptr,                                               "",                                                     nullptr }
     };
 
@@ -948,9 +941,8 @@ void CommandTableStorage::Init()
         if (p->ChildCommands != 0)
         {
             // Set the correct pointer.
-            ChatCommand* np = GetSubCommandTable(p->Name);
-            ARCEMU_ASSERT(np != NULL);
-            p->ChildCommands = np;
+            if (ChatCommand* np = GetSubCommandTable(p->Name))
+                p->ChildCommands = np;
         }
         ++p;
     }
@@ -962,9 +954,8 @@ void CommandTableStorage::Init()
         if (p_char->ChildCommands != 0)
         {
             // Set the correct pointer.
-            ChatCommand* np_char = GetCharSubCommandTable(p_char->Name);
-            ARCEMU_ASSERT(np_char != NULL);
-            p_char->ChildCommands = np_char;
+            if (ChatCommand* np_char = GetCharSubCommandTable(p_char->Name))
+                p_char->ChildCommands = np_char;
         }
         ++p_char;
     }
@@ -976,9 +967,8 @@ void CommandTableStorage::Init()
         if (p_npc->ChildCommands != 0)
         {
             // Set the correct pointer.
-            ChatCommand* np_npc = GetNPCSubCommandTable(p_npc->Name);
-            ARCEMU_ASSERT(np_npc != NULL);
-            p_npc->ChildCommands = np_npc;
+            if (ChatCommand* np_npc = GetNPCSubCommandTable(p_npc->Name))
+                p_npc->ChildCommands = np_npc;
         }
         ++p_npc;
     }
@@ -990,9 +980,8 @@ void CommandTableStorage::Init()
         if (p_gobject->ChildCommands != 0)
         {
             // Set the correct pointer.
-            ChatCommand* np_gobject = GetGOSubCommandTable(p_gobject->Name);
-            ARCEMU_ASSERT(np_gobject != NULL);
-            p_gobject->ChildCommands = np_gobject;
+            if (ChatCommand* np_gobject = GetGOSubCommandTable(p_gobject->Name))
+                p_gobject->ChildCommands = np_gobject;
         }
         ++p_gobject;
     }
@@ -1004,9 +993,8 @@ void CommandTableStorage::Init()
         if (p_reloadtable->ChildCommands != 0)
         {
             // Set the correct pointer.
-            ChatCommand* np_reloadtable = GetReloadCommandTable(p_reloadtable->Name);
-            ARCEMU_ASSERT(np_reloadtable != NULL);
-            p_reloadtable->ChildCommands = np_reloadtable;
+            if (ChatCommand* np_reloadtable = GetReloadCommandTable(p_reloadtable->Name))
+                p_reloadtable->ChildCommands = np_reloadtable;
         }
         ++p_reloadtable;
     }

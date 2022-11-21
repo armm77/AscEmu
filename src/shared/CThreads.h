@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -31,11 +31,6 @@ class WorldSession;
 class Creature;
 class GameObject;
 
-#define MAPMGR_UPDATEOBJECT_LOOP_DELAY 100
-#define MAPMGR_SESSION_UPDATE_DELAY    50
-
-#define MAPMGR_UPDATE_DELAY            100
-
 enum CThreadState
 {
     THREADSTATE_TERMINATE = 0,
@@ -44,7 +39,6 @@ enum CThreadState
     THREADSTATE_BUSY      = 3,
     THREADSTATE_AWAITING  = 4,
 };
-
 
 struct NameTableEntry;
 

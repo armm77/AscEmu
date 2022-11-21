@@ -1,13 +1,13 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "../world/Objects/ObjectMgr.h"
-#include "../world/Management/TransporterHandler.h"
-#include "../world/Objects/Transporter.h"
+#include <Management/ObjectMgr.h>
+#include <Management/TransporterHandler.h>
+#include <Objects/Transporter.h>
 
 extern "C"
 {
@@ -18,7 +18,6 @@ class GameObject;
 class LuaGameObject
 {
 public:
-
     static int GossipCreateMenu              (lua_State* L, GameObject* ptr);
     static int GossipMenuAddItem             (lua_State* L, GameObject* ptr);
     static int GossipSendMenu                (lua_State* L, GameObject* ptr);
@@ -83,7 +82,6 @@ public:
     static int Activate                      (lua_State* L, GameObject* ptr);
     static int DespawnObject                 (lua_State* L, GameObject* ptr);
     static int AddLoot                       (lua_State* L, GameObject* ptr);
-    static int GetInstanceOwner              (lua_State* L, GameObject* ptr);
     static int GetDungeonDifficulty          (lua_State* L, GameObject* ptr);
     static int SetDungeonDifficulty          (lua_State* L, GameObject* ptr);
     static int HasFlag                       (lua_State* L, GameObject* ptr);

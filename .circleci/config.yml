@@ -3,30 +3,31 @@ version: 2.1
 jobs:
   "Classic":
     docker:
-      - image: "debian:stretch"
+      - image: "cimg/base:2022.03"
     steps:
       - checkout
       - run:
           name: Installing SUDO
-          command: 'apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*'
-      - run:
-          name: Installing GCC
-          command: 'apt-get update && apt-get install -y gcc g++'
+          command: 'sudo apt-get update && sudo apt-get install -y && sudo rm -rf /var/lib/apt/lists/*'
+#      - run:
+#          name: Installing GCC
+#          command: 'sudo apt-get update && sudo apt-get install -y gcc-9 g++'
       - run:
           name: Install CMAKE
-          command: 'apt-get update && sudo apt-get install -y cmake'
+          command: 'sudo apt-get update && sudo apt-get install -y cmake'
       - run:
           name: Install deps
           command: |
-            apt-get update && apt-get install -y zlib1g-dev
-            apt-get update && apt-get install -y libssl-dev
-            apt-get update && apt-get install -y libpcre3-dev
-            apt-get update && apt-get install -y libbz2-dev
-            apt-get update && apt-get install -y default-libmysqlclient-dev
-            apt-get update && apt-get install -y libmysql++-dev
+            sudo apt-get update && sudo apt-get install -y zlib1g-dev
+            sudo apt-get update && sudo apt-get install -y libssl-dev
+            sudo apt-get update && sudo apt-get install -y libpcre3-dev
+            sudo apt-get update && sudo apt-get install -y libbz2-dev
+            sudo apt-get update && sudo apt-get install -y libmysqlclient-dev
+            sudo apt-get update && sudo apt-get install -y libmysql++-dev
       - run:
           name: Check versions
           command: |
+            gcc --version
             cmake --version
       - run:
           name: Build Classic
@@ -38,33 +39,33 @@ jobs:
             cd ascemu_classic
             make -j 4
             cd ..
-
   "TBC":
     docker:
-      - image: "debian:stretch"
+      - image: "cimg/base:2022.03"
     steps:
       - checkout
       - run:
           name: Installing SUDO
-          command: 'apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*'
-      - run:
-          name: Installing GCC
-          command: 'apt-get update && apt-get install -y gcc g++'
+          command: 'sudo apt-get update && sudo apt-get install -y && sudo rm -rf /var/lib/apt/lists/*'
+#      - run:
+#          name: Installing GCC
+#          command: 'sudo apt-get update && sudo apt-get install -y gcc-9 g++'
       - run:
           name: Install CMAKE
-          command: 'apt-get update && sudo apt-get install -y cmake'
+          command: 'sudo apt-get update && sudo apt-get install -y cmake'
       - run:
           name: Install deps
           command: |
-            apt-get update && apt-get install -y zlib1g-dev
-            apt-get update && apt-get install -y libssl-dev
-            apt-get update && apt-get install -y libpcre3-dev
-            apt-get update && apt-get install -y libbz2-dev
-            apt-get update && apt-get install -y default-libmysqlclient-dev
-            apt-get update && apt-get install -y libmysql++-dev
+            sudo apt-get update && sudo apt-get install -y zlib1g-dev
+            sudo apt-get update && sudo apt-get install -y libssl-dev
+            sudo apt-get update && sudo apt-get install -y libpcre3-dev
+            sudo apt-get update && sudo apt-get install -y libbz2-dev
+            sudo apt-get update && sudo apt-get install -y libmysqlclient-dev
+            sudo apt-get update && sudo apt-get install -y libmysql++-dev
       - run:
           name: Check versions
           command: |
+            gcc --version
             cmake --version
       - run:
           name: Build TBC
@@ -79,30 +80,31 @@ jobs:
             
   "WotLK":
     docker:
-      - image: "debian:stretch"
+      - image: "cimg/base:2022.03"
     steps:
       - checkout
       - run:
           name: Installing SUDO
-          command: 'apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*'
-      - run:
-          name: Installing GCC
-          command: 'apt-get update && apt-get install -y gcc g++'
+          command: 'sudo apt-get update && sudo apt-get install -y && sudo rm -rf /var/lib/apt/lists/*'
+#      - run:
+#          name: Installing GCC
+#          command: 'sudo apt-get update && sudo apt-get install -y gcc-9 g++'
       - run:
           name: Install CMAKE
-          command: 'apt-get update && sudo apt-get install -y cmake'
+          command: 'sudo apt-get update && sudo apt-get install -y cmake'
       - run:
           name: Install deps
           command: |
-            apt-get update && apt-get install -y zlib1g-dev
-            apt-get update && apt-get install -y libssl-dev
-            apt-get update && apt-get install -y libpcre3-dev
-            apt-get update && apt-get install -y libbz2-dev
-            apt-get update && apt-get install -y default-libmysqlclient-dev
-            apt-get update && apt-get install -y libmysql++-dev
+            sudo apt-get update && sudo apt-get install -y zlib1g-dev
+            sudo apt-get update && sudo apt-get install -y libssl-dev
+            sudo apt-get update && sudo apt-get install -y libpcre3-dev
+            sudo apt-get update && sudo apt-get install -y libbz2-dev
+            sudo apt-get update && sudo apt-get install -y libmysqlclient-dev
+            sudo apt-get update && sudo apt-get install -y libmysql++-dev
       - run:
           name: Check versions
           command: |
+            gcc --version
             cmake --version
       - run:
           name: Build WotLK
@@ -117,30 +119,31 @@ jobs:
             
   "Cata":
     docker:
-      - image: "debian:stretch"
+      - image: "cimg/base:2022.03"
     steps:
       - checkout
       - run:
           name: Installing SUDO
-          command: 'apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*'
-      - run:
-          name: Installing GCC
-          command: 'apt-get update && apt-get install -y gcc g++'
+          command: 'sudo apt-get update && sudo apt-get install -y && sudo rm -rf /var/lib/apt/lists/*'
+#      - run:
+#          name: Installing GCC
+#          command: 'sudo apt-get update && sudo apt-get install -y gcc-9 g++'
       - run:
           name: Install CMAKE
-          command: 'apt-get update && sudo apt-get install -y cmake'
+          command: 'sudo apt-get update && sudo apt-get install -y cmake'
       - run:
           name: Install deps
           command: |
-            apt-get update && apt-get install -y zlib1g-dev
-            apt-get update && apt-get install -y libssl-dev
-            apt-get update && apt-get install -y libpcre3-dev
-            apt-get update && apt-get install -y libbz2-dev
-            apt-get update && apt-get install -y default-libmysqlclient-dev
-            apt-get update && apt-get install -y libmysql++-dev
+            sudo apt-get update && sudo apt-get install -y zlib1g-dev
+            sudo apt-get update && sudo apt-get install -y libssl-dev
+            sudo apt-get update && sudo apt-get install -y libpcre3-dev
+            sudo apt-get update && sudo apt-get install -y libbz2-dev
+            sudo apt-get update && sudo apt-get install -y libmysqlclient-dev
+            sudo apt-get update && sudo apt-get install -y libmysql++-dev
       - run:
           name: Check versions
           command: |
+            gcc --version
             cmake --version
       - run:
           name: Build Cata
@@ -155,30 +158,31 @@ jobs:
             
   "Mop":
     docker:
-      - image: "debian:stretch"
+      - image: "cimg/base:2022.03"
     steps:
       - checkout
       - run:
           name: Installing SUDO
-          command: 'apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*'
-      - run:
-          name: Installing GCC
-          command: 'apt-get update && apt-get install -y gcc g++'
+          command: 'sudo apt-get update && sudo apt-get install -y && sudo rm -rf /var/lib/apt/lists/*'
+#      - run:
+#          name: Installing GCC
+#          command: 'sudo apt-get update && sudo apt-get install -y gcc-9 g++'
       - run:
           name: Install CMAKE
-          command: 'apt-get update && sudo apt-get install -y cmake'
+          command: 'sudo apt-get update && sudo apt-get install -y cmake'
       - run:
           name: Install deps
           command: |
-            apt-get update && apt-get install -y zlib1g-dev
-            apt-get update && apt-get install -y libssl-dev
-            apt-get update && apt-get install -y libpcre3-dev
-            apt-get update && apt-get install -y libbz2-dev
-            apt-get update && apt-get install -y default-libmysqlclient-dev
-            apt-get update && apt-get install -y libmysql++-dev
+            sudo apt-get update && sudo apt-get install -y zlib1g-dev
+            sudo apt-get update && sudo apt-get install -y libssl-dev
+            sudo apt-get update && sudo apt-get install -y libpcre3-dev
+            sudo apt-get update && sudo apt-get install -y libbz2-dev
+            sudo apt-get update && sudo apt-get install -y libmysqlclient-dev
+            sudo apt-get update && sudo apt-get install -y libmysql++-dev
       - run:
           name: Check versions
           command: |
+            gcc --version
             cmake --version
       - run:
           name: Build Mop

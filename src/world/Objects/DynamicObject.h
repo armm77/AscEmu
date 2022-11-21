@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -22,8 +22,9 @@
 #define WOWSERVER_DYNAMICOBJECT_H
 
 #include "Object.h"
-#include "Units/Unit.h"
+#include "Units/Unit.hpp"
 #include "Data/WoWDynamicObject.hpp"
+#include "Server/UpdateFieldInclude.h"
 
 class SpellInfo;
 

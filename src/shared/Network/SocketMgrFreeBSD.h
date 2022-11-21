@@ -32,10 +32,10 @@ class SocketMgr
 
         // fd -> pointer binding.
         Socket* fds[SOCKET_HOLDER_SIZE];
-        ListenSocketBase* listenfds[SOCKET_HOLDER_SIZE];        // shouldnt be more than 1024
+        ListenSocketBase* listenfds[SOCKET_HOLDER_SIZE]; // shouldnt be more than 1024
 
         /// socket counter
-        int socket_count;
+        std::atomic<unsigned long> socket_count;
 
     private:
         SocketMgr() = default;
@@ -91,13 +91,10 @@ class SocketMgr
         /// returns kqueue fd
         inline int GetKq() { return kq; }
 
-        /// returns number of sockets in array
-        inline int Count() { return socket_count; }
+        uint32_t GetSocketCount(); // used in linux socket and pass then to server commands
 
         /// closes all sockets
         void CloseAll();
-
-        uint32 GetSocketCount() { return socket_count.load(); }
 
         /// spawns worker threads
         void SpawnWorkerThreads();

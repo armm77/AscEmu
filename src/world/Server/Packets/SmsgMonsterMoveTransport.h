@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -45,7 +45,7 @@ namespace AscEmu::Packets
             packet << uint8_t(unitGuid.isPlayer());
 
             packet << currentPosition.x << currentPosition.y << currentPosition.z;
-            packet << Util::getMSTime();
+            packet << ::Util::getMSTime();
             packet << uint8_t(4);           // splinetype facing_angle
             packet << currentPosition.o;    // facing angle
             packet << uint32_t(0x00800000); // splineflag transport

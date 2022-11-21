@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,7 +7,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "DBCStructures.h"
 #include "../world/Storage/DBC/DBCStores.h"
 
-#include "Spell/Definitions/SpellFamily.h"
+#include "Spell/Definitions/SpellFamily.hpp"
 
 DBC::Structures::SpellAuraOptionsEntry const* DBC::Structures::SpellEntry::GetSpellAuraOptions() const
 {
@@ -61,7 +61,7 @@ DBC::Structures::SpellLevelsEntry const* DBC::Structures::SpellEntry::GetSpellLe
 
 DBC::Structures::SpellPowerEntry const* DBC::Structures::SpellEntry::GetSpellPower() const
 {
-    return SpellPowerId ? sSpellPowerStore.LookupEntry(SpellPowerId) : nullptr;
+    return sSpellPowerStore.LookupEntry(Id);
 }
 
 DBC::Structures::SpellReagentsEntry const* DBC::Structures::SpellEntry::GetSpellReagents() const
@@ -87,6 +87,11 @@ DBC::Structures::SpellTargetRestrictionsEntry const* DBC::Structures::SpellEntry
 DBC::Structures::SpellTotemsEntry const* DBC::Structures::SpellEntry::GetSpellTotems() const
 {
     return SpellTotemsId ? sSpellTotemsStore.LookupEntry(SpellTotemsId) : nullptr;
+}
+
+DBC::Structures::SpellMiscEntry const* DBC::Structures::SpellEntry::GetSpellMisc() const
+{
+    return SpellTotemsId ? sSpellMiscStore.LookupEntry(SpellMiscId) : nullptr;
 }
 
 uint32_t DBC::Structures::SpellEntry::GetManaCost() const
@@ -182,7 +187,7 @@ uint32_t DBC::Structures::SpellEntry::GetStackAmount() const
 uint32_t DBC::Structures::SpellEntry::GetManaCostPercentage() const
 {
     SpellPowerEntry const* power = GetSpellPower();
-    return power ? power->ManaCostPercentage : 0;
+    return power ? power->ManaCostPercentageFloat : 0;
 }
 
 uint32_t DBC::Structures::SpellEntry::GetProcCharges() const

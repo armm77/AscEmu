@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,14 +19,14 @@
  *
  */
 
-#include "StdAfx.h"
-#include "Map/MapMgr.h"
-#include "Objects/Faction.h"
-#include "Spell/SpellMgr.h"
+
+#include "Map/Management/MapMgr.hpp"
+#include "Management/Faction.h"
+#include "Spell/SpellMgr.hpp"
 #include "SpellAuras.h"
-#include "Definitions/SpellSchoolConversionTable.h"
-#include "Definitions/DispelType.h"
-#include "Units/Summons/TotemSummon.h"
+#include "Definitions/SpellSchoolConversionTable.hpp"
+#include "Definitions/DispelType.hpp"
+#include "Objects/Units/Creatures/Summons/Summon.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////
  // Mage Scripts
@@ -40,7 +40,7 @@ public:
 
     void DoAfterHandleEffect(Unit* target, uint32 /*i*/) override
     {
-        if (p_caster != NULL && target != NULL && p_caster->HasAura(54741)) // Cronicman: Player has "Firestarter" aura so we remove it AFTER casting Flamestrike.
+        if (p_caster != NULL && target != NULL && p_caster->hasAurasWithId(54741)) // Cronicman: Player has "Firestarter" aura so we remove it AFTER casting Flamestrike.
         {
             p_caster->removeAllAurasById(54741);
         }
@@ -57,7 +57,7 @@ public:
 
     void DoAfterHandleEffect(Unit* target, uint32 /*i*/) override
     {
-        if (p_caster != NULL && target != NULL && p_caster->HasAura(44401)) // Player has "Missile Barrage" aura so we remove it AFTER casting arcane missles.
+        if (p_caster != NULL && target != NULL && p_caster->hasAurasWithId(44401)) // Player has "Missile Barrage" aura so we remove it AFTER casting arcane missles.
         {
             p_caster->removeAllAurasById(44401);
         }
@@ -254,7 +254,7 @@ public:
     int32 DoCalculateEffect(uint32 i, Unit* /*target*/, int32 value)
     {
         if (p_caster != NULL && i == 0)
-            value += (uint32)(p_caster->GetAP() * 0.055 * 1.15);
+            value += (uint32)(p_caster->getCalculatedAttackPower() * 0.055 * 1.15);
 
         return value;
     }
@@ -271,7 +271,7 @@ public:
     int32 DoCalculateEffect(uint32 i, Unit* /*target*/, int32 value) override
     {
         if (p_caster != NULL && i == 0)
-            value += (uint32)(p_caster->GetAP() * 0.1);
+            value += (uint32)(p_caster->getCalculatedAttackPower() * 0.1);
 
         return value;
     }
@@ -288,7 +288,7 @@ public:
     int32 DoCalculateEffect(uint32 i, Unit* /*target*/, int32 value) override
     {
         if (p_caster != NULL && i == 0)
-            value += (uint32)(p_caster->GetAP() * 0.055 * 1.15);
+            value += (uint32)(p_caster->getCalculatedAttackPower() * 0.055 * 1.15);
 
         return value;
     }
@@ -306,12 +306,12 @@ public:
     {
         if (p_caster != NULL && i == 0)
         {
-            int32 ap = p_caster->GetAP();
+            int32 ap = p_caster->getCalculatedAttackPower();
 
             value += (uint32)(ap * 0.08);
 
             // Does additional damage if target has diseases (http://www.tankspot.com/forums/f14/48814-3-1-blood-boil-mechanics-tested.html)
-            if (target != NULL && (target->HasAura(55078) || target->HasAura(55095)))
+            if (target != NULL && (target->hasAurasWithId(55078) || target->hasAurasWithId(55095)))
                 value += (uint32)(ap * 0.015 + 95);
         }
 
@@ -331,7 +331,7 @@ public:
     {
         if (target != NULL)
         {
-            uint32 count = target->GetAuraCountWithDispelType(DISPEL_DISEASE, m_caster->getGuid());
+            uint32 count = target->getAuraCountWithDispelType(DISPEL_DISEASE, m_caster->getGuid());
             if (count)
                 value += value * count * (getSpellInfo()->calculateEffectValue(2)) / 200;
         }
@@ -380,7 +380,7 @@ public:
         {
             if (m_caster != NULL && m_caster->IsInWorld())
             {
-                Unit* target = m_caster->GetMapMgr()->GetUnit(m_targets.getUnitTarget());
+                Unit* target = m_caster->getWorldMap()->getUnit(m_targets.getUnitTarget());
 
                 if (target == NULL || !(isAttackable(m_caster, target, false) || target->getRace() == RACE_UNDEAD))
                     result = SPELL_FAILED_BAD_TARGETS;
@@ -402,7 +402,7 @@ public:
     void DoAfterHandleEffect(Unit* /*target*/, uint32 /*i*/)
     {
         if (u_caster != NULL)
-            u_caster->RemoveAura(56817);
+            u_caster->removeAllAurasById(56817);
     }
 };
 
@@ -435,6 +435,7 @@ public:
 
 class SpellDeflectionAura : public AbsorbAura
 {
+#if VERSION_STRING >= TBC // support classic
 public:
 
     SpellDeflectionAura(SpellInfo* proto, int32 duration, Object* caster, Unit* target, bool temporary = false, Item* i_caster = nullptr)
@@ -455,7 +456,7 @@ public:
         if (caster == NULL)
             return 0;
 
-        if (!Util::checkChance(caster->GetParryChance()))
+        if (!Util::checkChance(caster->getParryChance()))
             return 0;
 
         uint32 dmg_absorbed = *dmg * getEffectDamage(0) / 100;
@@ -463,6 +464,7 @@ public:
 
         return dmg_absorbed;
     }
+#endif
 };
 
 class BloodwormSpell : public Spell

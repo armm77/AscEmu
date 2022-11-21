@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -23,7 +23,6 @@
 
 #include "QuestDefines.hpp"
 #include "CommonTypes.hpp"
-#include "QuestLogEntry.hpp"
 #include "Management/Gossip/GossipMenu.hpp"
 
 #include <vector>
@@ -87,23 +86,27 @@ class Item;
 typedef std::list<QuestRelation*> QuestRelationList;
 typedef std::list<QuestAssociation*> QuestAssociationList;
 
-
+// APGL End
+// MIT Start
 class SERVER_DECL QuestMgr
 {
-    private:
+private:
+    QuestMgr() = default;
+    ~QuestMgr() = default;
 
-        QuestMgr() = default;
-        ~QuestMgr() = default;
+public:
+    static QuestMgr& getInstance();
+    void finalize();
 
-    public:
+    QuestMgr(QuestMgr&&) = delete;
+    QuestMgr(QuestMgr const&) = delete;
+    QuestMgr& operator=(QuestMgr&&) = delete;
+    QuestMgr& operator=(QuestMgr const&) = delete;
 
-        static QuestMgr& getInstance();
-        void finalize();
+    void onPlayerItemRemove(Player* plr, Item const* item);
 
-        QuestMgr(QuestMgr&&) = delete;
-        QuestMgr(QuestMgr const&) = delete;
-        QuestMgr& operator=(QuestMgr&&) = delete;
-        QuestMgr& operator=(QuestMgr const&) = delete;
+    // MIT End
+    // APGL Start
 
         uint32 PlayerMeetsReqs(Player* plr, QuestProperties const* qst, bool skiplevelcheck);
 
@@ -224,7 +227,8 @@ class SERVER_DECL QuestMgr
 
         // Quest Loading
         void _RemoveChar(char* c, std::string* str);
-        void _CleanLine(std::string* str);
+        // Zyres: not used 2022/03/06
+        //void _CleanLine(std::string* str);
 };
 
 template<> inline std::unordered_map<uint32, std::list<QuestRelation*>* >& QuestMgr::_GetList<Creature>()

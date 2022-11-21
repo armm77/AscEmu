@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,11 +18,10 @@
  *
  */
 
-#include "StdAfx.h"
+
 #include "WorldStatesHandler.h"
 #include "Server/World.h"
-#include "Server/World.Legacy.h"
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 
 void WorldStatesHandler::SetWorldStateForZone(uint32 zone, uint32 /*area*/, uint32 field, uint32 value)
 {

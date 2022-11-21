@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -31,12 +31,18 @@ namespace AscEmu::Packets
         }
 
     protected:
-
+#if VERSION_STRING < Cata
         size_t expectedSize() const override { return 4 + 8 + 4 + 4 * DBC_TAXI_MASK_SIZE; }
+#else   
+        size_t expectedSize() const override { return 4 + 8 + 4 + 4 + 4 * DBC_TAXI_MASK_SIZE; }
+#endif
 
         bool internalSerialise(WorldPacket& packet) override
         {
             packet << uint32_t(1) << guid << nearestNode;
+#if VERSION_STRING >= Cata
+            packet << uint32_t(DBC_TAXI_MASK_SIZE * 4);
+#endif
             for (auto tMask : taxiMask)
                 packet << tMask;
 

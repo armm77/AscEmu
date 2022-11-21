@@ -1,24 +1,24 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Management/GameEvent.h"
 #include "Storage/MySQLDataStore.hpp"
 #include "Server/MainServerDefines.h"
-#include "Map/MapMgr.h"
-#include "Map/WorldCreator.h"
+#include "Map/Management/MapMgr.hpp"
+#include "Server/Script/ScriptMgr.h"
 
 void GameEvent::CreateNPCs()
 {
     for (auto npc : npc_data)
     {
-        auto mapmgr = sInstanceMgr.GetMapMgr(npc.map_id);
+        auto mapmgr = sMapMgr.findWorldMap(npc.map_id);
         if (mapmgr == nullptr)
             continue;
 
-        Creature* c = mapmgr->CreateCreature(npc.entry);
+        Creature* c = mapmgr->createCreature(npc.entry);
         CreatureProperties const* cp = sMySQLStore.getCreatureProperties(npc.entry);
         if (cp == nullptr)
         {
@@ -29,13 +29,12 @@ void GameEvent::CreateNPCs()
         c->Load(cp, npc.position_x, npc.position_y, npc.position_z, npc.orientation);
         if (npc.waypoint_group != 0)
         {
-            c->LoadWaypointGroup(npc.waypoint_group);
-            c->SwitchToCustomWaypoints();
+            // todo aaron02
         }
 
         // Set up spawn specific information
         c->setDisplayId(npc.displayid);
-        c->SetFaction(npc.faction);
+        c->setFaction(npc.faction);
 
         // Equipment
         c->setVirtualItemSlotId(MELEE, sMySQLStore.getItemDisplayIdForEntry(cp->itemslot_1));
@@ -67,20 +66,24 @@ void GameEvent::CreateObjects()
 {
     for (auto gobj : gameobject_data)
     {
-        auto mapmgr = sInstanceMgr.GetMapMgr(gobj.map_id);
+        auto mapmgr = sMapMgr.findWorldMap(gobj.map_id);
         if (mapmgr == NULL)
             continue;
 
-        GameObject* g = mapmgr->CreateGameObject(gobj.entry);
-        g->CreateFromProto(gobj.entry, gobj.map_id, gobj.position_x, gobj.position_y, gobj.position_z, gobj.facing);
+        GameObject* g = mapmgr->createGameObject(gobj.entry);
+        g->create(gobj.entry, mapmgr, gobj.phase, LocationVector(gobj.position_x, gobj.position_y, gobj.position_z, gobj.facing), QuaternionData(), GameObject_State(gobj.state));
 
         // Set up spawn specific information
-        g->setScale(gobj.scale);
+        MySQLStructure::GameObjectSpawnOverrides const* overrides = sMySQLStore.getGameObjectOverride(gobj.id);
+        if (overrides)
+        {
+            g->setScale(overrides->scale);
 
-        if (gobj.faction != 0)
-            g->SetFaction(gobj.faction);
+            if (overrides->faction != 0)
+                g->SetFaction(overrides->faction);
 
-        g->setFlags(gobj.flags);
+            g->setFlags(overrides->flags);
+        }
 
         bool addToWorld = true;
         if (mEventScript != nullptr)

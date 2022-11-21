@@ -1,15 +1,20 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Map/InstanceDefines.hpp"
-#include "Server/Definitions.h"
+#include "Macros/CreatureMacros.hpp"
+#include "Map/Maps/InstanceDefines.hpp"
+#include "Map/SpawnGroups.hpp"
+#include "Objects/ObjectDefines.h"
 #include <cstdint>
 #include <string>
 #include "LocationVector.h"
+#include <G3D/Box.h>
+#include <G3D/CoordinateFrame.h>
+#include <G3D/Quat.h>
 
 // related to table areatriggers
 enum AreaTriggerType
@@ -51,7 +56,6 @@ namespace MySQLStructure
 
     //achievement_reward
 
-    //ai_agents
     //ai_threattospellid
 
     //areatriggers
@@ -80,6 +84,37 @@ namespace MySQLStructure
         uint32_t battlegroundId;
     };
 
+    //creature_ai_scripts
+    struct CreatureAIScripts
+    {
+        uint32_t entry;
+        uint8_t difficulty;
+        uint8_t phase;
+        uint8_t event;
+        uint8_t action;
+        uint8_t maxCount;
+        float chance;
+        uint32_t spellId;
+        uint8_t spell_type;
+        bool triggered;
+        uint8_t target;
+        uint32_t cooldownMin;
+        uint32_t cooldownMax;
+        float minHealth;
+        float maxHealth;
+        uint32_t textId;
+        uint32_t misc1;
+        std::string comment;
+    };
+
+    //creature_ai_texts
+    struct CreatureAITexts
+    {
+        float chance;
+        uint32_t textIds[CREATURE_AI_TEXT_COUNT];
+        uint8_t textCount;
+    };
+
     //creature_difficulty
     struct CreatureDifficulty
     {
@@ -87,15 +122,6 @@ namespace MySQLStructure
         uint32_t difficultyEntry1;
         uint32_t difficultyEntry2;
         uint32_t difficultyEntry3;
-    };
-
-    //creature_formations
-    struct CreatureFormation
-    {
-        //uint32_t spawnId
-        uint32_t targetSpawnId;
-        float followAngle;
-        float followDistance;
     };
 
     //creature_initial_equip
@@ -114,7 +140,6 @@ namespace MySQLStructure
         float y;
         float z;
         float o;
-        MySQLStructure::CreatureFormation const* form;    // formation
         uint8_t movetype;
         uint32_t displayid;
         uint32_t factionid;
@@ -143,7 +168,8 @@ namespace MySQLStructure
         uint32_t CanFly;
         uint32_t phase;
         //event_entry
-        //waypoint_group
+        uint32_t wander_distance;
+        uint32_t waypoint_id;
 
         // sets one of the bytes of an uint32
         uint32_t setbyte(uint32_t buffer, uint8_t index, uint32_t byte)
@@ -157,9 +183,6 @@ namespace MySQLStructure
 
             return buffer;
         }
-
-        // additional table handling
-        std::string table;
     };
 
     //creature_timed_emotes
@@ -195,33 +218,28 @@ namespace MySQLStructure
     //gameobject_spawns
     struct GameobjectSpawn
     {
-        uint32_t id;
-        //min_build
-        //max_build
-        uint32_t entry;
-        uint32_t map;
-        float position_x;
-        float position_y;
-        float position_z;
-        float orientation;  // column facing
-        float rotation_0;   // column orientation1
-        float rotation_1;   // column orientation2
-        float rotation_2;   // column orientation3
-        float rotation_3;   // column orientation4
-        //float facing;
-        //uint32_t flags;
-        uint32_t state;
-        uint32_t flags;
-        uint32_t faction;
-        //uint32_t level;
-        float scale;
-        //uint32_t stateNpcLink;
-        uint32_t phase;
-        uint32_t overrides;
-        //event_entry
+        uint32_t id = 0;
+        uint32_t entry = 0;
+        uint32_t map = 0;
+        uint32_t phase = 0;
+        LocationVector spawnPoint = {0,0,0, 0};
+        QuaternionData rotation = { 0,0,0, 0 };
+        uint32_t spawntimesecs = 0;
+        GameObject_State state = GO_STATE_OPEN;
+        //uint32_t event_entry
+    };
 
-        // additional table handling
-        std::string table;
+    struct GameObjectSpawnExtra
+    {
+        QuaternionData parentRotation;
+    };
+
+    struct GameObjectSpawnOverrides
+    {
+        uint32_t id;
+        float scale;
+        uint32_t faction;
+        uint32_t flags;
     };
 
     //gameobject_teleports
@@ -274,6 +292,23 @@ namespace MySQLStructure
     };
 
     //instance_bosses
+
+    // spawn_group_id
+    struct SpawnGroupId
+    {
+        uint8_t groupId;
+        std::string groupName;
+        SpawnGroupFlags groupFlags;
+        SpawnFlags spawnFlags;
+        uint32_t bossId;
+    };
+
+    // creature_group_spawn
+    struct CreatureGroupSpawn
+    {
+        uint8_t groupId;
+        uint32_t spawnId;
+    };
 
     //item_pages
     struct ItemPage
@@ -346,20 +381,6 @@ namespace MySQLStructure
         char* text;
     };
 
-    //locales_npc_monstersay
-    struct LocalesNPCMonstersay
-    {
-        uint32_t entry;
-        uint32_t type;
-        uint32_t languageCode;
-        char* monstername;
-        char* text0;
-        char* text1;
-        char* text2;
-        char* text3;
-        char* text4;
-    };
-
     //locales_npc_script_text
     struct LocalesNpcScriptText
     {
@@ -368,8 +389,8 @@ namespace MySQLStructure
         char* text;
     };
 
-    //locales_npc_text
-    struct LocalesNpcText
+    //locales_npc_gossip_texts
+    struct LocalesNpcGossipText
     {
         uint32_t entry;
         uint32_t languageCode;
@@ -422,18 +443,27 @@ namespace MySQLStructure
     //loot_skinning
 
     //\brief No structure!
-    //npc_gossip_textid
+    //npc_gossip_properties
 
-    //npc_monstersay
-    struct NpcMonsterSay
+    //npc_gossip_texts
+    struct NpcGossipText_Emote
     {
-        float chance;
-        uint32_t language;
-        uint32_t type;
-        const char* monsterName;
+        uint32_t delay;
+        uint32_t emote;
+    };
 
-        uint32_t textCount;
-        const char** texts;
+    struct NpcGossipText_Texts
+    {
+        float probability;
+        std::string texts[2];
+        uint32_t language;
+        NpcGossipText_Emote gossipEmotes[GOSSIP_EMOTE_COUNT];
+    };
+
+    struct NpcGossipText
+    {
+        uint32_t entry;
+        NpcGossipText_Texts textHolder[8];
     };
 
     //npc_script_text
@@ -450,28 +480,6 @@ namespace MySQLStructure
         uint32_t duration;
         uint32_t sound;             // the sound on say
         uint32_t broadcast_id;
-    };
-
-    //npc_text
-    struct NpcText_Emote
-    {
-        uint32_t delay;
-        uint32_t emote;
-    };
-
-    #define GOSSIP_EMOTE_COUNT 3
-    struct NpcText_Texts
-    {
-        float probability;
-        std::string texts[2];
-        uint32_t language;
-        NpcText_Emote gossipEmotes[GOSSIP_EMOTE_COUNT];
-    };
-
-    struct NpcText
-    {
-        uint32_t entry;
-        NpcText_Texts textHolder[8];
     };
 
     //pet_level_abilities
@@ -544,7 +552,7 @@ namespace MySQLStructure
     //spell_proc
     //spell_ranks
     //spell_teleport_coords
-    // Defined in Spells/TeleportCoords.h struct TeleportCoords
+    // Defined in Spells/TeleportCoords.hpp struct TeleportCoords
 
     //spellclickspells
     //spelloverride
@@ -660,6 +668,15 @@ namespace MySQLStructure
 
             return hasFlag(uint32_t(WMI_INSTANCE_HAS_NORMAL_10MEN) << difficulty);
         }
+
+        bool isDungeon() const { return type == INSTANCE_DUNGEON; }
+        bool isRaid() const { return type == INSTANCE_RAID; }
+        bool isBattleground() const { return type == INSTANCE_BATTLEGROUND; }
+        bool isMultimodeDungeon() const { return type == INSTANCE_MULTIMODE; }
+
+        bool isDungeonMap() const { return isDungeon() || isMultimodeDungeon(); }
+        bool isInstanceMap() const { return isDungeonMap() || isRaid(); }
+        bool isNonInstanceMap() const { return type == INSTANCE_NULL; }
     };
 
     //worldstate_templates

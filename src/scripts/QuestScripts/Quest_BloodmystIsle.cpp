@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,17 +19,18 @@
  */
 
 #include "Setup.h"
-#include <Units/Creatures/Pet.h>
+#include <Objects/Units/Creatures/Pet.h>
+
+#include "Server/Script/CreatureAIScript.h"
 
 class TheKesselRun : public QuestScript
 {
 public:
-
     void OnQuestStart(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
         if (!mTarget)
             return;
-        if (!mTarget->HasSpell(30829))
+        if (!mTarget->hasSpell(30829))
             mTarget->castSpell(mTarget, 30829, true);
     }
 };
@@ -37,7 +38,6 @@ public:
 class TheKesselRun1 : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         GossipMenu menu(pObject->getGuid(), 1);
@@ -49,14 +49,13 @@ public:
 
     void onSelectOption(Object* /*pObject*/, Player* plr, uint32_t /*Id*/, const char* /*EnteredCode*/, uint32_t /*gossipId*/) override
     {
-        plr->AddQuestKill(9663, 0, 0);
+        plr->addQuestKill(9663, 0, 0);
     }
 };
 
 class TheKesselRun2 : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         GossipMenu menu(pObject->getGuid(), 1);
@@ -68,14 +67,13 @@ public:
 
     void onSelectOption(Object* /*pObject*/, Player* plr, uint32_t /*Id*/, const char* /*EnteredCode*/, uint32_t /*gossipId*/) override
     {
-        plr->AddQuestKill(9663, 1, 0);
+        plr->addQuestKill(9663, 1, 0);
     }
 };
 
 class TheKesselRun3 : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         GossipMenu menu(pObject->getGuid(), 1);
@@ -87,22 +85,21 @@ public:
 
     void onSelectOption(Object* /*pObject*/, Player* plr, uint32_t /*Id*/, const char* /*EnteredCode*/, uint32_t /*gossipId*/) override
     {
-        plr->AddQuestKill(9663, 2, 0);
+        plr->addQuestKill(9663, 2, 0);
     }
 };
 
 class SavingPrincessStillpine : public GameObjectAIScript
 {
 public:
-
     explicit SavingPrincessStillpine(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new SavingPrincessStillpine(GO); }
 
     void OnActivate(Player* pPlayer) override
     {
-        pPlayer->AddQuestKill(9667, 0, 0);
+        pPlayer->addQuestKill(9667, 0, 0);
 
-        Creature* princess = pPlayer->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), 17682);
+        Creature* princess = pPlayer->getWorldMap()->getInterface()->getCreatureNearestCoords(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), 17682);
         if (princess != nullptr)
             princess->Despawn(1000, 6 * 60 * 1000);
     }
@@ -110,7 +107,8 @@ public:
 
 class HighChiefBristlelimb : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(HighChiefBristlelimb)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new HighChiefBristlelimb(c); }
     explicit HighChiefBristlelimb(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         fulborgskilled = 0;
@@ -125,29 +123,28 @@ class HighChiefBristlelimb : public CreatureAIScript
 
             if (fulborgskilled > 8 && mPlayer->hasQuestInQuestLog(9667))
             {
-                getCreature()->GetMapMgr()->GetInterface()->SpawnCreature(17702, -2419, -12166, 33, 3.45f, true, false, 0, 0)->Despawn(18000000, 0);
+                getCreature()->getWorldMap()->getInterface()->spawnCreature(17702, LocationVector(-2419, -12166, 33, 3.45f), true, false, 0, 0)->Despawn(18000000, 0);
                 fulborgskilled = 0;
-                getCreature()->SendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "Chief, we need your help!");
+                getCreature()->sendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "Chief, we need your help!");
             }
         }
     }
 
 private:
-
     int fulborgskilled;
 };
 
 class WebbedCreature : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(WebbedCreature)
-    explicit WebbedCreature(Creature* pCreature) : CreatureAIScript(pCreature)
-    {}
+public:
+    static CreatureAIScript* Create(Creature* c) { return new WebbedCreature(c); }
+    explicit WebbedCreature(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnCombatStart(Unit* /*pTarget*/) override
     {
         _setMeleeDisabled(true);
         getCreature()->setMoveRoot(true);
-        getCreature()->GetAIInterface()->StopMovement(0);
+        getCreature()->stopMoving();
     }
 
     void OnCombatStop(Unit* /*pTarget*/) override
@@ -158,7 +155,7 @@ class WebbedCreature : public CreatureAIScript
 
     void OnDied(Unit* pKiller) override
     {
-        Player* QuestHolder = pKiller->getPlayerOwner();
+        Player* QuestHolder = pKiller->getPlayerOwnerOrSelf();
         if (QuestHolder == nullptr)
             return;
 
@@ -167,7 +164,7 @@ class WebbedCreature : public CreatureAIScript
         {
             // Creatures from Bloodmyst Isle
             uint32_t Id[51] = { 17681, 17887, 17550, 17323, 17338, 17341, 17333, 17340, 17353, 17320, 17339, 17337, 17715, 17322, 17494, 17654, 17342, 17328, 17331, 17325, 17321, 17330, 17522, 17329, 17524, 17327, 17661, 17352, 17334, 17326, 17324, 17673, 17336, 17346, 17589, 17609, 17608, 17345, 17527, 17344, 17347, 17525, 17713, 17523, 17348, 17606, 17604, 17607, 17610, 17358, 17588 };
-            Creature* RandomCreature = getCreature()->GetMapMgr()->GetInterface()->SpawnCreature(Id[Util::getRandomUInt(50)], pos.x, pos.y, pos.z, pos.o, true, false, 0, 0);
+            Creature* RandomCreature = getCreature()->getWorldMap()->getInterface()->spawnCreature(Id[Util::getRandomUInt(50)], pos, true, false, 0, 0);
             if (RandomCreature != nullptr)
             {
                 RandomCreature->m_noRespawn = true;
@@ -177,14 +174,14 @@ class WebbedCreature : public CreatureAIScript
         else
         {
             uint32_t Id[8] = { 17681, 17321, 17330, 17522, 17673, 17336, 17346, 17589 };
-            Creature* RandomCreature = getCreature()->GetMapMgr()->GetInterface()->SpawnCreature(Id[Util::getRandomUInt(7)], pos.x, pos.y, pos.z, pos.o, true, false, 0, 0);
+            Creature* RandomCreature = getCreature()->getWorldMap()->getInterface()->spawnCreature(Id[Util::getRandomUInt(7)], pos, true, false, 0, 0);
             if (RandomCreature != nullptr)
             {
                 RandomCreature->m_noRespawn = true;
                 RandomCreature->Despawn(60000, 0);
                 if (RandomCreature->getEntry() == 17681)
                 {
-                    QuestHolder->AddQuestKill(9670, 0, 0);
+                    QuestHolder->addQuestKill(9670, 0, 0);
                 }
             }
         }

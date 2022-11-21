@@ -1,37 +1,29 @@
-# Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 
-#We have our own custom modules and dep modules that we use. This tells cmakes where to find them.
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 20)
+
+# set RPATH-handing (CMake parameters)
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+# we have our own custom modules and dep modules that we use. This tells cmakes where to find them.
 list(APPEND CMAKE_MODULE_PATH 
-    ${CMAKE_SOURCE_DIR}/cmake/Modules
-    ${CMAKE_SOURCE_DIR}/dep/cotire/CMake)
+    ${CMAKE_SOURCE_DIR}/cmake/Modules)
 
 # get git information
-include(${CMAKE_SOURCE_DIR}/cmake/GitRevision.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/Modules/AEGitRevision.cmake)
 
-# generally load PCH module
-if(USE_PCH)
-    include(PCHSupport)
-endif()
+# apply options settings
+include(${CMAKE_SOURCE_DIR}/cmake/Modules/AEConfigureFiles.cmake)
 
-# get architecture type
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(IS_64BIT TRUE)
-else()
-    set(IS_64BIT FALSE)
-endif()
-
-# set default architecture identifier
-if(IS_64BIT)
-    message(STATUS "Detected x64 system")
-	message(STATUS "Generator Plattform: ${CMAKE_GENERATOR_PLATFORM}")
-else()
-	message(STATUS "Detected Win32 system")
-	message(STATUS "Generator Plattform: ${CMAKE_GENERATOR_PLATFORM}")
-endif()
+# get architecture type and set architecture identifier
+include(${CMAKE_SOURCE_DIR}/cmake/Modules/AEConfigureArch.cmake)
 
 # default definitions
-#-DPREFIX=\"${ASCEMU_SCRIPTLIB_PATH}\"
-add_definitions(-DHAVE_CONFIG_H  )
+# -DPREFIX=\"${ASCEMU_SCRIPTLIB_PATH}\"
+add_definitions(-DHAVE_CONFIG_H)
 
 mark_as_advanced(
     ZLIB_LIBRARIES
@@ -45,23 +37,3 @@ mark_as_advanced(
     BZIP2_LIBRARIES
     BZIP2_INCLUDE_DIRS
 )
-
-# apply system settings
-if(WIN32)
-    include(${CMAKE_SOURCE_DIR}/cmake/Systems/Windows.cmake)
-elseif(UNIX)
-    if(APPLE)
-        include(${CMAKE_SOURCE_DIR}/cmake/Systems/Apple.cmake) 
-    elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "kFreeBSD") 
-        include(${CMAKE_SOURCE_DIR}/cmake/Systems/FreeBSD.cmake) 
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux") 
-        include(${CMAKE_SOURCE_DIR}/cmake/Systems/Linux.cmake) 
-    else()
-        message(FATAL_ERROR "System is not supported." ) 
-    endif()
-else()
-    message(FATAL_ERROR "System is not supported." )
-endif()
-
-# apply config settings
-include(${CMAKE_SOURCE_DIR}/cmake/Modules/GenerateConfigs.cmake)

@@ -1,14 +1,14 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Util.hpp"
+#include "Util/Strings.hpp"
 #include <iostream>
 #include <vector>
 #include <string>
 #include <sstream>
-#include <random>
 
 #include <fstream>
 #include "utf8.h"
@@ -16,65 +16,9 @@ This file is released under the MIT license. See README-MIT for more information
 namespace Util
 {
     //////////////////////////////////////////////////////////////////////////////////////////
-    // String functions
+    // WoW String functions
 
-    void StringToLowerCase(std::string& str)
-    {
-        // C4244
-        //std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-        for (std::size_t i = 0; i < str.length(); ++i)
-            str[i] = static_cast<char>(::tolower(str[i]));
-    }
-
-    void StringToUpperCase(std::string& str)
-    {
-        // C4244
-        //std::transform(str.begin(), str.end(), str.begin(), ::toupper);
-        for (std::size_t i = 0; i < str.length(); ++i)
-            str[i] = static_cast<char>(::toupper(str[i]));
-    }
-
-    void CapitalizeString(std::string& str)
-    {
-        if (!str.empty())
-        {
-            str[0] = static_cast<char>(::toupper(str[0]));
-
-            for (std::size_t i = 1; i < str.length(); ++i)
-                str[i] = static_cast<char>(::tolower(str[i]));
-        }
-    }
-
-    std::vector<std::string> SplitStringBySeperator(const std::string& str_src, const std::string& str_sep)
-    {
-        std::vector<std::string> string_vector {};
-
-        //\NOTE: somehow people think it is a good idea to use a separator as last char in a string
-        //       just remove it from the string before processing single strings (shitty db saving and loading)
-        std::string source = str_src;
-        if (source[source.size()] == str_sep[0])
-            source = source.substr(0, source.size() -1);
-
-        std::stringstream string_stream(source);
-        std::string isolated_string;
-
-        std::vector<char> seperator(str_sep.c_str(), str_sep.c_str() + str_sep.size() + 1);
-
-        while (std::getline(string_stream, isolated_string, seperator[0]))
-        {
-            if (isolated_string.size() != 0)
-                string_vector.push_back(isolated_string);
-        }
-
-        return string_vector;
-    }
-
-    bool findXinYString(std::string& x, std::string& y)
-    {
-        return y.find(x) != std::string::npos;
-    }
-
-    uint32_t getLanguagesIdFromString(std::string langstr)
+    uint8_t getLanguagesIdFromString(const std::string& langstr)
     {
         if (langstr.compare("enGB") == 0 || langstr.compare("enUS") == 0)
             return 0;
@@ -88,16 +32,56 @@ namespace Util
         if (langstr.compare("deDE") == 0)
             return 3;
 
-        if (langstr.compare("esES") == 0)
+        if (langstr.compare("zhCN") == 0)
             return 4;
 
-        if (langstr.compare("ruRU") == 0)
+        if (langstr.compare("zhTW") == 0)
             return 5;
+
+        if (langstr.compare("esES") == 0)
+            return 6;
+
+        // TBC
+        if (langstr.compare("esMX") == 0)
+            return 7;
+
+        if (langstr.compare("ruRU") == 0)
+            return 8;
+
+        // Cata
+        if (langstr.compare("ptBR") == 0)
+            return 10;
+
+        // Mop
+        if (langstr.compare("itIT") == 0)
+            return 11;
 
         return 0;
     }
 
-    uint32_t getNumberFromStringByRange(std::string string, int startCharacter, int endCharacter)
+    std::string getLanguagesStringFromId(uint8_t id)
+    {
+        switch (id)
+        {
+            case 1: return "koKR";
+            case 2: return "frFR";
+            case 3: return "deDE";
+            case 4: return "zhCN";
+            case 5: return "zhTW";
+            case 6: return "esES";
+            // TBC
+            case 7: return "esMX";
+            case 8: return "ruRU";
+            // Cata
+            case 10: return "ptBR";
+            // Mop
+            case 11: return "itIT";
+
+            default: return "enGB"; // also enUS
+        }
+    }
+
+    uint32_t getNumberFromStringByRange(const std::string& string, int startCharacter, int endCharacter)
     {
         auto const stringVersion = string.substr(startCharacter, endCharacter);
         return std::stoul(stringVersion);
@@ -111,14 +95,14 @@ namespace Util
         {
             return utf8::distance(utf8str.c_str(), utf8str.c_str() + utf8str.size());
         }
-        catch (std::exception)
+        catch (std::exception&)
         {
-            utf8str = "";
+            utf8str.clear();
             return 0;
         }
     }
 
-    bool Utf8toWStr(std::string utf8str, std::wstring& wstr)
+    bool Utf8toWStr(const std::string& utf8str, std::wstring& wstr)
     {
         try
         {
@@ -128,16 +112,16 @@ namespace Util
             if (len)
                 utf8::utf8to16(utf8str.c_str(), utf8str.c_str() + utf8str.size(), &wstr[0]);
         }
-        catch (std::exception)
+        catch (std::exception&)
         {
-            wstr = L"";
+            wstr.clear();
             return false;
         }
 
         return true;
     }
 
-    bool WStrToUtf8(std::wstring wstr, std::string& utf8str)
+    bool WStrToUtf8(const std::wstring& wstr, std::string& utf8str)
     {
         try
         {
@@ -146,9 +130,9 @@ namespace Util
             char* oend = utf8::utf16to8(wstr.c_str(), wstr.c_str() + wstr.size(), &utf8str[0]);
             utf8str.resize(oend - (&utf8str[0]));
         }
-        catch (std::exception)
+        catch (std::exception&)
         {
-            utf8str = "";
+            utf8str.clear();
             return false;
         }
 
@@ -165,6 +149,14 @@ namespace Util
         return std::chrono::high_resolution_clock::now();
     }
 
+    time_t getTimeNow()
+    {
+        const auto now_c = std::chrono::system_clock::now();
+        const auto now = std::chrono::system_clock::to_time_t(now_c);
+
+        return now;
+    }
+
     uint32_t getMSTime()
     {
         static const std::chrono::high_resolution_clock::time_point startTime = std::chrono::high_resolution_clock::now();
@@ -172,14 +164,14 @@ namespace Util
         return uint32_t(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count());
     }
 
-    long long GetTimeDifferenceToNow(std::chrono::high_resolution_clock::time_point start_time)
+    long long GetTimeDifferenceToNow(const std::chrono::high_resolution_clock::time_point& start_time)
     {
         std::chrono::duration<float> float_diff = TimeNow() - start_time;
         std::chrono::milliseconds time_difference = std::chrono::duration_cast<std::chrono::milliseconds>(float_diff);
         return time_difference.count();
     }
 
-    long long GetTimeDifference(std::chrono::high_resolution_clock::time_point start_time, std::chrono::high_resolution_clock::time_point end_time)
+    long long GetTimeDifference(const std::chrono::high_resolution_clock::time_point& start_time, const std::chrono::high_resolution_clock::time_point& end_time)
     {
         std::chrono::duration<float> float_diff = end_time - start_time;
         std::chrono::milliseconds time_difference = std::chrono::duration_cast<std::chrono::milliseconds>(float_diff);
@@ -286,7 +278,7 @@ namespace Util
         read_time_var >> time_period;
         read_time_var >> time_var;
 
-        Util::StringToLowerCase(time_var);
+        AscEmu::Util::Strings::toLowerCase(time_var);
 
         if (time_var.compare("y") == 0)
             multiplier = TimeVars::Year;
@@ -327,6 +319,24 @@ namespace Util
         gameTimeValue |= currentYear << TimeShiftmask::Year & TimeBitmask::Year;
 
         return gameTimeValue;
+    }
+
+    time_t getLocalHourTimestamp(time_t time, uint8_t hour, bool onlyAfterTime)
+    {
+        const auto now = std::chrono::system_clock::now();
+        const auto now_t = std::chrono::system_clock::to_time_t(now);
+
+        auto date = std::localtime(&now_t);
+        date->tm_hour = 0;
+        date->tm_min = 0;
+        date->tm_sec = 0;
+        const auto midnightLocal = std::mktime(date);
+        time_t hourLocal = midnightLocal + hour * 3600;
+
+        if (onlyAfterTime && hourLocal <= time)
+            hourLocal += 86400;
+
+        return hourLocal;
     }
 
     std::string ByteArrayToHexString(uint8_t const* bytes, uint32_t arrayLength, bool reverseArray)
@@ -429,7 +439,7 @@ namespace Util
     //////////////////////////////////////////////////////////////////////////////////////////
     // C++17 filesystem dependent functions
 
-    std::map<uint32_t, std::string> getDirectoryContent(std::string pathName, std::string specialSuffix, bool withPath)
+    std::map<uint32_t, std::string> getDirectoryContent(const std::string& pathName, const std::string& specialSuffix, bool withPath)
     {
         std::map<uint32_t, std::string> directoryContentMap;
 
@@ -481,7 +491,7 @@ namespace Util
     }
 
     // Database update files only
-    uint32_t readMajorVersionFromString(std::string fileName)
+    uint32_t readMajorVersionFromString(const std::string& fileName)
     {
         //         <-------->  0 - 8
         // example: 20180722-00_some_update_file.sql
@@ -490,12 +500,11 @@ namespace Util
     }
 
     // Database update files only
-    uint32_t readMinorVersionFromString(std::string fileName)
+    uint32_t readMinorVersionFromString(const std::string& fileName)
     {
         //                  <-->  9 - 11
         // example: 20180722-00_some_update_file.sql
         uint32_t const version = getNumberFromStringByRange(fileName, 9, 11);
         return version;
     }
-
 }

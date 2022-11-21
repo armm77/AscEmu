@@ -1,29 +1,39 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 
 #include "Guild.hpp"
 #include "GuildMgr.hpp"
-#if VERSION_STRING == Cata
-#include "GameCata/Management/GuildFinderMgr.h"
-#elif VERSION_STRING == Mop
-#include "GameMop/Management/GuildFinderMgr.h"
+
+#if VERSION_STRING >= Cata
+#include "Management/Guild/GuildFinderMgr.hpp"
 #endif
+
+#include "GuildBankEventLog.hpp"
+#include "GuildEventLog.hpp"
+#include "GuildNewsLog.hpp"
 #include "Chat/ChatHandler.hpp"
 #include "Server/MainServerDefines.h"
-#include "Objects/ObjectMgr.h"
-#include "Units/Players/Player.h"
+#include "Management/ObjectMgr.h"
+#include "Objects/Units/Players/Player.hpp"
 #include "Management/ItemInterface.h"
 #include "Server/Packets/SmsgGuildCommandResult.h"
 #include "Server/Packets/MsgSaveGuildEmblem.h"
-#include "Server/Packets/SmsgGuildBankMoneyWithdrawn.h"
-#include "Server/Packets/MsgGuildBankMoneyWithdrawn.h"
 #include "Server/Packets/SmsgGuildInvite.h"
 #include "Server/Packets/SmsgGuildEvent.h"
+#include "Server/Packets/SmsgMessageChat.h"
+#include "Server/Script/ScriptMgr.h"
+#include "Server/Definitions.h"
+
+#if VERSION_STRING >= Cata
+#include "Server/Packets/SmsgGuildBankMoneyWithdrawn.h"
 #include "Server/Packets/SmsgGuildMemberDailyReset.h"
+#else
+#include "Server/Packets/MsgGuildBankMoneyWithdrawn.h"
+#endif
 
 using namespace AscEmu::Packets;
 
@@ -83,7 +93,7 @@ void Guild::sendGuildInvitePacket(WorldSession* session, std::string invitedName
         return;
     }
 
-    if (invitedPlayer->getTeam() != session->GetPlayer()->getTeam() && session->GetPlayer()->GetSession()->GetPermissionCount() == 0 && !worldConfig.player.isInterfactionGuildEnabled)
+    if (invitedPlayer->getTeam() != session->GetPlayer()->getTeam() && session->GetPlayer()->getSession()->GetPermissionCount() == 0 && !worldConfig.player.isInterfactionGuildEnabled)
     {
         session->SendPacket(SmsgGuildCommandResult(GC_TYPE_INVITE, "", GC_ERROR_NOT_ALLIED).serialise().get());
         return;
@@ -102,10 +112,10 @@ void Guild::sendGuildInvitePacket(WorldSession* session, std::string invitedName
     invitedPlayer->setInvitedByGuildId(guild->getId());
 
 #if VERSION_STRING < Cata
-    invitedPlayer->GetSession()->SendPacket(SmsgGuildInvite(session->GetPlayer()->getName(), guild->getName()).serialise().get());
+    invitedPlayer->getSession()->SendPacket(SmsgGuildInvite(session->GetPlayer()->getName(), guild->getName()).serialise().get());
 
 #else
-    invitedPlayer->GetSession()->SendPacket(SmsgGuildInvite(session->GetPlayer()->getName(), guild->getName(), guild->getLevel(),
+    invitedPlayer->getSession()->SendPacket(SmsgGuildInvite(session->GetPlayer()->getName(), guild->getName(), guild->getLevel(),
         guild->getEmblemInfo(), guild->getId(), guild->getGUID()).serialise().get());
 #endif
 }
@@ -135,7 +145,7 @@ bool Guild::create(Player* pLeader, std::string const& name)
     if (sGuildMgr.getGuildByName(name))
         return false;
 
-    WorldSession* pLeaderSession = pLeader->GetSession();
+    WorldSession* pLeaderSession = pLeader->getSession();
     if (pLeaderSession == nullptr)
         return false;
 
@@ -291,7 +301,7 @@ void Guild::handleRoster(WorldSession* session)
             << uint32_t(itr->second->getZoneId());
 
         if (!itr->second->getFlags())
-            data << float(float(::time(nullptr) - itr->second->getLogoutTime()) / DAY);
+            data << float(float(::time(nullptr) - itr->second->getLogoutTime()) / static_cast<uint64_t>(DAY));
 
         data << itr->second->getPublicNote();
 
@@ -392,12 +402,12 @@ void Guild::handleRoster(WorldSession* session)
 
     if (session)
     {
-        sLogger.debug("SMSG_GUILD_ROSTER %s", session->GetPlayer()->getName().c_str());
+        sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_ROSTER %s", session->GetPlayer()->getName().c_str());
         session->SendPacket(&data);
     }
     else
     {
-        sLogger.debug("SMSG_GUILD_ROSTER [Broadcast]");
+        sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_ROSTER [Broadcast]");
         broadcastPacket(&data);
     }
 #endif
@@ -444,7 +454,7 @@ void Guild::handleQuery(WorldSession* session)
 
     session->SendPacket(&data);
 
-    //sLogger.debug("SMSG_GUILD_QUERY_RESPONSE %s", session->GetPlayer()->getName().c_str());
+    //sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_QUERY_RESPONSE %s", session->GetPlayer()->getName().c_str());
 }
 
 #if VERSION_STRING >= Cata
@@ -488,7 +498,7 @@ void Guild::sendGuildRankInfo(WorldSession* session) const
     data.append(rankData);
     session->SendPacket(&data);
 
-    sLogger.debug("SMSG_GUILD_RANK %s", session->GetPlayer()->getName().c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_RANK %s", session->GetPlayer()->getName().c_str());
 }
 #endif
 
@@ -758,7 +768,7 @@ void Guild::handleUpdateMemberRank(WorldSession* session, uint64_t guid, bool de
             }
             else
             {
-                if (member->isRankNotLower(rankId + 1))
+                if (member->isRankNotLower(rankId + 1U))
                 {
                     session->SendPacket(SmsgGuildCommandResult(type, name, GC_ERROR_RANK_TOO_HIGH_S).serialise().get());
                     return;
@@ -925,7 +935,7 @@ void Guild::handleGuildPartyRequest(WorldSession* session)
     if (!isMember(player->getGuid()) || !group)
         return;
 
-    sLogger.debug("SMSG_GUILD_PARTY_STATE_RESPONSE %s", session->GetPlayer()->getName().c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_PARTY_STATE_RESPONSE %s", session->GetPlayer()->getName().c_str());
 }
 
 void Guild::sendEventLog(WorldSession* session) const
@@ -938,7 +948,7 @@ void Guild::sendEventLog(WorldSession* session) const
     mEventLog->writeLogHolderPacket(data);
     session->SendPacket(&data);
 
-    sLogger.debug("SMSG_GUILD_EVENT_LOG_QUERY_RESULT %s", session->GetPlayer()->getName().c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_EVENT_LOG_QUERY_RESULT %s", session->GetPlayer()->getName().c_str());
 }
 
 #if VERSION_STRING >= Cata
@@ -997,7 +1007,7 @@ void Guild::sendNewsUpdate(WorldSession* session)
 
     session->SendPacket(&data);
 
-    sLogger.debug("SMSG_GUILD_NEWS_UPDATE %s", session->GetPlayer()->getName().c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_NEWS_UPDATE %s", session->GetPlayer()->getName().c_str());
 }
 #endif
 
@@ -1019,7 +1029,7 @@ void Guild::sendBankLog(WorldSession* session, uint8_t tabId) const
 #endif
         session->SendPacket(&data);
 
-        sLogger.debug("SMSG_GUILD_BANK_LOG_QUERY_RESULT %s TabId: %u", session->GetPlayer()->getName().c_str(), tabId);
+        sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_BANK_LOG_QUERY_RESULT %s TabId: %u", session->GetPlayer()->getName().c_str(), tabId);
     }
 }
 
@@ -1060,7 +1070,7 @@ void Guild::sendPermissions(WorldSession* session) const
 
     session->SendPacket(&data);
 
-    sLogger.debug("SMSG_GUILD_PERMISSIONS_QUERY_RESULTS %s Rank: %u", session->GetPlayer()->getName().c_str(), rankId);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_PERMISSIONS_QUERY_RESULTS %s Rank: %u", session->GetPlayer()->getName().c_str(), rankId);
 }
 
 void Guild::sendMoneyInfo(WorldSession* session) const
@@ -1082,7 +1092,7 @@ void Guild::sendLoginInfo(WorldSession* session)
 {
     session->SendPacket(SmsgGuildEvent(GE_MOTD, { m_motd }, 0).serialise().get());
 
-    sLogger.debug("SMSG_GUILD_EVENT %s MOTD", session->GetPlayer()->getName().c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_EVENT %s MOTD", session->GetPlayer()->getName().c_str());
 
     Player* player = session->GetPlayer();
 
@@ -1343,10 +1353,10 @@ void Guild::broadcastToGuild(WorldSession* session, bool officerOnly, std::strin
         {
             if (Player* player = itr->second->getPlayerByGuid(session->GetPlayer()->getGuid()))
             {
-                if (player->GetSession() && _hasRankRight(player->getGuid(), officerOnly ? GR_RIGHT_OFFCHATLISTEN : GR_RIGHT_GCHATLISTEN) &&
+                if (player->getSession() && _hasRankRight(player->getGuid(), officerOnly ? GR_RIGHT_OFFCHATLISTEN : GR_RIGHT_GCHATLISTEN) &&
                     !player->isIgnored(session->GetPlayer()->getGuidLow()))
                 {
-                    player->GetSession()->SendPacket(SmsgMessageChat(officerOnly ? CHAT_MSG_OFFICER : CHAT_MSG_GUILD, language, 0, msg).serialise().get());
+                    player->getSession()->SendPacket(SmsgMessageChat(officerOnly ? CHAT_MSG_OFFICER : CHAT_MSG_GUILD, language, 0, msg).serialise().get());
                 }
             }
         }
@@ -1361,10 +1371,10 @@ void Guild::broadcastAddonToGuild(WorldSession* session, bool officerOnly, std::
         {
             if (Player* player = itr->second->getPlayerByGuid(session->GetPlayer()->getGuid()))
             {
-                if (player->GetSession() && _hasRankRight(player->getGuid(), officerOnly ? GR_RIGHT_OFFCHATLISTEN : GR_RIGHT_GCHATLISTEN) &&
+                if (player->getSession() && _hasRankRight(player->getGuid(), officerOnly ? GR_RIGHT_OFFCHATLISTEN : GR_RIGHT_GCHATLISTEN) &&
                     !player->isIgnored(session->GetPlayer()->getGuidLow()))
                 {
-                    player->GetSession()->SendPacket(SmsgMessageChat(officerOnly ? CHAT_MSG_OFFICER : CHAT_MSG_GUILD, CHAT_MSG_ADDON, 0, msg).serialise().get());
+                    player->getSession()->SendPacket(SmsgMessageChat(officerOnly ? CHAT_MSG_OFFICER : CHAT_MSG_GUILD, CHAT_MSG_ADDON, 0, msg).serialise().get());
                 }
             }
         }
@@ -1379,7 +1389,7 @@ void Guild::broadcastPacketToRank(WorldPacket* packet, uint8_t rankId) const
         {
             if (Player* player = itr->second->getPlayerByGuid(itr->second->getGUID()))
             {
-                player->GetSession()->SendPacket(packet);
+                player->getSession()->SendPacket(packet);
             }
         }
     }
@@ -1391,7 +1401,7 @@ void Guild::broadcastPacket(WorldPacket* packet) const
     {
         if (Player* player = itr->second->getPlayerByGuid(itr->second->getGUID()))
         {
-            player->GetSession()->SendPacket(packet);
+            player->getSession()->SendPacket(packet);
         }
     }
 }
@@ -1460,7 +1470,7 @@ bool Guild::addMember(uint64_t guid, uint8_t rankId)
 #if VERSION_STRING >= Cata
         player->setGuildLevel(getLevel());
 #endif
-        sendLoginInfo(player->GetSession());
+        sendLoginInfo(player->getSession());
         name = player->getName();
     }
     else
@@ -1470,7 +1480,7 @@ bool Guild::addMember(uint64_t guid, uint8_t rankId)
         bool ok = false;
         if (sObjectMgr.GetPlayerInfo(lowguid))
         {
-            PlayerInfo* info = sObjectMgr.GetPlayerInfo(lowguid);
+            CachedCharacterInfo* info = sObjectMgr.GetPlayerInfo(lowguid);
             name = info->name;
             member->setStats(name, static_cast<uint8_t>(info->lastLevel), info->cl, info->lastZone, info->acct, 0);
 
@@ -1854,7 +1864,7 @@ void Guild::broadcastEvent(GuildEvents guildEvent, uint64_t guid, std::vector<st
 {
     broadcastPacket(SmsgGuildEvent(guildEvent, vars, guid).serialise().get());
 
-    sLogger.debug("SMSG_GUILD_EVENT: %s (%u)", _GetGuildEventString(guildEvent).c_str(), guildEvent);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_EVENT: %s (%u)", _GetGuildEventString(guildEvent).c_str(), guildEvent);
 }
 
 #if VERSION_STRING < Cata
@@ -1908,7 +1918,7 @@ void Guild::sendBankList(WorldSession* session, uint8_t tabId, bool /*withConten
 
             uint32_t numSlots = getRankBankTabSlotsPerDay(itr->second->getRankId(), tabId);
             data.put<uint32_t>(rempos, numSlots);
-            player->GetSession()->SendPacket(&data);
+            player->getSession()->SendPacket(&data);
         }
     }
 #else
@@ -2082,7 +2092,7 @@ void Guild::sendGuildRanksUpdate(uint64_t setterGuid, uint64_t targetGuid, uint3
 
     member->changeRank(static_cast<uint8_t>(rank));
 
-    sLogger.debug("SMSG_GUILD_RANKS_UPDATE target: %u, issuer: %u, rankId: %u",
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_RANKS_UPDATE target: %u, issuer: %u, rankId: %u",
         WoWGuid::getGuidLowPartFromUInt64(targetGuid), WoWGuid::getGuidLowPartFromUInt64(setterGuid), rank);
 }
 
@@ -2099,7 +2109,7 @@ void Guild::giveXP(uint32_t xp, Player* source)
 
     WorldPacket data(SMSG_GUILD_XP_GAIN, 8);
     data << uint64_t(xp);
-    source->GetSession()->SendPacket(&data);
+    source->getSession()->SendPacket(&data);
 
     m_experience += xp;
     m_todayExperience += xp;
@@ -2163,7 +2173,7 @@ void Guild::sendGuildReputationWeeklyCap(WorldSession* session, uint32_t reputat
     data << uint32_t(cap);
     session->SendPacket(&data);
 
-    sLogger.debug("SMSG_GUILD_REPUTATION_WEEKLY_CAP %s: Left: %u", session->GetPlayer()->getName().c_str(), cap);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_REPUTATION_WEEKLY_CAP %s: Left: %u", session->GetPlayer()->getName().c_str(), cap);
 }
 
 void Guild::resetTimes(bool weekly)
@@ -2174,7 +2184,7 @@ void Guild::resetTimes(bool weekly)
         itr->second->resetValues(weekly);
         if (Player* player = itr->second->getPlayerByGuid(itr->second->getGUID()))
         {
-            player->GetSession()->SendPacket(SmsgGuildMemberDailyReset().serialise().get());
+            player->getSession()->SendPacket(SmsgGuildMemberDailyReset().serialise().get());
         }
     }
 }
@@ -2281,7 +2291,7 @@ void Guild::swapItems(Player* player, uint8_t tabId, uint8_t slotId, uint8_t des
 
         pItem2->modStackCount(-static_cast<int32_t>(splitedAmount));
         pItem2->setCreatorGuid(0);
-        pItem2->SaveToDB(0, 0, true, nullptr);
+        pItem2->saveToDB(0, 0, true, nullptr);
 
         pItem = sObjectMgr.CreateItem(pItem2->getEntry(), player);
         if (pItem == nullptr)
@@ -2289,7 +2299,7 @@ void Guild::swapItems(Player* player, uint8_t tabId, uint8_t slotId, uint8_t des
 
         pItem->setStackCount(splitedAmount);
         pItem->setCreatorGuid(0);
-        pItem->SaveToDB(0, 0, true, nullptr);
+        pItem->saveToDB(0, 0, true, nullptr);
     }
     else
     {
@@ -2346,8 +2356,7 @@ void Guild::swapItemsWithInventory(Player* player, bool toChar, uint8_t tabId, u
             if (player->getItemInterface()->SafeRemoveAndRetreiveItemFromSlot(playerBag, playerSlotId, false) == nullptr)
                 return;
 
-            if (pSourceItem)
-                pSourceItem->RemoveFromWorld();
+            pSourceItem->removeFromWorld();
         }
 
         if (pSourceItem == nullptr)
@@ -2357,7 +2366,7 @@ void Guild::swapItemsWithInventory(Player* player, bool toChar, uint8_t tabId, u
                 pSourceItem2 = pDestItem;
 
                 pSourceItem2->modStackCount(-static_cast<int32_t>(splitedAmount));
-                pSourceItem2->SaveToDB(0, 0, true, nullptr);
+                pSourceItem2->saveToDB(0, 0, true, nullptr);
 
                 pDestItem = sObjectMgr.CreateItem(pSourceItem2->getEntry(), player);
                 if (pDestItem == nullptr)
@@ -2376,7 +2385,7 @@ void Guild::swapItemsWithInventory(Player* player, bool toChar, uint8_t tabId, u
             getBankTab(tabId)->setItem(slotId, pSourceItem);
 
             pSourceItem->setOwner(nullptr);
-            pSourceItem->SaveToDB(0, 0, true, nullptr);
+            pSourceItem->saveToDB(0, 0, true, nullptr);
         }
     }
     else
@@ -2387,12 +2396,12 @@ void Guild::swapItemsWithInventory(Player* player, bool toChar, uint8_t tabId, u
                 return;
 
             pDestItem->setOwner(player);
-            pDestItem->SaveToDB(playerBag, playerSlotId, true, nullptr);
+            pDestItem->saveToDB(playerBag, playerSlotId, true, nullptr);
 
             if (!player->getItemInterface()->SafeAddItem(pDestItem, 0, 0))
             {
                 if (!player->getItemInterface()->AddItemToFreeSlot(pDestItem))
-                    pDestItem->DeleteMe();
+                    pDestItem->deleteMe();
             }
 
             logBankEvent(GB_LOG_WITHDRAW_ITEM, tabId, player->getGuidLow(),
@@ -2454,7 +2463,7 @@ void Guild::_sendBankContentUpdate(uint8_t tabId, SlotIds slots, bool sendAllSlo
 
         uint32_t numSlots = getRankBankTabSlotsPerDay(itr->second->getRankId(), tabId);
         data.put<uint32_t>(rempos, numSlots);
-        player->GetSession()->SendPacket(&data);
+        player->getSession()->SendPacket(&data);
     }
 #else
     if (GuildBankTab const* guildBankTab = getBankTab(tabId))
@@ -2565,19 +2574,19 @@ void Guild::_sendBankContentUpdate(uint8_t tabId, SlotIds slots, bool sendAllSlo
                 if (Player* player = itr->second->getPlayerByGuid(itr->second->getGUID()))
                 {
                     data.put<uint32_t>(rempos, uint32_t(getMemberRemainingSlots(itr->second, tabId)));
-                    player->GetSession()->SendPacket(&data);
+                    player->getSession()->SendPacket(&data);
                 }
             }
         }
 
-        sLogger.debug("SMSG_GUILD_BANK_LIST");
+        sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "SMSG_GUILD_BANK_LIST");
     }
 #endif
 }
 
 Guild::GuildMember::GuildMember(uint32_t guildId, uint64_t guid, uint8_t rankId) : mGuildId(guildId), mGuid(guid), mZoneId(0), mLevel(0), mClass(0),
-mFlags(GEM_STATUS_NONE), mLogoutTime(::time(nullptr)), mAccountId(0), mRankId(rankId), mAchievementPoints(0),
-mTotalActivity(0), mWeekActivity(0), mTotalReputation(0), mBankWithdraw{ 0 }, mWeekReputation(0)
+mFlags(GEM_STATUS_NONE), mLogoutTime(::time(nullptr)), mAccountId(0), mRankId(rankId), mBankWithdraw{ 0 }, mAchievementPoints(0),
+mTotalActivity(0), mWeekActivity(0), mTotalReputation(0), mWeekReputation(0)
 {
     memset(mBankWithdraw, 0, (MAX_GUILD_BANK_TABS + 1) * sizeof(int32_t));
 }
@@ -2588,7 +2597,7 @@ void Guild::GuildMember::setStats(Player* player)
     mLevel = static_cast<uint8_t>(player->getLevel());
     mClass = player->getClass();
     mZoneId = player->GetZoneId();
-    mAccountId = player->GetSession()->GetAccountId();
+    mAccountId = player->getSession()->GetAccountId();
     mAchievementPoints = 0;
 }
 
@@ -2671,7 +2680,7 @@ void Guild::GuildMember::resetFlags()
 
 bool Guild::GuildMember::loadGuildMembersFromDB(Field* fields, Field* fields2)
 {
-    PlayerInfo* plr = sObjectMgr.GetPlayerInfo((fields[1].GetUInt32()));
+    CachedCharacterInfo* plr = sObjectMgr.GetPlayerInfo((fields[1].GetUInt32()));
     if (plr == nullptr)
         return false;
 

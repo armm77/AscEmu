@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "StdAfx.h"
+
 #include "WorldConf.h"
 #include "Server/LogonCommClient/LogonCommHandler.h"
 #include "Storage/MySQLDataStore.hpp"
@@ -28,15 +28,17 @@
 #include "Server/Master.h"
 #include "Server/BroadcastMgr.h"
 #include "Storage/DayWatcherThread.h"
-#include "Management/Channel.h"
-#include "Management/ChannelMgr.h"
+#include "Chat/Channel.hpp"
+#include "Chat/ChannelMgr.hpp"
 #include "Management/AddonMgr.h"
 #include "Management/AuctionMgr.h"
-#include "Spell/SpellTarget.h"
 #include "Util.hpp"
 #include "Database/DatabaseUpdater.hpp"
 #include "Packets/SmsgServerMessage.h"
 #include "OpcodeTable.hpp"
+#include "Chat/ChatHandler.hpp"
+#include "Script/ScriptMgr.h"
+#include "Spell/SpellMgr.hpp"
 
 std::string LogFileName;
 bool bLogChat;
@@ -55,8 +57,8 @@ SERVER_DECL SessionLog* Player_Log;
 ConfigMgr Config;
 
 // DB version
-static const char* REQUIRED_CHAR_DB_VERSION = "20201216-00_rename_event_properties";
-static const char* REQUIRED_WORLD_DB_VERSION = "20210501-02_creature_spawn";
+static const char* REQUIRED_CHAR_DB_VERSION = "20220415-00_account_instance_times";
+static const char* REQUIRED_WORLD_DB_VERSION = "20221023_00_violet_hold";
 
 void Master::_OnSignal(int s)
 {
@@ -107,7 +109,10 @@ struct Addr
 bool bServerShutdown = false;
 bool StartConsoleListener();
 void CloseConsoleListener();
+
+#ifdef WIN32
 ThreadBase* GetConsoleListener();
+#endif
 
 std::unique_ptr<WorldRunnable> worldRunnable = nullptr;
 
@@ -115,7 +120,6 @@ std::unique_ptr<WorldRunnable> worldRunnable = nullptr;
 // Testscript fo experimental filesystem
 
 #include <fstream>
-#include <iostream>
 #include <string>
 
 void createExtendedLogDir()
@@ -127,32 +131,14 @@ void createExtendedLogDir()
         fs::create_directories(logDir);
 }
 
-void checkRequiredDirs()
+bool checkRequiredDirs()
 {
     std::vector<std::string> requiredDirs;
+    requiredDirs.reserve(3);
+
     requiredDirs.emplace_back(CONFDIR);
     requiredDirs.emplace_back("dbc");
     requiredDirs.emplace_back("maps");
-
-    if (worldConfig.terrainCollision.isCollisionEnabled)
-        requiredDirs.emplace_back("vmaps");
-
-    if (worldConfig.terrainCollision.isPathfindingEnabled)
-    {
-        // Check that vertical maps are also enabled
-        if (!worldConfig.terrainCollision.isCollisionEnabled)
-        {
-            sLogger.failure("Pathfinding is enabled but collision is disabled. Disabling pathfinding.");
-            worldConfig.terrainCollision.isPathfindingEnabled = false;
-
-            // Give user a chance to read the error message
-            Arcemu::Sleep(2000);
-        }
-        else
-        {
-            requiredDirs.emplace_back("mmaps");
-        }
-    }
 
     std::string dataDir = worldConfig.server.dataDir;
     dataDir.erase(0, 2); //remove ./ from string
@@ -177,19 +163,73 @@ void checkRequiredDirs()
         }
         else
         {
+            sLogger.failure("Directory %s not found. Shutting down.", requiredPath.u8string().c_str());
+            return false;
+        }
+    }
+    return true;
+}
+
+void checkAdditinaloDirs()
+{
+    std::vector<std::string> additionalDirs;
+
+    if (worldConfig.terrainCollision.isCollisionEnabled)
+        additionalDirs.emplace_back("vmaps");
+
+    if (worldConfig.terrainCollision.isPathfindingEnabled)
+    {
+        // Check that vertical maps are also enabled
+        if (!worldConfig.terrainCollision.isCollisionEnabled)
+        {
+            sLogger.failure("Pathfinding is enabled but collision is disabled. Disabling pathfinding.");
+            worldConfig.terrainCollision.isPathfindingEnabled = false;
+
+            // Give user a chance to read the error message
+            Arcemu::Sleep(2000);
+        }
+        else
+        {
+            additionalDirs.emplace_back("mmaps");
+        }
+    }
+
+    std::string dataDir = worldConfig.server.dataDir;
+    dataDir.erase(0, 2); //remove ./ from string
+
+    for (const auto& dir : additionalDirs)
+    {
+        fs::path additionalPath = fs::current_path();
+
+        if (dataDir.empty() || dir == CONFDIR)
+        {
+            additionalPath /= dir;
+        }
+        else
+        {
+            additionalPath /= dataDir;
+            additionalPath /= dir;
+        }
+
+        if (fs::exists(additionalPath))
+        {
+            sLogger.info("Required dir %s found!", additionalPath.u8string().c_str());
+        }
+        else
+        {
             if (dir == "mmaps")
             {
-                sLogger.failure("Movement maps in %s not found. Disabling pathfinding.", requiredPath.u8string().c_str());
+                sLogger.failure("Movement maps in %s not found. Disabling pathfinding.", additionalPath.u8string().c_str());
                 worldConfig.terrainCollision.isPathfindingEnabled = false;
             }
             else if (dir == "vmaps")
             {
-                sLogger.failure("Vertical maps in %s not found. Disabling collision.", requiredPath.u8string().c_str());
+                sLogger.failure("Vertical maps in %s not found. Disabling collision.", additionalPath.u8string().c_str());
                 worldConfig.terrainCollision.isCollisionEnabled = false;
             }
             else
             {
-                sLogger.failure("Required dir %s not found!", requiredPath.u8string().c_str());
+                sLogger.failure("Required dir %s not found!", additionalPath.u8string().c_str());
             }
 
             // Give user a chance to read the error message
@@ -213,7 +253,7 @@ void checkRequiredDirs()
 
 bool Master::Run(int /*argc*/, char** /*argv*/)
 {
-    char* config_file = (char*)CONFDIR "/world.conf";
+    std::string config_file = CONFDIR "/world.conf";
 
     UNIXTIME = time(NULL);
     g_localTime = *localtime(&UNIXTIME);
@@ -242,6 +282,7 @@ bool Master::Run(int /*argc*/, char** /*argv*/)
     sWorld.loadWorldConfigValues();
 
     sLogger.setMinimumMessageType(static_cast<AscEmu::Logging::MessageType>(worldConfig.logger.minimumMessageType));
+    sLogger.setDebugFlags(static_cast<AscEmu::Logging::DebugFlags>(worldConfig.logger.debugFlags));
 
     OpenCheatLogFiles();
 
@@ -254,7 +295,14 @@ bool Master::Run(int /*argc*/, char** /*argv*/)
 
     createExtendedLogDir();
 
-    checkRequiredDirs();
+    if (!checkRequiredDirs())
+    {
+        Database::CleanupLibs();
+        sLogger.finalize();
+        return false;
+    }
+
+    checkAdditinaloDirs();
 
     const std::string charDbName = worldConfig.charDb.dbName;
     DatabaseUpdater::initBaseIfNeeded(charDbName, "character", CharacterDatabase);
@@ -647,11 +695,11 @@ void OnCrash(bool Terminate)
 
 void Master::PrintBanner()
 {
-    sLogger.file(AscEmu::Logging::Severity::FAILURE, AscEmu::Logging::MessageType::MINOR, "<< AscEmu %s/%s-%s (%s) :: World Server >>", BUILD_HASH_STR, CONFIG, PLATFORM_TEXT, ARCH);
+    sLogger.file(AscEmu::Logging::Severity::FAILURE, AscEmu::Logging::MessageType::MINOR, "<< AscEmu %s/%s-%s %s :: World Server >>", BUILD_HASH_STR, CONFIG, AE_PLATFORM, AE_ARCHITECTURE);
     sLogger.file(AscEmu::Logging::Severity::FAILURE, AscEmu::Logging::MessageType::MINOR, "========================================================");
 }
 
-bool Master::LoadWorldConfiguration(char* config_file)
+bool Master::LoadWorldConfiguration(std::string config_file)
 {
     sLogger.info("Config : Loading Config Files...");
     if (Config.MainConfig.openAndLoadConfigFile(config_file))
@@ -741,7 +789,7 @@ void Master::WritePidFile()
 #else
         pid = getpid();
 #endif
-        fprintf(fPid, "%u", (unsigned int)pid);
+        fprintf(fPid, "%u", pid);
         fclose(fPid);
     }
 }

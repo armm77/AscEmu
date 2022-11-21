@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -21,6 +21,7 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 //enum 
 //{
@@ -30,17 +31,18 @@
 
 class Lunaclaw : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Lunaclaw)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Lunaclaw(c); }
     explicit Lunaclaw(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnDied(Unit* mKiller)
+    void OnDied(Unit* mKiller) override
     {
         if (!mKiller->isPlayer())
             return;
 
         Player* plr = static_cast<Player*>(mKiller);
 
-        Creature* ct = plr->GetMapMgr()->CreateAndSpawnCreature(12144, getCreature()->GetPositionX(), getCreature()->GetPositionY(), getCreature()->GetPositionZ(), 0);
+        Creature* ct = plr->getWorldMap()->createAndSpawnCreature(12144, getCreature()->GetPosition());
         if (ct != nullptr)
             ct->Despawn(1 * 60 * 1000, 0);
     }
@@ -49,10 +51,9 @@ class Lunaclaw : public CreatureAIScript
 class MoonkinGhost_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        GossipMenu menu(pObject->getGuid(), 4714, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), 4714, plr->getSession()->language);
         if (plr->hasQuestInQuestLog(6002))
             menu.addItem(GOSSIP_ICON_CHAT, 455, 1);     // You have fought well, spirit. I ask you to grand me the strenght of your body and the strenght of your heart.
         else if (plr->hasQuestInQuestLog(6001))
@@ -112,10 +113,9 @@ public:
 class SCRIPT_DECL BearGhost_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        GossipMenu menu(pObject->getGuid(), 4719, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), 4719, plr->getSession()->language);
         if (plr->hasQuestInQuestLog(5930)) // horde
             menu.addItem(GOSSIP_ICON_CHAT, 456, 1);     // What do you represent, spirit?
         else if (plr->hasQuestInQuestLog(5929)) // ally
@@ -130,21 +130,21 @@ public:
         {
             case 1:
             {
-                GossipMenu menu(pObject->getGuid(), 4721, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 4721, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 457, 2);     // I seek to understand the importance of strength of the body.
                 menu.sendGossipPacket(plr);
                 break;
             }
             case 2:
             {
-                GossipMenu menu(pObject->getGuid(), 4733, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 4733, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 458, 3);     // I seek to understand the importance of strength of the heart.
                 menu.sendGossipPacket(plr);
                 break;
             }
             case 3:
             {
-                GossipMenu menu(pObject->getGuid(), 4734, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 4734, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 459, 4);     // I have heard your words, Great Bear Spirit, and I understand. I now...
                 menu.sendGossipPacket(plr);
                 break;
@@ -166,21 +166,21 @@ public:
             }
             case 5:
             {
-                GossipMenu menu(pObject->getGuid(), 4721, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 4721, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 457, 6);     // I seek to understand the importance of strength of the body.
                 menu.sendGossipPacket(plr);
                 break;
             }
             case 6:
             {
-                GossipMenu menu(pObject->getGuid(), 4733, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 4733, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 458, 7);     // I seek to understand the importance of strength of the heart.
                 menu.sendGossipPacket(plr);
                 break;
             }
             case 7:
             {
-                GossipMenu menu(pObject->getGuid(), 4734, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 4734, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 459, 8);     // I have heard your words, Great Bear Spirit, and I understand. I now...
                 menu.sendGossipPacket(plr);
                 break;
@@ -207,10 +207,9 @@ public:
 class MoongladeQuest : public QuestScript
 {
 public:
-
     void OnQuestStart(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
-        if (!mTarget->HasSpell(19027))
+        if (!mTarget->hasSpell(19027))
             mTarget->castSpell(mTarget, sSpellMgr.getSpellInfo(19027), true);
     }
 };

@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -27,9 +27,6 @@ LfgGroupData::LfgGroupData() :
     m_Dungeon(0),
     m_VotesNeeded(LFG_GROUP_KICK_VOTES_NEEDED),
     m_KicksLeft(LFG_GROUP_MAX_KICKS)
-{}
-
-LfgGroupData::~LfgGroupData()
 {}
 
 void LfgGroupData::SetState(LfgState state)

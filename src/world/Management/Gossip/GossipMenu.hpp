@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -9,15 +9,13 @@ This file is released under the MIT license. See README-MIT for more information
 #include <string>
 #include "GossipDefines.hpp"
 #include "Management/Quest.h"
-#include "Units/Players/Player.h"
+#include "Objects/Units/Players/Player.hpp"
 
 class SERVER_DECL GossipMenu
 {
 public:
-
     GossipMenu(uint64_t senderGuid, uint32_t textId, uint32_t sessionLanguage = 0, uint32_t gossipId = 0);
 
-    //MIT starts
     void addItem(uint8_t icon, uint32_t textId, uint32_t id, std::string text = "", uint32_t boxMoney = 0, std::string boxMessage = "", bool isCoded = false);
     void removeItem(uint32_t id);
 

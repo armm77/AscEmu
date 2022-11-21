@@ -1,21 +1,18 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
+#include <filesystem>
 #include "Common.Legacy.h"
 
-#ifdef WIN32
-    #define LIBMASK ".dll";
-#else
-    #ifndef __APPLE__
-        #define LIBMASK ".so";
-    #else
-        #define LIBMASK ".dylib";
-    #endif
-#endif
+namespace fs = std::filesystem;
+
+// Banner information
+#define AE_PLATFORM     "@AE_PLATFORM@"
+#define AE_ARCHITECTURE "@AE_ARCHITECTURE@"
 
 // Time Variables
 namespace TimeVars
@@ -68,15 +65,4 @@ namespace TimeShiftmask
     };
 }
 
-//\ brief: C++17 filesystem. It is currently experimental.
-//         On MSVC it is included with <filesystem> (Since VS 2019 16.3.5)
-//         On GCC and Clang you have to include <experimental/filesystem> and set the
-//         compilerflag =stdc++17 and link stdc++fs.
-//         We use the namespace fs to simplify it. On GCC it is v1.
-#if (WIN32 || _WIN64)
-    #include <filesystem>
-    namespace fs = std::filesystem;
-#else
-    #include <experimental/filesystem>
-    namespace fs = std::experimental::filesystem::v1;
-#endif
+unsigned const maxPathLength = 1024;

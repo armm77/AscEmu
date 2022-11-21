@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -187,7 +187,7 @@ namespace AscEmu::Threading
         queueTask(task, milliseconds(-1), taskName);
     }
 
-    void AEThreadPool::queueHighPriorityTask(ThreadFunc task, std::string taskName)
+    void AEThreadPool::queueHighPriorityTask(ThreadFunc task, const std::string& taskName)
     {
         queueTask(task, milliseconds(-1), taskName, true);
     }

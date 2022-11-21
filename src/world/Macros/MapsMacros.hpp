@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -59,13 +59,8 @@ This file is released under the MIT license. See README-MIT for more information
     #define MAX_NUM_MAPS 975
 #endif
 
-#define TERRAIN_INVALID_HEIGHT -50000
-#define TERRAIN_TILE_SIZE 533.3333333f
-#define TERRAIN_NUM_TILES 64
-#define TERRAIN_MAP_RESOLUTION 128
-
-#define CREATURE_SPAWNS_FIELDCOUNT 27
-#define GO_SPAWNS_FIELDCOUNT 18
+#define CREATURE_SPAWNS_FIELDCOUNT 32
+#define GO_SPAWNS_FIELDCOUNT 17
 
 #define MAP_CELL_DEFAULT_UNLOAD_TIME 300
 #define MAKE_CELL_EVENT(x, y) (((x) * 1000) + 200 + y)
@@ -91,3 +86,6 @@ This file is released under the MIT license. See README-MIT for more information
 
 #define MAP_LIQUID_NO_TYPE    0x0001
 #define MAP_LIQUID_NO_HEIGHT  0x0002
+
+// Extra tolerance to z position to check if it is in air or on ground.
+#define GROUND_HEIGHT_TOLERANCE 0.05f

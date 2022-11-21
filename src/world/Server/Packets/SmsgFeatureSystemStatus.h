@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -31,11 +31,12 @@ namespace AscEmu::Packets
     protected:
         size_t expectedSize() const override
         {
-#if VERSION_STRING > WotLK
-            return 1 + 4 + 4 + 4 + 4 + 2 + 4 + 4 + 4 + 4 + 4 + 4 + 4;
-#endif
-#if VERSION_STRING > CATA
+#if VERSION_STRING > Cata
             return 4 + 4 + 4 + 1 + 4 + 2 + 4 + 4 + 4 + 4 + 4 + 4 + 4;
+#elif VERSION_STRING > WotLK
+            return 1 + 4 + 4 + 4 + 4 + 2 + 4 + 4 + 4 + 4 + 4 + 4 + 4;
+#else
+            return 1 + 1;
 #endif
         }
 

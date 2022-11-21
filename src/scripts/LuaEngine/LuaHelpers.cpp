@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -36,16 +36,16 @@ int LuaHelpers::ExtractfRefFromCString(lua_State* L, const char* functionName)
                     functionRef = luaL_ref(L, LUA_REGISTRYINDEX);
                     break;
                 }
-                else if (lua_istable(L, -1))
+                
+                if (lua_istable(L, -1))
                 {
                     token = strtok(nullptr, ".:");
                     continue;
                 }
-                else
-                {
-                    luaL_error(L, "Reference creation failed! (%s) is not a valid Lua function. \n", functionName);
-                    break;
-                }
+
+                luaL_error(L, "Reference creation failed! (%s) is not a valid Lua function. \n", functionName);
+                break;
+
             }
         }
         free((void*)copy);

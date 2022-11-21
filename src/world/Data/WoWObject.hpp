@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -14,8 +14,6 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include <cstdint>
-#include <cmath>
-#include "GuidData.hpp"
 #include "WorldConf.h"
 
 #pragma pack(push, 1)
@@ -112,7 +110,15 @@ struct WoWObject
     };
 
     uint32_t entry;
-    uint32_t dynamic_flags;
+    union
+    {
+        struct
+        {
+            uint16_t dynamic_flags;
+            int16_t path_progress;
+        } dynamic_field_parts;
+        uint32_t dynamic_field;
+    };
     float scale_x;
 
     void setLowGuid(uint32_t val)

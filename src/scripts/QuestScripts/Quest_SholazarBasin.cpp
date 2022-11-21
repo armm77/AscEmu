@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,6 +20,7 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 #include "Spell/SpellAuras.h"
 
 enum
@@ -35,15 +36,16 @@ enum
 
 class ChickenEscapee : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ChickenEscapee)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ChickenEscapee(c); }
     explicit ChickenEscapee(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnLoad()
+    void OnLoad() override
     {
         RegisterAIUpdateEvent(1000);
     }
 
-    void AIUpdate()
+    void AIUpdate() override
     {
         // Let's see if we are netted
         if (Aura* a = getCreature()->getAuraWithId(51959))
@@ -72,12 +74,11 @@ class ChickenEscapee : public CreatureAIScript
 class SCRIPT_DECL HemetTasteTest : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (plr->hasQuestInQuestLog(12645))
         {
-            GossipMenu menu(pObject->getGuid(), 40002, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 40002, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 476, 1);     // Care to try Grimbooze Thunderbrew's Jungle punch?
             menu.sendGossipPacket(plr);
         }
@@ -88,11 +89,11 @@ public:
         Creature* pCreature = static_cast<Creature*>(pObject);
 
         std::string msg = "Aye, I'll try it.";
-        pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg.c_str());
+        pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg.c_str());
         std::string msg2 = "That's exactly what I needed!";
         std::string msg3 = "It's got my vote! That'll put hair on your chest like nothing else will.";
-        pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg2.c_str(), 2000);
-        pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg3.c_str(), 4000);
+        pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg2.c_str(), 2000);
+        pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg3.c_str(), 4000);
 
         if (auto* questLog = plr->getQuestLogByQuestId(12645))
         {
@@ -100,7 +101,7 @@ public:
                 return;
 
             questLog->setMobCountForIndex(0, 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -109,12 +110,11 @@ public:
 class SCRIPT_DECL HadriusTasteTest : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (plr->hasQuestInQuestLog(12645))
         {
-            GossipMenu menu(pObject->getGuid(), 40002, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 40002, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 476, 1);     // Care to try Grimbooze Thunderbrew's Jungle punch?
             menu.sendGossipPacket(plr);
         }
@@ -125,11 +125,11 @@ public:
         Creature* pCreature = static_cast<Creature*>(pObject);
 
         std::string msg = "I'm always up for something of Grimbooze's.";
-        pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg.c_str());
+        pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg.c_str());
         std::string msg2 = "Well, so far, it tastes like something my wife would drink...";
         std::string msg3 = "Now, there's the kick I've come to expect from Grimbooze's drinks! I like it!";
-        pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg2.c_str(), 2000);
-        pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg3.c_str(), 4000);
+        pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg2.c_str(), 2000);
+        pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg3.c_str(), 4000);
 
         if (auto* questLog = plr->getQuestLogByQuestId(12645))
         {
@@ -137,7 +137,7 @@ public:
                 return;
 
             questLog->setMobCountForIndex(1, 1);
-            questLog->SendUpdateAddKill(1);
+            questLog->sendUpdateAddKill(1);
             questLog->updatePlayerFields();
         }
     }
@@ -146,12 +146,11 @@ public:
 class SCRIPT_DECL TamaraTasteTest : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (plr->hasQuestInQuestLog(12645))
         {
-            GossipMenu menu(pObject->getGuid(), 40002, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 40002, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 476, 1);     // Care to try Grimbooze Thunderbrew's Jungle punch?
             menu.sendGossipPacket(plr);
         }
@@ -162,11 +161,11 @@ public:
         Creature* pCreature = static_cast<Creature*>(pObject);
 
         std::string msg = " Sure!";
-        pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg.c_str());
+        pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg.c_str());
         std::string msg2 = "Oh my...";
         std::string msg3 = "Tastes like I'm drinking... engine degreaser!";
-        pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg2.c_str(), 2000);
-        pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg3.c_str(), 4000);
+        pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg2.c_str(), 2000);
+        pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg3.c_str(), 4000);
 
         if (auto* questLog = plr->getQuestLogByQuestId(12645))
         {
@@ -174,7 +173,7 @@ public:
                 return;
 
             questLog->setMobCountForIndex(2, 1);
-            questLog->SendUpdateAddKill(2);
+            questLog->sendUpdateAddKill(2);
             questLog->updatePlayerFields();
         }
     }

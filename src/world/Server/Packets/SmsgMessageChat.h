@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -36,7 +36,7 @@ namespace AscEmu::Packets
         std::string senderName;
         WoWGuid receiverGuid;
         std::string receiverName;
-        uint32_t achievementId;
+        uint32_t achievementId = 0;
 
         SmsgMessageChat() : SmsgMessageChat(0, 0, 0, "", 0, "", 0, "", 0)
         {
@@ -234,7 +234,6 @@ namespace AscEmu::Packets
             uint64_t unpacked_guid;
             uint32_t unk;
             uint32_t message_length;
-            uint8_t flag;
             packet >> type >> language >> unpacked_guid >> unk >> unpacked_guid >> message_length >> message >> flag;
             senderGuid = WoWGuid(unpacked_guid);
             return false;

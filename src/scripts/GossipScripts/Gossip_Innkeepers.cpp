@@ -1,9 +1,11 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Server/Script/ScriptMgr.h"
 #include "Storage/MySQLDataStore.hpp"
 #include "Storage/MySQLStructures.h"
 
@@ -18,7 +20,7 @@ class InnkeeperGossip : public GossipScript
 public:
     void onHello(Object* pObject, Player* Plr) override;
     void onSelectOption(Object* pObject, Player* Plr, uint32_t Id, const char* Code, uint32_t gossipId) override;
-    void destroy() { delete this; }
+    void destroy() override { delete this; }
 };
 
 void InnkeeperGossip::onHello(Object* pObject, Player* Plr)
@@ -33,7 +35,7 @@ void InnkeeperGossip::onHello(Object* pObject, Player* Plr)
     uint32_t Text = sMySQLStore.getGossipTextIdForNpc(pCreature->getEntry());
     if (Text != 0)
     {
-        MySQLStructure::NpcText const* text = sMySQLStore.getNpcText(Text);
+        MySQLStructure::NpcGossipText const* text = sMySQLStore.getNpcGossipText(Text);
         if (text != nullptr)
         {
             TextID = Text;
@@ -47,7 +49,7 @@ void InnkeeperGossip::onHello(Object* pObject, Player* Plr)
     tm * ct = std::localtime(&_time_now);
     if (ct->tm_mon == 9 && (ct->tm_mday > 17 && ct->tm_mday <= 31))
     {
-        if (!Plr->HasAura(SPELL_TRICK_OR_TREATED))
+        if (!Plr->hasAurasWithId(SPELL_TRICK_OR_TREATED))
         {
             menu.addItem(GOSSIP_ICON_CHAT, GI_TRICK_TREAT, 4);
         }
@@ -75,20 +77,20 @@ void InnkeeperGossip::onSelectOption(Object* pObject, Player* Plr, uint32_t Id, 
     {
         case 1: // Vendor
         {
-            Plr->GetSession()->sendInventoryList(pCreature);
+            Plr->getSession()->sendInventoryList(pCreature);
         } break;
         case 2: // Binder
         {
-            Plr->GetSession()->sendInnkeeperBind(pCreature);
+            Plr->getSession()->sendInnkeeperBind(pCreature);
         } break;
         case 3: // What can i do?
         {
             // Prepare second menu
-            GossipMenu::sendQuickMenu(pCreature->getGuid(), 1853, Plr, 2, GOSSIP_ICON_CHAT, Plr->GetSession()->LocalizedGossipOption(INNKEEPER));
+            GossipMenu::sendQuickMenu(pCreature->getGuid(), 1853, Plr, 2, GOSSIP_ICON_CHAT, Plr->getSession()->LocalizedGossipOption(INNKEEPER));
         } break;
         case 4: // Event of halloween
         {
-            if (!Plr->HasAura(SPELL_TRICK_OR_TREATED))
+            if (!Plr->hasAurasWithId(SPELL_TRICK_OR_TREATED))
             {
                 pCreature->castSpell(Plr, SPELL_TRICK_OR_TREATED, true);
 

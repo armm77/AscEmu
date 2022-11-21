@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,13 +19,13 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 bool BaronVardusAllowSpawn = true;
 
 class WantedBaronVardus : public QuestScript
 {
 public:
-
     void OnQuestStart(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
         if (BaronVardusAllowSpawn == true)
@@ -34,16 +34,16 @@ public:
             switch (rand)
             {
                 case 0:
-                    mTarget->GetMapMgr()->GetInterface()->SpawnCreature(2306, 692.64f, -904.74f, 157.79f, 0, true, false, 0, 0)->Despawn(1800000, 0);
+                    mTarget->getWorldMap()->getInterface()->spawnCreature(2306, LocationVector(692.64f, -904.74f, 157.79f), true, false, 0, 0)->Despawn(1800000, 0);
                     break;
                 case 1:
-                    mTarget->GetMapMgr()->GetInterface()->SpawnCreature(2306, 939.0f, -852.46f, 114.644f, 0, true, false, 0, 0)->Despawn(1800000, 0);
+                    mTarget->getWorldMap()->getInterface()->spawnCreature(2306, LocationVector(939.0f, -852.46f, 114.644f), true, false, 0, 0)->Despawn(1800000, 0);
                     break;
                 case 2:
-                    mTarget->GetMapMgr()->GetInterface()->SpawnCreature(2306, 1184.07f, -553.43f, 71.3346f, 0, true, false, 0, 0)->Despawn(1800000, 0);
+                    mTarget->getWorldMap()->getInterface()->spawnCreature(2306, LocationVector(1184.07f, -553.43f, 71.3346f), true, false, 0, 0)->Despawn(1800000, 0);
                     break;
                 case 3:
-                    mTarget->GetMapMgr()->GetInterface()->SpawnCreature(2306, 1001.20f, -793.93f, 108.65f, 0, true, false, 0, 0)->Despawn(1800000, 0);
+                    mTarget->getWorldMap()->getInterface()->spawnCreature(2306, LocationVector(1001.20f, -793.93f, 108.65f), true, false, 0, 0)->Despawn(1800000, 0);
                     break;
             }
             BaronVardusAllowSpawn = false;
@@ -53,7 +53,8 @@ public:
 
 class Baron_Vardus : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Baron_Vardus)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Baron_Vardus(c); }
     explicit Baron_Vardus(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnDied(Unit* /*mKiller*/) override

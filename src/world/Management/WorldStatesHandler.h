@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@
 #define WORLDSTATEHANDLER_H
 
 #include "WorldPacket.h"
+#include "Storage/MySQLStructures.h"
 #include <unordered_map>
 
 struct WorldState;
@@ -42,7 +43,7 @@ class SERVER_DECL WorldStatesHandler
             observer = NULL;
         }
 
-        ~WorldStatesHandler(){}
+        ~WorldStatesHandler() = default;
 
 
         //////////////////////////////////////////////////////////////////////////////////////////

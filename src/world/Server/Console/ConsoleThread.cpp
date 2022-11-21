@@ -1,15 +1,17 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 
 #include "Server/Console/BaseConsole.h"
 #include "Server/Console/ConsoleThread.h"
 #include "Log.hpp"
 
 #include <iostream>
+
+#include "Logging/Logger.hpp"
 
 #ifndef WIN32
     #include <poll.h>

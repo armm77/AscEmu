@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -10,7 +10,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include <string>
 #include <cstdint>
 
-enum WorldConfigRates
+enum WorldConfigRates : uint8_t
 {
     RATE_HEALTH = 0,    // health
     RATE_POWER1,        // mana
@@ -104,6 +104,7 @@ class SERVER_DECL WorldConfig
         struct LoggerSettings
         {
             uint8_t minimumMessageType;
+            uint32_t debugFlags;
             bool enableWorldPacketLog;
             std::string extendedLogsDir;
             bool enableCheaterLog;

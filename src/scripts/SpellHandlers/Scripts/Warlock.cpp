@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -69,7 +69,7 @@ public:
     bool canProc(SpellProc* proc, Unit* /*victim*/, SpellInfo const* /*castingSpell*/, DamageInfo damageInfo) override
     {
         // Cannot proc if warlock already has the aura
-        if (proc->getProcOwner()->HasAura(SPELL_SHADOW_TRANCE_PROC))
+        if (proc->getProcOwner()->hasAurasWithId(SPELL_SHADOW_TRANCE_PROC))
             return false;
 
         // Should proc only when dealing damage

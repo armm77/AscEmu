@@ -1,11 +1,12 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 
-#include "Spell/Definitions/SpellEffectTarget.h"
+#include "Spell/Definitions/SpellEffects.hpp"
+#include "Spell/Definitions/SpellEffectTarget.hpp"
 
 enum PriestSpells
 {
@@ -29,39 +30,29 @@ enum PriestSpells
     SPELL_HOLY_CONCENTRATION_R3             = 63725,
     SPELL_IMPROVED_DEVOURING_PLAGUE_R1      = 63625,
     SPELL_IMPROVED_DEVOURING_PLAGUE_R2      = 63626,
-#if VERSION_STRING == WotLK
     SPELL_IMPROVED_DEVOURING_PLAGUE_R3      = 63627,
-#endif
     SPELL_IMPROVED_DEVOURING_PLAGUE_DMG     = 63675,
     SPELL_IMPROVED_DEVOURING_PLAGUE_HEAL    = 75999,
     SPELL_IMPROVED_MIND_BLAST_R1            = 15273,
     SPELL_IMPROVED_MIND_BLAST_R2            = 15312,
     SPELL_IMPROVED_MIND_BLAST_R3            = 15313,
-#if VERSION_STRING < Cata
     SPELL_IMPROVED_MIND_BLAST_R4            = 15314,
     SPELL_IMPROVED_MIND_BLAST_R5            = 15316,
-#endif
     SPELL_IMPROVED_SPIRIT_TAP_R1            = 49694,
     SPELL_IMPROVED_SPIRIT_TAP_R2            = 59000,
     SPELL_MIND_TRAUMA                       = 48301,
 #if VERSION_STRING < Cata
-#if VERSION_STRING >= TBC
     SPELL_SURGE_OF_LIGHT_PROC               = 33151,
-#endif
+#else
+    SPELL_SURGE_OF_LIGHT_PROC               = 88688,
 #endif
     SPELL_VAMPIRIC_EMBRACE_DUMMY            = 15286,
     SPELL_VAMPIRIC_EMBRACE_HEAL             = 15290,
     SPELL_VAMPIRIC_TOUCH_R1                 = 34914,
-#if VERSION_STRING < Cata
-#if VERSION_STRING >= TBC
     SPELL_VAMPIRIC_TOUCH_R2                 = 34916,
     SPELL_VAMPIRIC_TOUCH_R3                 = 34917,
-#endif
-#endif
-#if VERSION_STRING == WotLK
     SPELL_VAMPIRIC_TOUCH_R4                 = 48159,
     SPELL_VAMPIRIC_TOUCH_R5                 = 48160,
-#endif
     SPELL_VAMPIRIC_TOUCH_DISPEL             = 64085,
     SPELL_VAMPIRIC_TOUCH_MANA               = 34919,
     SPELL_REPLENISHMENT                     = 57669,
@@ -76,7 +67,7 @@ public:
     void onAuraRemove(Aura* aur, AuraRemoveMode /*mode*/) override
     {
         // Remove Body and Soul poison proc
-        aur->getOwner()->RemoveAura(SPELL_BODY_AND_SOUL_POISON);
+        aur->getOwner()->removeAllAurasById(SPELL_BODY_AND_SOUL_POISON);
     }
 };
 #endif
@@ -196,7 +187,7 @@ public:
 
     SpellScriptExecuteState onCastProcSpell(SpellProc* /*spellProc*/, Unit* /*caster*/, Unit* /*victim*/, Spell* spell) override
     {
-        spell->forced_basepoints[EFF_INDEX_0] = absorbAmount;
+        spell->forced_basepoints.set(EFF_INDEX_0, absorbAmount);
         absorbAmount = 0;
         return SpellScriptExecuteState::EXECUTE_OK;
     }
@@ -467,10 +458,10 @@ public:
     {
 #if VERSION_STRING < WotLK
         // Same amount for party and self in Classic and TBC
-        spell->forced_basepoints[EFF_INDEX_0] = selfHeal;
+        spell->forced_basepoints.set(EFF_INDEX_0, selfHeal);
 #else
-        spell->forced_basepoints[EFF_INDEX_0] = partyHeal;
-        spell->forced_basepoints[EFF_INDEX_1] = selfHeal;
+        spell->forced_basepoints.set(EFF_INDEX_0, partyHeal);
+        spell->forced_basepoints.set(EFF_INDEX_1, selfHeal);
 #endif
         selfHeal = 0;
         partyHeal = 0;
@@ -535,10 +526,11 @@ public:
             return;
 
         // Create backfire damage on dispel
+        SpellForcedBasePoints forcedBasePoints;
+        forcedBasePoints.set(EFF_INDEX_0, aur->getAuraEffect(EFF_INDEX_1)->getEffectDamage() * 8);
         const auto caster = aur->GetUnitCaster();
-        const auto backfireDmg = aur->getAuraEffect(EFF_INDEX_1).getEffectDamage() * 8;
         if (caster != nullptr)
-            caster->castSpell(aur->getOwner(), SPELL_VAMPIRIC_TOUCH_DISPEL, backfireDmg, true);
+            caster->castSpell(aur->getOwner(), SPELL_VAMPIRIC_TOUCH_DISPEL, forcedBasePoints, true);
     }
 #endif
 };
@@ -571,7 +563,7 @@ public:
         manaReturn = static_cast<uint32_t>(std::ceil(damageInfo.realDamage * spellProc->getOverrideEffectDamage(EFF_INDEX_0) / 100.0f));
         return SpellScriptExecuteState::EXECUTE_OK;
 #elif VERSION_STRING < Mop
-        const auto caster = spellProc->getProcOwner()->GetMapMgrUnit(spellProc->getCasterGuid());
+        const auto caster = spellProc->getProcOwner()->getWorldMapUnit(spellProc->getCasterGuid());
         if (caster == nullptr)
             return SpellScriptExecuteState::EXECUTE_PREVENT;
 
@@ -585,7 +577,7 @@ public:
 #if VERSION_STRING == TBC
     SpellScriptExecuteState onCastProcSpell(SpellProc* /*spellProc*/, Unit* /*caster*/, Unit* /*victim*/, Spell* spell) override
     {
-        spell->forced_basepoints[EFF_INDEX_0] = manaReturn;
+        spell->forced_basepoints.set(EFF_INDEX_0, manaReturn);
         manaReturn = 0;
         return SpellScriptExecuteState::EXECUTE_OK;
     }
@@ -707,7 +699,7 @@ void setupPriestSpells(ScriptMgr* mgr)
     mgr->register_spell_script(improvedSpiritTapIds, new ImprovedSpiritTap);
 #endif
 
-#if VERSION_STRING < Cata
+#if VERSION_STRING < Mop
 #if VERSION_STRING >= TBC
     mgr->register_spell_script(SPELL_SURGE_OF_LIGHT_PROC, new SurgeOfLight);
 #endif
@@ -721,14 +713,12 @@ void setupPriestSpells(ScriptMgr* mgr)
     {
         SPELL_VAMPIRIC_TOUCH_R1,
 #if VERSION_STRING < Cata
-#if VERSION_STRING >= TBC
         SPELL_VAMPIRIC_TOUCH_R2,
         SPELL_VAMPIRIC_TOUCH_R3,
-#endif
-#endif
 #if VERSION_STRING == WotLK
         SPELL_VAMPIRIC_TOUCH_R4,
         SPELL_VAMPIRIC_TOUCH_R5,
+#endif
 #endif
         0
     };

@@ -1,12 +1,12 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include "Common.hpp"
-#include "Map/InstanceDefines.hpp"
+#include "Map/Maps/InstanceDefines.hpp"
 #include "Spell/SpellDefines.hpp"
 
 struct WMOAreaTableTripple
@@ -24,7 +24,7 @@ struct WMOAreaTableTripple
     int32_t adtId;
 };
 
-///\ These will be verified and ported to Spell/Definitions/SpellEffectTarget.h when spell targeting is being rewritten -Appled
+///\ These will be verified and ported to Spell/Definitions/SpellEffectTarget.hpp when spell targeting is being rewritten -Appled
 enum Targets
 {
     TARGET_NONE                                 = 0,
@@ -168,11 +168,11 @@ namespace DBC::Structures
 {
     namespace
     {
-        char const achievement_format[] = "niiissiiiiisii";
+        char const achievement_format[] = "niiissiiiiisiii";
         char const achievement_criteria_format[] = "niiiiiiiixsiiiiixxxxxxx";
         char const area_group_format[] = "niiiiiii";
-        char const area_table_entry_format[] = "iiinixxxxxisiiiiixxxxxxxxx";
-        char const area_trigger_entry_format[] = "nifffxxxfffff";
+        char const area_table_entry_format[] = "iiinixxxxxxxisiiiiixxxxxxxxxxx";
+        char const area_trigger_entry_format[] = "nifffxxxfffffxxx";
         //char const armor_location_format[] = "nfffff"; new
         char const auction_house_format[] = "niiix";
         char const bank_bag_slot_prices_format[] = "ni";
@@ -182,24 +182,24 @@ namespace DBC::Structures
         char const char_start_outfit_format[]="dbbbXiiiiiiiiiiiiiiiiiiiiiiiixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxii"; 
         char const char_titles_format[] = "nxsxix";
         char const chat_channels_format[] = "iixsx";
-        char const chr_classes_format[] = "nixsxxxixiiiii";
-        char const chr_races_format[] = "nxixiixixxxxixsxxxxxixxx";
+        char const chr_classes_format[] = "nixsxxxixiiiixxxxx";
+        char const chr_races_format[] = "nxixiixixxxxixsxxxxxxxxxxxxxxxxxxxxx";
         char const chr_classes_xpower_types_format[]="nii";
         //char const cinematic_sequences_format[]="nxxxxxxxxx"; new
-        char const creature_display_info_format[]="nixifxxxxxxxxxxxx";
+        char const creature_display_info_format[]="nixxfxxxxxxxxxxxxxxx";
         char const creature_display_info_extra_format[]="nixxxxxxxxxxxxxxxxxxx";
         char const creature_family_format[] = "nfifiiiiixsx";
-        //char const creature_model_data_format[] = "nxxxxxxxxxxxxxxffxxxxxxxxxxxxxx"; new
+        char const creature_model_Data_format[] = "nisxxxxxxxxxxxxffxxxxxxxxxxxxxx";
         char const creature_spell_data_format[] = "niiiiiiii";  //niiiixxxx
         //char const creature_type_format[]="nxx"; new
-        char const currency_types_format[] = "nisxxxxiiix";
+        char const currency_types_format[] = "nisxxxxiiixx";
         //char const destructible_model_data_format[] = "nixxxixxxxixxxxixxxxixxx"; new
-        char const dungeon_encounter_format[] = "niixisxx";
+        char const dungeon_encounter_format[] = "niixisxxx";
         char const durability_costs_format[] = "niiiiiiiiiiiiiiiiiiiiiiiiiiiii";
         char const durability_quality_format[] = "nf";
         char const emotes_entry_format[] = "nxxiiixx";
         char const emotes_text_format[] = "nxixxxxxxxxxxxxxxxx";
-        char const faction_format[] = "niiiiiiiiiiiiiiiiiiffixsxx";
+        char const faction_format[] = "niiiiiiiiiiiiiiiiiiffixsxixx";
         char const faction_template_format[] = "niiiiiiiiiiiii";
         char const game_object_display_info_format[] = "nsxxxxxxxxxxffffffxxx";
         char const gem_properties_format[] = "nixxix";
@@ -211,8 +211,8 @@ namespace DBC::Structures
         char const gt_chance_to_spell_crit_format[] = "xf";
         char const gt_chance_to_spell_crit_base_format[] = "xf";
         char const gt_combat_ratings_format[] = "xf";
-        //char const gt_oct_base_hp_by_class_format[] = "df"; new
-        //char const gt_oct_base_mp_by_class_format[] = "df"; new
+        char const gt_oct_base_hp_by_class_format[] = "df";
+        char const gt_oct_base_mp_by_class_format[] = "df";
         char const gt_oct_class_combat_rating_scalar_format[] = "df";
         //char const gt_oct_hp_per_stamina_format[] = "df"; new
         //char const gt_oct_regen_hp_format[] = "xf";
@@ -232,12 +232,12 @@ namespace DBC::Structures
         char const item_random_suffix_format[] = "nsxiiiiiiiiii";
         char const item_set_format[] = "dsxxxxxxxxxxxxxxxxxiiiiiiiiiiiiiiiiii";
         char const item_limit_category_format[] = "nxii";
-        char const lfg_dungeon_entry_format[] = "nsiiiiiiiiiisiiisiiii";
+        char const lfg_dungeon_entry_format[] = "nsiiiiiiiiixxixixixxxxxxxxxxx";
         char const liquid_type_entry_format[] = "nxxixixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
         char const lock_format[] = "niiiiiiiiiiiiiiiiiiiiiiiixxxxxxxx";
         char const mail_template_format[] = "nss";  //nxs
-        char const map_format[] = "nsiiiisissififfiiiii";
-        //char const map_difficulty_entry_format[] = "niisiis"; new
+        char const map_format[] = "nxixxsixxixiffxiixi";
+        char const map_difficulty_entry_format[] = "diisiix";
         //char const mount_capability_format[] = "niiiiiii"; new
         //char const mount_type_format[] = "niiiiiiiiiiiiiiiiiiiiiiii"; new
         //char const movie_entry_format[] = "nxxx"; new
@@ -252,54 +252,55 @@ namespace DBC::Structures
         char const quest_xp_format[] = "niiiiiiiiii";
         //char const random_properties_points_format[] = "niiiiiiiiiiiiiii"; new
         char const scaling_stat_distribution_format[] = "niiiiiiiiiiiiiiiiiiiixi";
-        char const scaling_stat_values_format[] = "iniiiiiiiiiiiiiiiiiiiixxxxxxxxxxxxxxxxxxxxxxxxx";
-        char const skill_line_format[] = "nisxixi";
-        char const skill_line_ability_format[] = "niiiixxiiiiiix";
+        char const scaling_stat_values_format[] = "iniiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii";
+        char const skill_line_format[] = "nisxixixx";
+        char const skill_line_ability_format[] = "niiiiiiiiiixx";
         //char const sound_entries_format[] = "nissssssssssssssssssssssxxxxxxxxxxx"; new
-        char const spell_aura_options_format[] = "diiii";
-        char const spell_aura_restrictions_format[] = "diiiiiiii";
+        char const spell_aura_options_format[] = "nxxiiiixx";
+        char const spell_aura_restrictions_format[] = "dxxiiiiiiii";
         char const spell_cast_times_format[] = "niii";
         char const spell_casting_requirements_format[] = "dixxixi";
-        char const spell_categories_format[] = "diiiiii";
+        char const spell_categories_format[] = "dxxiiiiiix";
         char const spell_class_options_format[] = "dxiiiix";
-        char const spell_cooldowns_format[] = "diii";
+        char const spell_cooldowns_format[] = "dxxiii";
         char const spell_difficulty_format[] = "niiii";
         char const spell_duration_format[] = "niii";
-        char const spell_entry_format[] = "niiiiiiiiiiiiiiifiiiissxxiixxixiiiiiiixiiiiiiiix";
-        char const spell_item_enchantment_format[] = "nxiiiiiixxxiiisiiiiiiix";
+        char const spell_entry_format[] = "nssxxixxfiiiiiiiiiiiiiiii";
+        char const spell_item_enchantment_format[] = "nxiiiiiiiiisiiiiiiixxxxxxx";
         //char const skill_race_class_info_format[] = "diiiiixxx"; new
-        char const spell_radius_format[] = "nfff";
+        char const spell_radius_format[] = "nffxf";
         char const spell_range_format[] = "nffffixx";
-        char const spell_rune_cost_format[] = "niiii";
+        char const spell_rune_cost_format[] = "niiiii";
         char const spell_shapeshift_form_format[] = "nxxiixiiixxiiiiiiiixx";
-        char const spell_effect_format[] = "difiiiffiiiiiifiifiiiiiiiix";
-        char const spell_equipped_items_format[] = "diii";
+        char const spell_effect_format[] = "nxifiiiffiiiiiifiifiiiiixiiiix";
+        char const spell_equipped_items_format[] = "dxxiii";
         //char const spell_focus_object_format[] = "nx"; new
-        char const spell_interrupts_format[] = "dixixi";
+        char const spell_interrupts_format[] = "dxxixixi";
         //char const spell_item_enchantment_condition_format[] = "nbbbbbxxxxxbbbbbbbbbbiiiiixxxxx"; new
-        char const spell_levels_format[] = "diii";
-        char const spell_power_format[] = "diiiiixf";
-        char const spell_reagents_format[] = "diiiiiiiiiiiiiiii";
-        char const spell_scaling_format[] = "diiiiffffffffffi";
+        char const spell_levels_format[] = "dxxiii";
+        char const spell_misc_format[] = "nxiiiiiiiiiiiiiiiiiifiiiii";
+        char const spell_power_format[] = "dixiiiiixffix";
+        char const spell_reagents_format[] = "diiiiiiiiiiiiiiiiii";
+        char const spell_scaling_format[] = "diiiifixx";
         char const spell_shapeshift_format[] = "dixixx";
-        char const spell_target_restrictions_format[] = "dfiiii";
+        char const spell_target_restrictions_format[] = "nxxxfiiii";
         char const spell_totems_format[] = "diiii";
         //char const stable_slot_prices_format[] = "ni"; NA
         char const summon_properties_format[] = "niiiii";
-        char const talent_format[] = "niiiiiiiiixxixxxxxx";
+        char const talent_format[] = "nxiiixxxiix";
         char const talent_tab_format[] = "nxxiiixxiii";
         char const talent_tree_primary_spells_format[] = "iiix";
-        char const taxi_nodes_format[] = "nifffsiixxx";
+        char const taxi_nodes_format[] = "nifffsiixixx";
         char const taxi_path_format[] = "niii";
         char const taxi_path_node_format[] = "diiifffiiii";
         char const totem_category_entry_format[] = "nxii";
         char const transport_animation_format[] = "diifffx";
         char const transport_rotation_format[] = "diiffff";
-        char const vehicle_format[] = "niffffiiiiiiiifffffffffffffffssssfifiixx";
+        char const vehicle_format[] = "nixffffiiiiiiiifffffffffffffffssssfifiixx";
         char const vehicle_seat_format[] = "niiffffffffffiiiiiifffffffiiifffiiiiiiiffiiiiixxxxxxxxxxxxxxxxxxxx";
         char const wmo_area_table_format[] = "niiixxxxxiixxxx";
         char const world_map_area_entry_format[] = "xinxxxxxixxxxx";
-        char const world_map_overlay_format[] = "nxiiiixxxxxxxxx";
+        char const world_map_overlay_format[] = "nxiiiixxxxxxxxxx";
         //char const world_pvp_area_enrty_format[] = "niiiiii"; new
         //char const world_safe_locs_entry_format[] = "nifffx"; new
     }
@@ -733,6 +734,7 @@ namespace DBC::Structures
         char* rewardName;                                           // 11 title/item reward name
         uint32_t count;                                             // 12
         uint32_t refAchievement;                                    // 13
+        uint32_t criteriaTreeID;
     };
 
     struct AreaGroupEntry
@@ -871,7 +873,7 @@ namespace DBC::Structures
         uint32_t spellfamily;                                       // 7
         //uint32_t unk4;                                            // 8
         uint32_t cinematic_id;                                      // 9 CinematicSequences.dbc
-        uint32_t expansion;                                         // 10
+        //uint32_t expansion;                                       // 10
         uint32_t apPerStr;                                          // 11
         uint32_t apPerAgi;                                          // 12
         uint32_t rapPerAgi;                                         // 13
@@ -895,7 +897,7 @@ namespace DBC::Structures
         //char* name_neutral;                                       // 16
         //uint32_t unk5[2]                                          // 17-18
         //uint32_t unk19                                            // 19
-        uint32_t expansion;                                         // 20
+        //uint32_t expansion;                                       // 20
         //uint32_t unk21                                            // 21
         //uint32_t unk22                                            // 22
         //uint32_t unk23                                            // 23
@@ -910,21 +912,20 @@ namespace DBC::Structures
 
     struct CreatureDisplayInfoEntry
     {
-        uint32_t Displayid;                                         // 0
-        uint32_t ModelId;                                           // 1
-        //uint32_t sound_id;                                        // 2
+        uint32_t ID;                                                // 0
+        uint32_t ModelID;                                           // 1
+        //uint32_t SoundID;                                         // 2
         uint32_t ExtendedDisplayInfoID;                             // 3
-        float scale;                                                // 4
-        //uint32_t unk01;                                           // 5
-        //uint32_t unk02[2];                                        // 6-8
-        //uint32_t unk03;                                           // 9
-        //uint32_t unk04;                                           // 10
-        //uint32_t unk05;                                           // 11
-        //uint32_t unk06;                                           // 12
-        //uint32_t unk07;                                           // 13
-        //uint32_t unk08;                                           // 14
-        //uint32_t unk09;                                           // 15
-        //uint32_t unk10;                                           // 16
+        float CreatureModelScale;                                   // 4
+        //uint32_t CreatureModelAlpha;                              // 5
+        //char const* TextureVariation[3];                          // 6-8
+        //char const* PortraitTextureName;                          // 9
+        //uint32_t SizeClass;                                       // 10
+        //uint32_t BloodID;                                         // 11
+        //uint32_t NPCSoundID;                                      // 12
+        //uint32_t ParticleColorID;                                 // 13
+        //uint32_t CreatureGeosetData;                              // 14
+        //uint32_t ObjectEffectPackageID;                           // 15
     };
 
     struct CreatureDisplayInfoExtraEntry
@@ -940,6 +941,41 @@ namespace DBC::Structures
         //uint32_t Equipment[11];                                   // 8-18
         //uint32_t CanEquip;                                        // 19
         //char* unk                                                 // 20
+    };
+
+    enum CreatureModelDataFlags
+    {
+        CREATURE_MODEL_DATA_FLAGS_CAN_MOUNT = 0x00000080
+    };
+
+    struct CreatureModelDataEntry
+    {
+        uint32_t ID;                                                // 0
+        uint32_t Flags;                                             // 1
+        char const* ModelName;                                      // 2
+        //uint32_t SizeClass;                                       // 3
+        //float ModelScale;                                         // 4 Used in calculation of unit collision data
+        //int32_t BloodID;                                          // 5
+        //int32_t FootprintTextureID;                               // 6
+        //uint32_t FootprintTextureLength;                          // 7
+        //uint32_t FootprintTextureWidth;                           // 8
+        //float FootprintParticleScale;                             // 9
+        //uint32_t FoleyMaterialID;                                 // 10
+        //float FootstepShakeSize;                                  // 11
+        //uint32_t DeathThudShakeSize;                              // 12
+        //uint32_t SoundID;                                         // 13
+        //float CollisionWidth;                                     // 14
+        float CollisionHeight;                                      // 15
+        float MountHeight;                                          // 16 Used in calculation of unit collision data when mounted
+        //float GeoBoxMin[3];                                       // 17-19
+        //float GeoBoxMax[3];                                       // 20-22
+        //float WorldEffectScale;                                   // 23
+        //float AttachedEffectScale;                                // 24
+        //float MissileCollisionRadius;                             // 25
+        //float MissileCollisionPush;                               // 26
+        //float MissileCollisionRaise;                              // 27
+
+        inline bool hasFlag(CreatureModelDataFlags flag) const { return (Flags & flag) != 0; }
     };
 
     struct CreatureFamilyEntry
@@ -1037,7 +1073,7 @@ namespace DBC::Structures
         //uint32_t unk1;                                            // 22
         char* Name;                                                 // 23
         //uint32_t Description;                                     // 24
-        //uint32_t description_flags;                               // 25
+        uint32_t GroupExpansion;                                    // 25
     };
 
     struct FactionTemplateEntry
@@ -1050,6 +1086,14 @@ namespace DBC::Structures
         uint32_t HostileMask;                                       // 5
         uint32_t EnemyFactions[4];                                  // 6-9
         uint32_t FriendlyFactions[4];                               // 10-13
+
+        bool isNeutralToAll() const
+        {
+            for (int i = 0; i < 4; ++i)
+                if (EnemyFactions[i] != 0)
+                    return false;
+            return HostileMask == 0 && FriendlyMask == 0;
+        }
     };
 
     struct GameObjectDisplayInfoEntry
@@ -1120,6 +1164,16 @@ namespace DBC::Structures
     struct GtCombatRatingsEntry
     {
         float val;                                                  // 0
+    };
+
+    struct GtOCTBaseHPByClassEntry
+    {
+        float ratio;
+    };
+
+    struct GtOCTBaseMPByClassEntry
+    {
+        float ratio;
     };
 
     struct GtOCTClassCombatRatingScalarEntry
@@ -1223,18 +1277,19 @@ namespace DBC::Structures
         uint32_t recmaxlevel;                                       // 6
         int32_t map;                                                // 7
         uint32_t difficulty;                                        // 8
-        uint32_t unk;                                               // 9
+        //uint32_t unk;                                             // 9
         uint32_t flags;                                             // 10
         int32_t type;                                               // 11
-        char* iconname;                                             // 12
+        //char* iconname;                                           // 12
         uint32_t expansion;                                         // 13
-        uint32_t unk4;                                              // 14
-        uint32_t unk5;                                              // 15
-        char* unk_text;                                             // 16
+        //uint32_t unk4;                                            // 14
+        //uint32_t unk5;                                            // 15
+        //char* unk_text;                                           // 16
         uint32_t grouptype;                                         // 17
-        uint32_t unkflags1;                                         // 18
-        uint32_t unkflags2;                                         // 19
-        uint32_t unk7;                                              // 20
+        //uint32_t unkflags1;                                       // 18
+        //uint32_t unkflags2;                                       // 19
+        //uint32_t unk7;                                            // 20
+        uint32_t randomDungeonId;
 
         // Helpers
         uint32_t Entry() const { return ID + (type << 24); }
@@ -1296,21 +1351,21 @@ namespace DBC::Structures
     struct MapEntry
     {
         uint32_t id;                                                // 0
-        char* name_internal;                                        // 1
+        //char* name_internal;                                      // 1
         uint32_t map_type;                                          // 2
-        uint32_t map_flags;                                         // 3
-        uint32_t unk4;                                              // 4
-        uint32_t is_pvp_zone;                                       // 5
+        //uint32_t map_flags;                                       // 3
+        //uint32_t unk4;                                            // 4
+        //uint32_t is_pvp_zone;                                     // 5
         char* map_name;                                             // 6
         uint32_t linked_zone;                                       // 7 common zone for instance and continent map
-        char* horde_intro;                                          // 8 horde text for PvP Zones
-        char* alliance_intro;                                       // 9 alliance text for PvP Zones
+        //char* horde_intro;                                        // 8 horde text for PvP Zones
+        //char* alliance_intro;                                     // 9 alliance text for PvP Zones
         uint32_t multimap_id;                                       // 10
-        float battlefield_map_icon;                                 // 11
+        //float battlefield_map_icon;                               // 11
         int32_t parent_map;                                         // 12 ghost map_id of parent map
         float start_x;                                              // 13 ghost enter x coordinate (if exist single entry)
         float start_y;                                              // 14 ghost enter y coordinate (if exist single entry)
-        uint32_t dayTime_override;                                  // 15
+        //uint32_t dayTime_override;                                // 15
         uint32_t addon;                                             // 16 0-original maps, 1-tbc addon, 2-wotlk addon
         uint32_t unk_time;                                          // 17
         uint32_t max_players;                                       // 18
@@ -1325,10 +1380,42 @@ namespace DBC::Structures
         bool isBattlegroundOrArena() const { return map_type == MAP_BATTLEGROUND || map_type == MAP_ARENA; }
         bool isWorldMap() const { return map_type == MAP_COMMON; }
 
+        bool getEntrancePos(int32_t& mapid, float& x, float& y) const
+        {
+            if (parent_map < 0)
+                return false;
+            mapid = parent_map;
+            x = start_x;
+            y = start_y;
+            return true;
+        }
+
         bool isContinent() const
         {
             return id == 0 || id == 1 || id == 530 || id == 571;
         }
+    };
+
+    struct MapDifficultyEntry
+    {
+        //uint32_t ID;                                            // 0
+        uint32_t MapID;                                           // 1
+        uint32_t Difficulty;                                      // 2 (for arenas: arena slot)
+        char const* Message;                                    // 3-18 text showed when transfer to map failed (missing requirements)
+        //uint32 Message_lang_mask;                             // 19
+        uint32_t RaidDuration;                                    // 20
+        uint32_t MaxPlayers;                                      // 21
+        //char const* Difficultystring;                         // 22
+    };
+
+    struct MapDifficulty
+    {
+        MapDifficulty() : resetTime(0), maxPlayers(0), hasErrorMessage(false) { }
+        MapDifficulty(uint32_t _resetTime, uint32_t _maxPlayers, bool _hasErrorMessage) : resetTime(_resetTime), maxPlayers(_maxPlayers), hasErrorMessage(_hasErrorMessage) { }
+
+        uint32_t resetTime;
+        uint32_t maxPlayers;
+        bool hasErrorMessage;
     };
 
     struct NameGenEntry
@@ -1377,7 +1464,7 @@ namespace DBC::Structures
     {
         uint32_t id;                                                // 0
         uint32_t level;                                             // 1
-        uint32_t multiplier[20];                                    // 
+        uint32_t multiplier[47];                                    // 
         //\todo danko Rewrite GetStatScalingStatValueColumn!
         //uint32_t dpsMod[6];                                       // 2-7
         //uint32_t spellBonus;                                      // 8
@@ -1406,15 +1493,12 @@ namespace DBC::Structures
         uint32_t spell;                                             // 2
         uint32_t race_mask;                                         // 3
         uint32_t class_mask;                                        // 4
-        //uint32_t excludeRace;                                     // 5
-        //uint32_t excludeClass;                                    // 6
-        uint32_t minSkillLineRank;                                  // 7 req skill value
-        uint32_t next;                                              // 8
-        uint32_t acquireMethod;                                     // 9 auto learn
-        uint32_t grey;                                              // 10 max
-        uint32_t green;                                             // 11 min
-        uint32_t characterPoints;                                   // 12
-        //uint32_t unk;                                             // 13
+        uint32_t minSkillLineRank;                                  // 5 req skill value
+        uint32_t next;                                              // 6
+        uint32_t acquireMethod;                                     // 7 auto learn
+        uint32_t grey;                                              // 8 max
+        uint32_t green;                                             // 9 min
+        uint32_t characterPoints;                                   // 10
     };
 
     //\todo danko
@@ -1433,7 +1517,7 @@ namespace DBC::Structures
     // SpellAuraOptions.dbc
     struct SpellAuraOptionsEntry
     {
-        //uint32_t Id;                                              // 0
+        uint32_t Id;                                                // 0
         uint32_t MaxStackAmount;                                    // 1
         uint32_t procChance;                                        // 2
         uint32_t procCharges;                                       // 3
@@ -1517,40 +1601,41 @@ namespace DBC::Structures
     struct SpellDurationEntry
     {
         uint32_t ID;                                                // 0
-        uint32_t Duration1;                                         // 1
-        uint32_t Duration2;                                         // 2
-        uint32_t Duration3;                                         // 3
+        int32_t Duration1;                                          // 1
+        int32_t Duration2;                                          // 2
+        int32_t Duration3;                                          // 3
     };
 
     // SpellEffect.dbc
     struct SpellEffectEntry
     {
-        //uint32_t Id;                                              // 0
-        uint32_t Effect;                                            // 1
-        float EffectMultipleValue;                                  // 2
-        uint32_t EffectApplyAuraName;                               // 3
-        uint32_t EffectAmplitude;                                   // 4
-        int32_t EffectBasePoints;                                   // 5
-        float EffectBonusMultiplier;                                // 6
-        float EffectDamageMultiplier;                               // 7
-        uint32_t EffectChainTarget;                                 // 8
-        int32_t EffectDieSides;                                     // 9
-        uint32_t EffectItemType;                                    // 10
-        uint32_t EffectMechanic;                                    // 11
-        int32_t EffectMiscValue;                                    // 12
-        int32_t EffectMiscValueB;                                   // 13
-        float EffectPointsPerComboPoint;                            // 14
-        uint32_t EffectRadiusIndex;                                 // 15
-        uint32_t EffectRadiusMaxIndex;                              // 16
-        float EffectRealPointsPerLevel;                             // 17
-        uint32_t EffectSpellClassMask[3];                           // 18-20
+        uint32_t id;                                                // 0
+        //uint32_t unk;                                             // 1
+        uint32_t Effect;                                            // 2
+        float EffectMultipleValue;                                  // 3
+        uint32_t EffectApplyAuraName;                               // 4
+        uint32_t EffectAmplitude;                                   // 5
+        int32_t EffectBasePoints;                                   // 6
+        float EffectBonusMultiplier;                                // 7
+        float EffectDamageMultiplier;                               // 8
+        uint32_t EffectChainTarget;                                 // 9
+        int32_t EffectDieSides;                                     // 10
+        uint32_t EffectItemType;                                    // 11
+        uint32_t EffectMechanic;                                    // 12
+        int32_t EffectMiscValue;                                    // 13
+        int32_t EffectMiscValueB;                                   // 14
+        float EffectPointsPerComboPoint;                            // 15
+        uint32_t EffectRadiusIndex;                                 // 16
+        uint32_t EffectRadiusMaxIndex;                              // 17
+        float EffectRealPointsPerLevel;                             // 18
+        uint32_t EffectSpellClassMask[4];                           // 19-22
         //ClassFamilyMask EffectSpellClassMask;
-        uint32_t EffectTriggerSpell;                                // 21
-        uint32_t EffectImplicitTargetA;                             // 22
-        uint32_t EffectImplicitTargetB;                             // 23
-        uint32_t EffectSpellId;                                     // 24
-        uint32_t EffectIndex;                                       // 25
-        //uint32_t unk;                                             // 26
+        uint32_t EffectTriggerSpell;                                // 23
+        uint32_t EffectImplicitTargetA;                             // 25
+        uint32_t EffectImplicitTargetB;                             // 26
+        uint32_t EffectSpellId;                                     // 27
+        uint32_t EffectIndex;                                       // 28
+        //uint32_t unk;                                             // 29
 
         uint32_t GetRadiusIndex() const
         {
@@ -1633,13 +1718,17 @@ namespace DBC::Structures
     struct SpellPowerEntry
     {
         //uint32_t Id;                                              // 0
+        uint32_t spellId;
+        //uint32_t RaidDifficulty;
+        uint32_t powerType;
         uint32_t manaCost;                                          // 1
         uint32_t manaCostPerlevel;                                  // 2
-        uint32_t ManaCostPercentage;                                // 3
         uint32_t manaPerSecond;                                     // 4
         uint32_t manaPerSecondPerLevel;                             // 5
         //uint32_t PowerDisplayId;                                  // 6 
         float ManaCostPercentageFloat;                              // 7
+        float ChannelCostPercentageFloat;
+        uint32_t ShapeShiftSpellId;
     };
 
     // SpellRadius.dbc
@@ -1671,7 +1760,7 @@ namespace DBC::Structures
     {
         //uint32_t Id;                                              // 0
         int32_t Reagent[MAX_SPELL_REAGENTS];                        // 54-61
-        uint32_t ReagentCount[MAX_SPELL_REAGENTS];                  // 62-69
+        uint32_t ReagentCount[MAX_SPELL_REAGENTS+2];                // 62-69
     };
 
     // SpellRuneCost.dbc
@@ -1681,6 +1770,7 @@ namespace DBC::Structures
         uint32_t bloodRuneCost;                                     // 1
         uint32_t frostRuneCost;                                     // 2
         uint32_t unholyRuneCost;                                    // 3
+        uint32_t deathRuneCost;
         uint32_t runePowerGain;                                     // 4
     };
 
@@ -1692,13 +1782,11 @@ namespace DBC::Structures
         uint32_t castTimeMax;                                       // 2
         uint32_t castScalingMaxLevel;                               // 3
         uint32_t playerClass;                                       // 4
-        float coeff1[3];                                            // 5-7
-        float coeff2[3];                                            // 8-10
-        float coeff3[3];                                            // 11-13
-        float coefBase;                                             // 14
-        uint32_t coefLevelBase;                                     // 15
 
-        bool IsScalableEffect(uint8_t i) const { return coeff1[i] != 0.0f; };
+        float coefBase;                                             // 14
+        int32_t coefLevelBase;                                      // 15
+
+        bool IsScalableEffect(uint8_t i) const { return coefBase != 0.0f; };
     };
 
     // SpellShapeshift.dbc
@@ -1715,7 +1803,7 @@ namespace DBC::Structures
     // SpellTargetRestrictions.dbc
     struct SpellTargetRestrictionsEntry
     {
-        //uint32_t Id;                                              // 0
+        uint32_t Id;                                                // 0
         float MaxTargetRadius;                                      // 1
         uint32_t MaxAffectedTargets;                                // 2
         uint32_t MaxTargetLevel;                                    // 3
@@ -1731,9 +1819,10 @@ namespace DBC::Structures
         uint32_t Totem[MAX_SPELL_TOTEMS];                           // 3 4
     };
 
-    struct SERVER_DECL SpellEntry
+    struct SpellMiscEntry
     {
         uint32_t Id;                                                // 0
+        uint32_t SpellDifficultyId;
         uint32_t Attributes;                                        // 1
         uint32_t AttributesEx;                                      // 2
         uint32_t AttributesExB;                                     // 3
@@ -1745,25 +1834,35 @@ namespace DBC::Structures
         uint32_t AttributesExH;                                     // 9
         uint32_t AttributesExI;                                     // 10
         uint32_t AttributesExJ;                                     // 11
+        uint32_t AttributesExK;
+        uint32_t AttributesExL;
+        uint32_t AttributesExM;
         uint32_t CastingTimeIndex;                                  // 12
         uint32_t DurationIndex;                                     // 13
-        int32_t powerType;                                          // 14
+        //int32_t powerType;                                        // 14
         uint32_t rangeIndex;                                        // 15
         float speed;                                                // 16
         uint32_t SpellVisual;                                       // 17
         uint32_t SpellVisual1;                                      // 18
         uint32_t spellIconID;                                       // 19
         uint32_t activeIconID;                                      // 20
+        uint32_t School;                                            // 25
+
+        //uint32_t SpellPowerId;                                      // 42 SpellPower.dbc
+        
+    };
+
+    struct SERVER_DECL SpellEntry
+    {
+        uint32_t Id;                                                // 0
         const char* Name;                                           // 21
         const char* Rank;                                           // 22
         //char* Description;                                        // 23 not used
         //char* BuffDescription;                                    // 24 not used
-        uint32_t School;                                            // 25
         uint32_t RuneCostID;                                        // 26
         //uint32_t spellMissileID;                                  // 27
         //uint32_t spellDescriptionVariableID;                      // 28
-        uint32_t SpellDifficultyId;                                 // 29
-        //float unk_1;                                              // 30
+        float unk_1;                                                // 30
         uint32_t SpellScalingId;                                    // 31 SpellScaling.dbc
         uint32_t SpellAuraOptionsId;                                // 32 SpellAuraOptions.dbc
         uint32_t SpellAuraRestrictionsId;                           // 33 SpellAuraRestrictions.dbc
@@ -1771,16 +1870,16 @@ namespace DBC::Structures
         uint32_t SpellCategoriesId;                                 // 35 SpellCategories.dbc
         uint32_t SpellClassOptionsId;                               // 36 SpellClassOptions.dbc
         uint32_t SpellCooldownsId;                                  // 37 SpellCooldowns.dbc
-        //uint32_t unk_2;                                           // 38 all zeros...
         uint32_t SpellEquippedItemsId;                              // 39 SpellEquippedItems.dbc
         uint32_t SpellInterruptsId;                                 // 40 SpellInterrupts.dbc
         uint32_t SpellLevelsId;                                     // 41 SpellLevels.dbc
-        uint32_t SpellPowerId;                                      // 42 SpellPower.dbc
+        //uint32_t SpellPowerId;                                    // 42 SpellPower.dbc
         uint32_t SpellReagentsId;                                   // 43 SpellReagents.dbc
         uint32_t SpellShapeshiftId;                                 // 44 SpellShapeshift.dbc
         uint32_t SpellTargetRestrictionsId;                         // 45 SpellTargetRestrictions.dbc
         uint32_t SpellTotemsId;                                     // 46 SpellTotems.dbc
-        //uint32_t ResearchProject;                                 // 47 ResearchProject.dbc
+        uint32_t ResearchProject;                                   // 47 ResearchProject.dbc
+        uint32_t SpellMiscId;                                       // 24 SpellMisc.dbc
 
         // struct access functions
         SpellAuraOptionsEntry const* GetSpellAuraOptions() const;
@@ -1799,6 +1898,7 @@ namespace DBC::Structures
         SpellShapeshiftEntry const* GetSpellShapeshift() const;
         SpellTargetRestrictionsEntry const* GetSpellTargetRestrictions() const;
         SpellTotemsEntry const* GetSpellTotems() const;
+        SpellMiscEntry const* GetSpellMisc() const;
 
         // single fields
         uint32_t GetManaCost() const;
@@ -1876,18 +1976,21 @@ namespace DBC::Structures
     struct TalentEntry
     {
         uint32_t TalentID;                                          // 0
-        uint32_t TalentTree;                                        // 1
+        //uint32_t TalentTree;                                      // 1
         uint32_t Row;                                               // 2
         uint32_t Col;                                               // 3
-        uint32_t RankID[5];                                         // 4-8
+        //uint32_t RankID[5];                                       // 4-8
+        uint32_t SpellId;
         //uint32_t unk[4];                                          // 9-12
-        uint32_t DependsOn;                                         // 13
+        //uint32_t DependsOn;                                       // 13
         //uint32_t unk1[2];                                         // 14-15
-        uint32_t DependsOnRank;                                     // 16
+        //uint32_t DependsOnRank;                                   // 16
         //uint32_t unk2[2];                                         // 17-18
         //uint32_t unk3;                                            // 19
         //uint32_t unk4;                                            // 20
         //uint32_t unk5;                                            // 21
+        uint32_t playerClass;
+        uint32_t overrideSpellId;
     };
 
     struct TalentTabEntry
@@ -1922,6 +2025,7 @@ namespace DBC::Structures
         char* name;                                                 // 5
         uint32_t horde_mount;                                       // 6
         uint32_t alliance_mount;                                    // 7
+        uint32_t flags;
     };
 
     struct TaxiPathEntry
@@ -2014,21 +2118,51 @@ namespace DBC::Structures
 
     enum VehicleSeatFlags
     {
-        VEHICLE_SEAT_FLAG_HIDE_PASSENGER             = 0x00000200,  // Passenger is hidden
-        VEHICLE_SEAT_FLAG_UNK11                      = 0x00000400,
-        VEHICLE_SEAT_FLAG_CAN_CONTROL                = 0x00000800,  // Lua_UnitInVehicleControlSeat
-        VEHICLE_SEAT_FLAG_CAN_ATTACK                 = 0x00004000,  // Can attack, cast spells and use items from vehicle?
-        VEHICLE_SEAT_FLAG_USABLE                     = 0x02000000,  // Lua_CanExitVehicle
-        VEHICLE_SEAT_FLAG_CAN_SWITCH                 = 0x04000000,  // Lua_CanSwitchVehicleSeats
-        VEHICLE_SEAT_FLAG_CAN_CAST                   = 0x20000000,  // Lua_UnitHasVehicleUI
+        VEHICLE_SEAT_FLAG_HAS_LOWER_ANIM_FOR_ENTER                              = 0x00000001,
+        VEHICLE_SEAT_FLAG_HAS_LOWER_ANIM_FOR_RIDE                               = 0x00000002,
+        VEHICLE_SEAT_FLAG_UNK3                                                  = 0x00000004,
+        VEHICLE_SEAT_FLAG_SHOULD_USE_VEH_SEAT_EXIT_ANIM_ON_VOLUNTARY_EXIT       = 0x00000008,
+        VEHICLE_SEAT_FLAG_UNK5                                                  = 0x00000010,
+        VEHICLE_SEAT_FLAG_UNK6                                                  = 0x00000020,
+        VEHICLE_SEAT_FLAG_UNK7                                                  = 0x00000040,
+        VEHICLE_SEAT_FLAG_UNK8                                                  = 0x00000080,
+        VEHICLE_SEAT_FLAG_UNK9                                                  = 0x00000100,
+        VEHICLE_SEAT_FLAG_HIDE_PASSENGER                                        = 0x00000200,           // Passenger is hidden
+        VEHICLE_SEAT_FLAG_ALLOW_TURNING                                         = 0x00000400,
+        VEHICLE_SEAT_FLAG_CAN_CONTROL                                           = 0x00000800,           // Lua_UnitInVehicleControlSeat
+        VEHICLE_SEAT_FLAG_CAN_CAST_MOUNT_SPELL                                  = 0x00001000,           // Can cast spells with SPELL_AURA_MOUNTED from seat (possibly 4.x only, 0 seats on 3.3.5a)
+        VEHICLE_SEAT_FLAG_UNCONTROLLED                                          = 0x00002000,           // can override !& VEHICLE_SEAT_FLAG_CAN_ENTER_OR_EXIT
+        VEHICLE_SEAT_FLAG_CAN_ATTACK                                            = 0x00004000,           // Can attack, cast spells and use items from vehicle?
+        VEHICLE_SEAT_FLAG_SHOULD_USE_VEH_SEAT_EXIT_ANIM_ON_FORCED_EXIT          = 0x00008000,
+        VEHICLE_SEAT_FLAG_UNK17                                                 = 0x00010000,
+        VEHICLE_SEAT_FLAG_UNK18                                                 = 0x00020000,           // Needs research and support (28 vehicles): Allow entering vehicles while keeping specific permanent(?) auras that impose visuals (states like beeing under freeze/stun mechanic, emote state animations).
+        VEHICLE_SEAT_FLAG_HAS_VEH_EXIT_ANIM_VOLUNTARY_EXIT                      = 0x00040000,
+        VEHICLE_SEAT_FLAG_HAS_VEH_EXIT_ANIM_FORCED_EXIT                         = 0x00080000,
+        VEHICLE_SEAT_FLAG_PASSENGER_NOT_SELECTABLE                              = 0x00100000,
+        VEHICLE_SEAT_FLAG_UNK22                                                 = 0x00200000,
+        VEHICLE_SEAT_FLAG_REC_HAS_VEHICLE_ENTER_ANIM                            = 0x00400000,
+        VEHICLE_SEAT_FLAG_IS_USING_VEHICLE_CONTROLS                             = 0x00800000,           // Lua_IsUsingVehicleControls
+        VEHICLE_SEAT_FLAG_ENABLE_VEHICLE_ZOOM                                   = 0x01000000,
+        VEHICLE_SEAT_FLAG_USABLE                                                = 0x02000000,           // Lua_CanExitVehicle
+        VEHICLE_SEAT_FLAG_CAN_SWITCH                                            = 0x04000000,           // Lua_CanSwitchVehicleSeats
+        VEHICLE_SEAT_FLAG_HAS_START_WARITING_FOR_VEH_TRANSITION_ANIM_ENTER      = 0x08000000,
+        VEHICLE_SEAT_FLAG_HAS_START_WARITING_FOR_VEH_TRANSITION_ANIM_EXIT       = 0x10000000,
+        VEHICLE_SEAT_FLAG_CAN_CAST                                              = 0x20000000,           // Lua_UnitHasVehicleUI
+        VEHICLE_SEAT_FLAG_UNK2                                                  = 0x40000000,           // checked in conjunction with 0x800 in CastSpell2
     };
 
     enum VehicleSeatFlagsB
     {
-        VEHICLE_SEAT_FLAG_B_NONE                     = 0x00000000,
-        VEHICLE_SEAT_FLAG_B_USABLE_FORCED            = 0x00000002, 
-        VEHICLE_SEAT_FLAG_B_USABLE_FORCED_2          = 0x00000040,
-        VEHICLE_SEAT_FLAG_B_USABLE_FORCED_3          = 0x00000100,
+        VEHICLE_SEAT_FLAG_B_NONE                                                = 0x00000000,
+        VEHICLE_SEAT_FLAG_B_USABLE_FORCED                                       = 0x00000002,
+        VEHICLE_SEAT_FLAG_B_TARGETS_IN_RAIDUI                                   = 0x00000008,           // Lua_UnitTargetsVehicleInRaidUI
+        VEHICLE_SEAT_FLAG_B_EJECTABLE                                           = 0x00000020,           // ejectable
+        VEHICLE_SEAT_FLAG_B_USABLE_FORCED_2                                     = 0x00000040,
+        VEHICLE_SEAT_FLAG_B_USABLE_FORCED_3                                     = 0x00000100,
+        VEHICLE_SEAT_FLAG_B_KEEP_PET                                            = 0x00020000,
+        VEHICLE_SEAT_FLAG_B_USABLE_FORCED_4                                     = 0x02000000,
+        VEHICLE_SEAT_FLAG_B_CAN_SWITCH                                          = 0x04000000,
+        VEHICLE_SEAT_FLAG_B_VEHICLE_PLAYERFRAME_UI                              = 0x80000000            // Lua_UnitHasVehiclePlayerFrameUI - actually checked for flagsb &~ 0x80000000
     };
 
     struct VehicleSeatEntry
@@ -2080,6 +2214,9 @@ namespace DBC::Structures
         int32_t uiSkin;                                             // 44
         uint32_t flagsB;                                            // 45
 
+        bool hasFlag(VehicleSeatFlags flag) const { return (flags & flag) != 0; }
+        bool hasFlag(VehicleSeatFlagsB flag) const { return (flagsB & flag) != 0; }
+
         bool IsUsable() const
         {
             if ((flags & VEHICLE_SEAT_FLAG_USABLE) != 0)
@@ -2103,6 +2240,15 @@ namespace DBC::Structures
             else
                 return false;
         }
+
+        bool canEnterOrExit() const { return hasFlag(VehicleSeatFlags(VEHICLE_SEAT_FLAG_USABLE | VEHICLE_SEAT_FLAG_CAN_CONTROL | VEHICLE_SEAT_FLAG_SHOULD_USE_VEH_SEAT_EXIT_ANIM_ON_VOLUNTARY_EXIT)); }
+        bool canSwitchFromSeat() const { return hasFlag(VEHICLE_SEAT_FLAG_CAN_SWITCH); }
+        bool isUsableByOverride() const {
+            return hasFlag(VehicleSeatFlags(VEHICLE_SEAT_FLAG_UNCONTROLLED | VEHICLE_SEAT_FLAG_UNK18))
+                || hasFlag(VehicleSeatFlagsB(VEHICLE_SEAT_FLAG_B_USABLE_FORCED | VEHICLE_SEAT_FLAG_B_USABLE_FORCED_2 |
+                    VEHICLE_SEAT_FLAG_B_USABLE_FORCED_3 | VEHICLE_SEAT_FLAG_B_USABLE_FORCED_4));
+        }
+        bool isEjectable() const { return hasFlag(VEHICLE_SEAT_FLAG_B_EJECTABLE); }
     };
 
     struct WMOAreaTableEntry
@@ -2165,7 +2311,7 @@ namespace DBC::Structures
             effects[1] = nullptr;
             effects[2] = nullptr;
         }
-        SpellEffectEntry const* effects[3];
+        SpellEffectEntry const* effects[32];
     };
     typedef std::map<uint32_t, SpellEffect> SpellEffectMap;
 }

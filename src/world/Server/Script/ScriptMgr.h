@@ -1,6 +1,6 @@
 /*
 * AscEmu Framework based on ArcEmu MMORPG Server
-* Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+* Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
 * Copyright (C) 2005-2007 Ascent Team
 *
@@ -21,19 +21,21 @@
 
 #pragma once
 
-#include <mutex>
-#include "Macros/ScriptMacros.hpp"
 #include "Management/Gossip/GossipScript.hpp"
 #include "Management/GameEventMgr.h"
-#include "Units/Unit.h"
-#include "Management/ArenaTeam.h"
+#include "Objects/Units/Unit.hpp"
+#include "Management/ArenaTeam.hpp"
+#include "Map/Maps/InstanceMap.hpp"
+#include "Server/Script/AchievementScript.hpp"
 #include "Server/ServerState.h"
-#include "Spell/Definitions/ProcFlags.h"
+#include "Server/World.h"
+#include "Spell/Definitions/ProcFlags.hpp"
 #include "Spell/SpellAuras.h"
-#include "Spell/SpellScript.h"
+#include "Spell/SpellScript.hpp"
 #include "ScriptEvent.hpp"
 
 class Channel;
+enum EncounterCreditType : uint8_t;
 class Guild;
 struct QuestProperties;
 
@@ -133,7 +135,7 @@ class QuestScript;
 // Factory Imports (from script lib)
 typedef CreatureAIScript* (*exp_create_creature_ai)(Creature* pCreature);
 typedef GameObjectAIScript* (*exp_create_gameobject_ai)(GameObject* pGameObject);
-typedef InstanceScript* (*exp_create_instance_ai)(MapMgr* pMapMgr);
+typedef InstanceScript* (*exp_create_instance_ai)(WorldMap* pMapMgr);
 
 typedef bool(*exp_handle_dummy_spell)(uint8_t effectIndex, Spell* pSpell);
 typedef bool(*exp_handle_script_effect)(uint8_t effectIndex, Spell* pSpell);
@@ -157,64 +159,90 @@ typedef std::set<GossipScript*> CustomGossipScripts;
 typedef std::unordered_map<uint32, GossipScript*> GossipMap;
 typedef std::set<EventScript*> EventScripts;
 typedef std::set<QuestScript*> QuestScripts;
-typedef std::map<uint32_t, SpellScript*> SpellScripts;
 typedef std::set<void*> ServerHookList;
 typedef std::list< Arcemu::DynLib* > DynamicLibraryMap;
 
+// APGL End
+// MIT Start
+#ifdef FT_ACHIEVEMENTS
+typedef std::unordered_map<uint32_t, AchievementCriteriaScript*> AchievementCriteriaScripts;
+#endif
+typedef std::unordered_map<uint32_t, SpellScript*> SpellScripts;
 
 class SERVER_DECL ScriptMgr
 {
-    private:
-        // APGL End
-        // MIT Start
-        ScriptMgr() = default;
-        ~ScriptMgr() = default;
+private:
+    ScriptMgr() = default;
+    ~ScriptMgr() = default;
 
-    public:
-        static ScriptMgr& getInstance();
+public:
+    static ScriptMgr& getInstance();
 
-        ScriptMgr(ScriptMgr&&) = delete;
-        ScriptMgr(ScriptMgr const&) = delete;
-        ScriptMgr& operator=(ScriptMgr&&) = delete;
-        ScriptMgr& operator=(ScriptMgr const&) = delete;
+    ScriptMgr(ScriptMgr&&) = delete;
+    ScriptMgr(ScriptMgr const&) = delete;
+    ScriptMgr& operator=(ScriptMgr&&) = delete;
+    ScriptMgr& operator=(ScriptMgr const&) = delete;
 
-        // Spell script hooks
-        SpellCastResult callScriptedSpellCanCast(Spell* spell, uint32_t* parameter1, uint32_t* parameter2) const;
-        void callScriptedSpellAtStartCasting(Spell* spell);
-        void callScriptedSpellFilterTargets(Spell* spell, uint8_t effectIndex, std::vector<uint64_t>* effectTargets);
-        void callScriptedSpellBeforeHit(Spell* spell, uint8_t effectIndex);
-        void callScriptedSpellAfterMiss(Spell* spell, Unit* unitTarget);
-        SpellScriptEffectDamage callScriptedSpellDoCalculateEffect(Spell* spell, uint8_t effectIndex, int32_t* damage) const;
-        SpellScriptExecuteState callScriptedSpellBeforeSpellEffect(Spell* spell, uint8_t effectIndex) const;
-        void callScriptedSpellAfterSpellEffect(Spell* spell, uint8_t effectIndex);
+#ifdef FT_ACHIEVEMENTS
+    // Achievement criteria script hooks
+    bool callScriptedAchievementCriteriaCanComplete(uint32_t criteriaId, Player* player, Object* target) const;
+#endif
 
-        // Aura script hooks
-        void callScriptedAuraOnCreate(Aura* aur);
-        void callScriptedAuraOnApply(Aura* aur);
-        void callScriptedAuraOnRemove(Aura* aur, AuraRemoveMode mode);
-        void callScriptedAuraOnRefreshOrGainNewStack(Aura* aur, uint32_t newStackCount, uint32_t oldStackCount);
-        SpellScriptExecuteState callScriptedAuraBeforeAuraEffect(Aura* aur, AuraEffectModifier* aurEff, bool apply) const;
-        SpellScriptCheckDummy callScriptedAuraOnDummyEffect(Aura* aur, AuraEffectModifier* aurEff, bool apply) const;
-        SpellScriptExecuteState callScriptedAuraOnPeriodicTick(Aura* aur, AuraEffectModifier* aurEff, float_t* damage) const;
+    // Spell script hooks
+    SpellCastResult callScriptedSpellCanCast(Spell* spell, uint32_t* parameter1, uint32_t* parameter2) const;
+    void callScriptedSpellAtStartCasting(Spell* spell);
+    void callScriptedSpellFilterTargets(Spell* spell, uint8_t effectIndex, std::vector<uint64_t>* effectTargets);
+    void callScriptedSpellBeforeHit(Spell* spell, uint8_t effectIndex);
+    void callScriptedSpellAfterMiss(Spell* spell, Unit* unitTarget);
+    SpellScriptEffectDamage callScriptedSpellDoCalculateEffect(Spell* spell, uint8_t effectIndex, int32_t* damage) const;
+    SpellScriptExecuteState callScriptedSpellBeforeSpellEffect(Spell* spell, uint8_t effectIndex) const;
+    SpellScriptCheckDummy callScriptedSpellOnDummyOrScriptedEffect(Spell* spell, uint8_t effectIndex) const;
+    void callScriptedSpellAfterSpellEffect(Spell* spell, uint8_t effectIndex);
 
-        // Spell proc script hooks
-        void callScriptedSpellProcCreate(SpellProc* spellProc, Object* obj);
-        bool callScriptedSpellCanProc(SpellProc* spellProc, Unit* victim, SpellInfo const* castingSpell, DamageInfo damageInfo) const;
-        bool callScriptedSpellCheckProcFlags(SpellProc* spellProc, SpellProcFlags procFlags) const;
-        bool callScriptedSpellProcCanDelete(SpellProc* spellProc, uint32_t spellId, uint64_t casterGuid, uint64_t misc) const;
-        SpellScriptExecuteState callScriptedSpellProcDoEffect(SpellProc* spellProc, Unit* victim, SpellInfo const* castingSpell, DamageInfo damageInfo) const;
-        uint32_t callScriptedSpellCalcProcChance(SpellProc* spellProc, Unit* victim, SpellInfo const* castingSpell) const;
-        bool callScriptedSpellCanProcOnTriggered(SpellProc* spellProc, Unit* victim, SpellInfo const* castingSpell, Aura* triggeredFromAura) const;
-        SpellScriptExecuteState callScriptedSpellProcCastSpell(SpellProc* spellProc, Unit* caster, Unit* victim, Spell* spellToProc);
+    // Aura script hooks
+    void callScriptedAuraOnCreate(Aura* aur);
+    void callScriptedAuraOnApply(Aura* aur);
+    void callScriptedAuraOnRemove(Aura* aur, AuraRemoveMode mode);
+    void callScriptedAuraOnRefreshOrGainNewStack(Aura* aur, uint32_t newStackCount, uint32_t oldStackCount);
+    SpellScriptExecuteState callScriptedAuraBeforeAuraEffect(Aura* aur, AuraEffectModifier* aurEff, bool apply) const;
+    SpellScriptCheckDummy callScriptedAuraOnDummyEffect(Aura* aur, AuraEffectModifier* aurEff, bool apply) const;
+    SpellScriptExecuteState callScriptedAuraOnPeriodicTick(Aura* aur, AuraEffectModifier* aurEff, float_t* damage) const;
 
-        SpellScript* getSpellScript(uint32_t spellId) const;
-        void register_spell_script(uint32_t spellId, SpellScript* ss);
-        void register_spell_script(uint32_t* spellIds, SpellScript* ss);
+    // Spell proc script hooks
+    void callScriptedSpellProcCreate(SpellProc* spellProc, Object* obj);
+    bool callScriptedSpellCanProc(SpellProc* spellProc, Unit* victim, SpellInfo const* castingSpell, DamageInfo damageInfo) const;
+    bool callScriptedSpellCheckProcFlags(SpellProc* spellProc, SpellProcFlags procFlags) const;
+    bool callScriptedSpellProcCanDelete(SpellProc* spellProc, uint32_t spellId, uint64_t casterGuid, uint64_t misc) const;
+    SpellScriptExecuteState callScriptedSpellProcDoEffect(SpellProc* spellProc, Unit* victim, SpellInfo const* castingSpell, DamageInfo damageInfo) const;
+    uint32_t callScriptedSpellCalcProcChance(SpellProc* spellProc, Unit* victim, SpellInfo const* castingSpell) const;
+    bool callScriptedSpellCanProcOnTriggered(SpellProc* spellProc, Unit* victim, SpellInfo const* castingSpell, Aura* triggeredFromAura) const;
+    SpellScriptExecuteState callScriptedSpellProcCastSpell(SpellProc* spellProc, Unit* caster, Unit* victim, Spell* spellToProc);
 
-        // Creature AI script hooks
-        void DamageTaken(Creature* pCreature, Unit* attacker, uint32_t* damage) const;
-        CreatureAIScript* getCreatureAIScript(Creature* pCreature) const;
+#ifdef FT_ACHIEVEMENTS
+    AchievementCriteriaScript* getAchievementCriteriaScript(uint32_t criteriaId) const;
+    void register_achievement_criteria_script(uint32_t criteriaId, AchievementCriteriaScript* acs);
+    void register_achievement_criteria_script(uint32_t* criteriaIds, AchievementCriteriaScript* acs);
+#endif
 
+    SpellScript* getSpellScript(uint32_t spellId) const;
+    // By default this will register spell script to spell's all different difficulties (if they exist)
+    void register_spell_script(uint32_t spellId, SpellScript* ss, bool registerAllDifficulties = true);
+    void register_spell_script(uint32_t* spellIds, SpellScript* ss);
+
+    // Creature AI script hooks
+    void DamageTaken(Creature* pCreature, Unit* attacker, uint32_t* damage) const;
+    CreatureAIScript* getCreatureAIScript(Creature* pCreature) const;
+
+protected:
+#ifdef FT_ACHIEVEMENTS
+    AchievementCriteriaScripts _achievementCriteriaScripts;
+#endif
+    SpellScripts _spellScripts;
+
+private:
+    void _register_spell_script(uint32_t spellId, SpellScript* ss);
+
+public:
         // MIT End
         // APGL Start
 
@@ -234,7 +262,7 @@ class SERVER_DECL ScriptMgr
 
         CreatureAIScript* CreateAIScriptClassForEntry(Creature* pCreature);
         GameObjectAIScript* CreateAIScriptClassForGameObject(uint32 uEntryId, GameObject* pGameObject);
-        InstanceScript* CreateScriptClassForInstance(uint32 pMapId, MapMgr* pMapMgr);
+        InstanceScript* CreateScriptClassForInstance(uint32 pMapId, WorldMap* pMapMgr);
 
         bool CallScriptedDummySpell(uint32 uSpellId, uint8_t effectIndex, Spell* pSpell);
         bool HandleScriptedSpellEffect(uint32 SpellId, uint8_t effectIndex, Spell* s);
@@ -354,20 +382,11 @@ class SERVER_DECL ScriptMgr
         CustomGossipScripts _customgossipscripts;
         EventScripts _eventscripts;
         QuestScripts _questscripts;
-        SpellScripts _spellscripts;
         GossipMap creaturegossip_, gogossip_, itemgossip_;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Base.h stuff
-struct LocationExtra
-{
-    float x;
-    float y;
-    float z;
-    float o;
-    uint32_t addition;
-};
 
 enum TargetGenerator
 {
@@ -395,30 +414,6 @@ enum TargetGenerator
     TargetGen_RandomPlayerApplyAura         // Random target player to self cast aura
 };
 
-enum TargetFilter
-{
-    // Standard filters
-    TargetFilter_None                   = 0,            // 0
-    TargetFilter_Closest                = 1 << 0,       // 1
-    TargetFilter_Friendly               = 1 << 1,       // 2
-    TargetFilter_NotCurrent             = 1 << 2,       // 4
-    TargetFilter_Wounded                = 1 << 3,       // 8
-    TargetFilter_SecondMostHated        = 1 << 4,       // 16
-    TargetFilter_Aggroed                = 1 << 5,       // 32
-    TargetFilter_Corpse                 = 1 << 6,       // 64
-    TargetFilter_InMeleeRange           = 1 << 7,       // 128
-    TargetFilter_InRangeOnly            = 1 << 8,       // 256
-    TargetFilter_IgnoreSpecialStates    = 1 << 9,       // 512 - not really a TargetFilter, more like requirement for spell
-    TargetFilter_IgnoreLineOfSight      = 1 << 10,      // 1024
-
-    // Predefined filters
-    TargetFilter_ClosestFriendly        = TargetFilter_Closest | TargetFilter_Friendly,         // 3
-    TargetFilter_ClosestNotCurrent      = TargetFilter_Closest | TargetFilter_NotCurrent,       // 5
-    TargetFilter_WoundedFriendly        = TargetFilter_Wounded | TargetFilter_Friendly,         // 10
-    TargetFilter_FriendlyCorpse         = TargetFilter_Corpse | TargetFilter_Friendly,          // 66
-    TargetFilter_ClosestFriendlyCorpse  = TargetFilter_Closest | TargetFilter_FriendlyCorpse    // 67
-};
-
 class TargetType;
 class CreatureAIScript;
 class Unit;
@@ -441,15 +436,13 @@ class SERVER_DECL TargetType
 {
 public:
     TargetType(uint32_t pTargetGen = TargetGen_Self, TargetFilter pTargetFilter = TargetFilter_None, uint32_t pMinTargetNumber = 0, uint32_t pMaxTargetNumber = 0);
-    ~TargetType();
+    ~TargetType() = default;
 
     uint32_t mTargetGenerator;      // Defines what kind of target should we try to find
     TargetFilter mTargetFilter;     // Defines filter of target
     uint32_t mTargetNumber[2];      // 0: Defines min. number of creature on hatelist (0 - any, 1 - the most hated etc.)
                                     // 1: Defines max. number of creature on hatelist (0 - any, HateList.size + 1 - the least hated etc.)
 };
-
-#include "CreatureAIScript.h"
 
 class GameEvent;
 class SERVER_DECL EventScript
@@ -520,6 +513,35 @@ class SERVER_DECL GameObjectAIScript
         void ModifyAIUpdateEvent(uint32 newfrequency);
         void RemoveAIUpdateEvent();
 
+        //////////////////////////////////////////////////////////////////////////////////////////
+        // instance
+        InstanceScript* getInstanceScript();
+
+        bool _isHeroic();
+
+        template<class T> inline
+        const T& RAID_MODE(const T& normal10, const T& normal25, const T& heroic10, const T& heroic25) const
+        {
+            if (_gameobject->getWorldMap()->getInstance())
+            {
+                switch (_gameobject->getWorldMap()->getDifficulty())
+                {
+                case InstanceDifficulty::RAID_10MAN_NORMAL:
+                    return normal10;
+                case InstanceDifficulty::RAID_25MAN_NORMAL:
+                    return normal25;
+                case InstanceDifficulty::RAID_10MAN_HEROIC:
+                    return heroic10;
+                case InstanceDifficulty::RAID_25MAN_HEROIC:
+                    return heroic25;
+                default:
+                    break;
+                }
+            }
+
+            return normal10;
+        }
+
     protected:
 
         GameObject* _gameobject;
@@ -543,9 +565,6 @@ class SERVER_DECL QuestScript
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Instanced class created for each instance of the map, holds all scriptable exports
-#include "Map/WorldCreator.h"
-
-//#define UseNewMapScriptsProject
 
 enum EncounterFrameType
 {
@@ -566,20 +585,34 @@ enum EncounterFrameType
 #endif
 };
 
-enum EncounterStates
+enum EncounterStates : uint8_t
 {
-    NotStarted = 0,
-    InProgress = 1,
-    Finished = 2,
-    Performed = 3,
-    PreProgress = 4,
-    InvalidState = 0xff
+    NotStarted          = 0,
+    InProgress          = 1,
+    Failed              = 2,
+    Performed           = 3,
+    PreProgress         = 4,
+    InvalidState        = 0xff
 };
 
-typedef std::map<uint32_t, uint32_t> InstanceDataMap;
+// Maybe Save more in future
+struct BossInfo
+{
+    BossInfo() : state(InvalidState) {}
+    uint32_t entry = 0;
+    EncounterStates state;
+};
+
+struct ObjectData
+{
+    uint32_t entry;
+    uint32_t type;
+};
 
 typedef std::set<Creature*> CreatureSet;
 typedef std::set<GameObject*> GameObjectSet;
+typedef std::map<uint32_t, uint32_t> ObjectInfoMap;
+typedef std::map<uint32_t, uint32_t> ObjectGuidMap;
 
 typedef std::pair<uint32_t, uint32_t> InstanceTimerPair;
 typedef std::vector<InstanceTimerPair> InstanceTimerArray;
@@ -595,7 +628,7 @@ class SERVER_DECL InstanceScript
 {
     public:
 
-        InstanceScript(MapMgr* pMapMgr);
+        InstanceScript(WorldMap* pMapMgr);
         virtual ~InstanceScript() {}
 
         // Procedures that had been here before
@@ -605,6 +638,9 @@ class SERVER_DECL InstanceScript
 
         // Player
         virtual void OnPlayerDeath(Player* /*pVictim*/, Unit* /*pKiller*/) {}
+
+        // Spawn Groups
+        virtual void OnSpawnGroupKilled(uint32_t /*groupId*/) {}
 
         // Area and AreaTrigger
         virtual void OnPlayerEnter(Player* /*pPlayer*/) {}
@@ -622,48 +658,83 @@ class SERVER_DECL InstanceScript
         virtual void UpdateEvent() {}
 
         virtual void OnEncounterStateChange(uint32_t /*entry*/, uint32_t /*state*/) {}
+        virtual void TransportBoarded(Unit* /*punit*/, Transporter* /*transport*/) {}
+        virtual void TransportUnboarded(Unit* /*punit*/, Transporter* /*transport*/) {}
 
         virtual void Destroy() {}
 
         // Something to return Instance's MapMgr
-        MapMgr* GetInstance() { return mInstance; }
+        WorldMap* getWorldMap() { return mInstance; }
+        InstanceMap* getInstance() { return mInstance->getInstance(); }
         uint8_t GetDifficulty() { return Difficulty; }
 
         // MIT start
         //////////////////////////////////////////////////////////////////////////////////////////
         // data
+        void addObject(Object* obj);
+        void removeObject(Object* obj);
 
-        void addData(uint32_t data, uint32_t state = NotStarted);
-
-        void setData(uint32_t data, uint32_t state);
-        uint32_t getData(uint32_t data);
-        bool isDataStateFinished(uint32_t data);
+        uint32_t getGuidFromData(uint32_t type);
+        Creature* getCreatureFromData(uint32_t type);
+        GameObject* getGameObjectFromData(uint32_t type);
 
         // not saved to database, only for scripting
+        virtual void setupInstanceData(ObjectData const* creatureData, ObjectData const* gameObjectData);
         virtual void setLocalData(uint32_t /*type*/, uint32_t /*data*/) {}
         virtual void setLocalData64(uint32_t /*type*/, uint64_t /*data*/) {}
         virtual uint32_t getLocalData(uint32_t /*type*/) const { return 0; }
+        virtual Creature* getLocalCreatureData(uint32_t /*type*/) const { return nullptr; }
         virtual uint64_t getLocalData64(uint32_t /*type*/) const { return 0; }
         virtual void DoAction(int32_t /*action*/) {}
         virtual void TransporterEvents(Transporter* /*transport*/, uint32_t /*eventId*/) {}
         uint8_t Difficulty;
-        
-        //used for debug
-        std::string getDataStateString(uint32_t bossEntry);
+
+        void setZoneMusic(uint32_t zoneId, uint32_t musicId)
+        {
+            WorldPacket data(SMSG_PLAY_MUSIC, 4);
+            data << uint32_t(musicId);
+            sWorld.sendZoneMessage(&data, zoneId);
+        }
 
         //////////////////////////////////////////////////////////////////////////////////////////
         // encounters
 
         // called for all initialized instancescripts!
         void generateBossDataState();
+        void loadSavedInstanceData(char const* data);
         void sendUnitEncounter(uint32_t type, Unit* unit = nullptr, uint8_t value_a = 0, uint8_t value_b = 0);
 
+        virtual bool setBossState(uint32_t id, EncounterStates state);
+        std::vector<BossInfo> getBosses() { return bosses; }
+        EncounterStates getBossState(uint32_t id) const { return id < bosses.size() ? bosses[id].state : InvalidState; }
+        //used for debug
+        std::string getDataStateString(uint8_t state);
+
+        uint32_t getEncounterCount() const { return static_cast<uint32_t>(bosses.size()); }
+
+        void saveToDB();
+        void updateEncounterState(EncounterCreditType type, uint32_t creditEntry);
+
         // Checks encounter state
-        void UpdateEncountersStateForCreature(uint32_t creditEntry, uint8_t difficulty);
-        void UpdateEncountersStateForSpell(uint32_t creditEntry, uint8_t difficulty);
+        void updateEncountersStateForCreature(uint32_t creditEntry, uint8_t difficulty);
+        void updateEncountersStateForSpell(uint32_t creditEntry, uint8_t difficulty);
+
+        // Used only during loading
+        void setCompletedEncountersMask(uint32_t newMask) { completedEncounters = newMask; }
+
+        // Returns completed encounters mask for packets
+        uint32_t getCompletedEncounterMask() const { return completedEncounters; }
+
+        void readSaveDataBossStates(std::istringstream& data);
+        virtual void readSaveDataExtended(std::istringstream& /*data*/) {}
+        void writeSaveDataBossStates(std::ostringstream& data);
+        virtual void writeSaveDataExtended(std::ostringstream& /*data*/) {}
+        virtual std::string getSaveData();
 
         //used for debug
         void displayDataStateList(Player* player);
+
+        void setBossNumber(uint32_t number) { bosses.resize(number); }
 
         //////////////////////////////////////////////////////////////////////////////////////////
         // timers
@@ -673,11 +744,17 @@ class SERVER_DECL InstanceScript
         InstanceTimerArray mTimers;
         uint32_t mTimerCount;
 
+        // FaST Acess Instance Data
+        static void setupObjectData(ObjectData const* creatureData, ObjectInfoMap& objectInfo);
+        ObjectInfoMap _creatureInfo;
+        ObjectInfoMap _gameObjectInfo;
+        ObjectGuidMap _objectGuids;
+
     public:
 
         uint32_t addTimer(uint32_t durationInMs);
         uint32_t getTimeForTimer(uint32_t timerId);
-        uint32_t completedEncounters; // completed encounter mask, bit indexes are DungeonEncounter.dbc boss numbers, used for packets // todo for further use save these in db
+        uint32_t completedEncounters = 0; // completed encounter mask, bit indexes are DungeonEncounter.dbc boss numbers, used for packets
         void removeTimer(uint32_t& timerId);
         void resetTimer(uint32_t timerId, uint32_t durationInMs);
         bool isTimerFinished(uint32_t timerId);
@@ -720,6 +797,7 @@ class SERVER_DECL InstanceScript
         Creature* spawnCreature(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t factionId = 0);
         Creature* getCreatureBySpawnId(uint32_t entry);
         Creature* GetCreatureByGuid(uint32_t guid);
+        Creature* findNearestCreature(Object* pObject, uint32_t entry, float maxSearchRange /*= 250.0f*/);
 
         CreatureSet getCreatureSetForEntry(uint32_t entry, bool debug = false, Player* player = nullptr);
         CreatureSet getCreatureSetForEntries(std::vector<uint32_t> entryVector);
@@ -747,11 +825,11 @@ class SERVER_DECL InstanceScript
 
     protected:
 
-        InstanceDataMap mInstanceData;
+        std::vector<BossInfo> bosses;
 
         //MIT end
 
-        MapMgr* mInstance;
+        WorldMap* mInstance;
 };
 
 

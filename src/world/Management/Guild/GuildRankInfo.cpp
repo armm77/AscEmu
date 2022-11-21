@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,6 +7,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "GuildBankRightsAndSlots.hpp"
 #include "Log.hpp"
 #include "Database/Database.h"
+#include "Logging/Logger.hpp"
 #include "Server/MainServerDefines.h"
 
 
@@ -88,7 +89,7 @@ void GuildRankInfo::setRights(uint32_t rights)
     CharacterDatabase.Execute("UPDATE guild_ranks SET rankRights = %u WHERE guildId = %u AND rankId = %u", mRights, mGuildId, static_cast<uint32_t>(mRankId));
 }
 
-int32_t GuildRankInfo::getBankMoneyPerDay() const
+uint32_t GuildRankInfo::getBankMoneyPerDay() const
 {
     return mBankMoneyPerDay;
 }

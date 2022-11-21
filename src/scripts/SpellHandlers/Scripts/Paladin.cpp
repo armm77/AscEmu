@@ -1,11 +1,11 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 
-#include "Spell/Definitions/SpellDamageType.h"
+#include "Spell/Definitions/SpellDamageType.hpp"
 
 enum PaladinSpells
 {
@@ -16,17 +16,17 @@ enum PaladinSpells
     SPELL_EYE_FOR_AN_EYE_DUMMY_R1       = 9799,
     SPELL_EYE_FOR_AN_EYE_DUMMY_R2       = 25988,
     SPELL_HOLY_VENGEANCE                = 31803,
-#if VERSION_STRING < Cata
     SPELL_JUDGEMENT_OF_LIGHT_DEBUFF     = 20185,
     SPELL_JUDGEMENT_OF_LIGHT_HEAL       = 20267,
     SPELL_JUDGEMENT_OF_WISDOM_DEBUFF    = 20186,
     SPELL_JUDGEMENT_OF_WISDOM_MANA      = 20268,
-#endif
     SPELL_SEAL_OF_CORRUPTION_DIRECT     = 53739,
     SPELL_SEAL_OF_CORRUPTION_DUMMY      = 53736,
     SPELL_SEAL_OF_RIGHTEOUSNESS         = 25742,
 #if VERSION_STRING < Cata
     SPELL_SEAL_OF_RIGHTOUESNESS_DUMMY   = 21084,
+#else
+    SPELL_SEAL_OF_RIGHTOUESNESS_DUMMY   = 20154,
 #endif
     SPELL_SEAL_OF_VENGEANCE_DIRECT      = 42463,
     SPELL_SEAL_OF_VENGEANCE_DUMMY       = 31801,
@@ -83,11 +83,20 @@ public:
 class EyeForAnEye : public SpellScript
 {
 public:
-    SpellScriptExecuteState onDoProcEffect(SpellProc* spellProc, Unit* victim, SpellInfo const* /*castingSpell*/, DamageInfo damageInfo) override
+    SpellScriptExecuteState onDoProcEffect(SpellProc* spellProc, Unit* /*victim*/, SpellInfo const* /*castingSpell*/, DamageInfo damageInfo) override
     {
-        const auto dmg = damageInfo.realDamage * spellProc->getOverrideEffectDamage(EFF_INDEX_0) / 100;
-        spellProc->getProcOwner()->castSpell(victim, spellProc->getSpell(), dmg, true);
-        return SpellScriptExecuteState::EXECUTE_PREVENT;
+        damage = damageInfo.realDamage * spellProc->getOverrideEffectDamage(EFF_INDEX_0) / 100;
+        if (damage == 0)
+            return SpellScriptExecuteState::EXECUTE_PREVENT;
+
+        return SpellScriptExecuteState::EXECUTE_OK;
+    }
+
+    SpellScriptExecuteState onCastProcSpell(SpellProc* /*spellProc*/, Unit* /*caster*/, Unit* /*victim*/, Spell* spell) override
+    {
+        spell->forced_basepoints.set(EFF_INDEX_0, damage);
+        damage = 0;
+        return SpellScriptExecuteState::EXECUTE_OK;
     }
 
     SpellScriptEffectDamage doCalculateEffect(Spell* spell, uint8_t /*effIndex*/, int32_t* damage) override
@@ -102,8 +111,12 @@ public:
 
         return SpellScriptEffectDamage::DAMAGE_NO_BONUSES;
     }
+
+private:
+    uint32_t damage = 0;
 };
 
+#if VERSION_STRING < Cata
 class JudgementOfLightDummy : public SpellScript
 {
 public:
@@ -154,7 +167,9 @@ public:
     }
 #endif
 };
+#endif
 
+#if VERSION_STRING < Cata
 class JudgementOfWisdomDummy : public SpellScript
 {
 public:
@@ -207,6 +222,7 @@ public:
     }
 #endif
 };
+#endif
 
 #if VERSION_STRING == WotLK
 class SealOfCorruptionDummy : public SpellScript
@@ -401,6 +417,8 @@ void setupPaladinSpells(ScriptMgr* mgr)
 #if VERSION_STRING < Cata
     mgr->register_spell_script(SPELL_JUDGEMENT_OF_LIGHT_DEBUFF, new JudgementOfLightDummy);
     mgr->register_spell_script(SPELL_JUDGEMENT_OF_LIGHT_HEAL, new JudgementOfLight);
+#endif
+#if VERSION_STRING < Cata
     mgr->register_spell_script(SPELL_JUDGEMENT_OF_WISDOM_DEBUFF, new JudgementOfWisdomDummy);
     mgr->register_spell_script(SPELL_JUDGEMENT_OF_WISDOM_MANA, new JudgementOfWisdom);
 #endif
@@ -411,9 +429,7 @@ void setupPaladinSpells(ScriptMgr* mgr)
     mgr->register_spell_script(SPELL_BLOOD_CORRUPTION, new SealOfVengeanceAndCorruptionDot);
 #endif
 
-#if VERSION_STRING < Cata
     mgr->register_spell_script(SPELL_SEAL_OF_RIGHTOUESNESS_DUMMY, new SealOfRighteousnessDummy);
-#endif
 
 #if VERSION_STRING >= TBC
     mgr->register_spell_script(SPELL_SEAL_OF_VENGEANCE_DIRECT, new SealOfVengeanceAndCorruptionDirect);

@@ -1,20 +1,21 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Units/Creatures/AIInterface.h"
-#include "Management/Item.h"
-#include "Map/InstanceDefines.hpp"
-#include "Map/MapMgr.h"
-#include "Management/ItemInterface.h"
-#include "Storage/MySQLDataStore.hpp"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Item.hpp"
+#include "Map/Maps/InstanceDefines.hpp"
+#include "Map/Management/MapMgr.hpp"
+#include "Map/Maps/MapScriptInterface.h"
 #include "Management/QuestLogEntry.hpp"
-#include "Map/MapScriptInterface.h"
-#include "Spell/SpellMgr.h"
-#include "Map/WorldCreatorDefines.hpp"
+#include "Management/ItemInterface.h"
+#include "Movement/Spline/MoveSpline.h"
+#include "Server/Script/CreatureAIScript.h"
+#include "Storage/MySQLDataStore.hpp"
+#include "Spell/SpellMgr.hpp"
 
 //Classic
 void SetupBlackfathomDeeps(ScriptMgr* mgr);
@@ -79,6 +80,22 @@ void SetupUtgardePinnacle(ScriptMgr* mgr);
 void SetupVaultOfArchavon(ScriptMgr* mgr);
 #endif
 
+//Cataclysm
+#if VERSION_STRING >= Cata
+void SetupBlackrockCaverns(ScriptMgr* mgr);
+void SetupEndTime(ScriptMgr* mgr);
+void SetupGrimBatol(ScriptMgr* mgr);
+void SetupHallsOfOrigination(ScriptMgr* mgr);
+void SetupHourOfTwilight(ScriptMgr* mgr);
+void SetupLostCityOfTolvir(ScriptMgr* mgr);
+void SetupTheStonecore(ScriptMgr* mgr);
+void SetupThroneOfTides(ScriptMgr* mgr);
+void SetupVortexPinnacle(ScriptMgr* mgr);
+void SetupWellOfEternity(ScriptMgr* mgr);
+void SetupZulAmanCata(ScriptMgr* mgr);
+void SetupZulGurubCata(ScriptMgr* mgr);
+#endif
+
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Raids
@@ -110,6 +127,15 @@ void SetupTheObsidianSanctum(ScriptMgr* mgr);
 void SetupNaxxramas(ScriptMgr* mgr);
 void SetupUlduar(ScriptMgr* mgr);
 void SetupTrialOfTheCrusader(ScriptMgr* mgr);
+#endif
+
+//Cataclysm
+#if VERSION_STRING >= Cata
+void SetupBaradinHold(ScriptMgr* mgr);
+void SetupBastionOfTwilight(ScriptMgr* mgr);
+void SetupBlackwingDescent(ScriptMgr* mgr);
+void SetupDragonSoul(ScriptMgr* mgr);
+void SetupFirelands(ScriptMgr* mgr);
 #endif
 
 
@@ -155,6 +181,7 @@ enum InstanceMaps
     MAP_CF_THE_UNDERBOG         = 546,  // Coilfang: The Underbog
     MAP_CF_SLAVE_PENS           = 547,  // Coilfang: The Slave Pens
     MAP_CF_SERPENTSHRINE_CA     = 548,  // Coilfang: Serpentshrine Cavern
+    MAP_TEMPEST_KEEP            = 550,  // Tempest Keep
 
     MAP_TK_THE_ARCATRAZ         = 552,  // Tempest Keep: The Arcatraz
     MAP_TK_THE_BOTANICA         = 553,  // Tempest Keep: The Botanica
@@ -175,7 +202,7 @@ enum InstanceMaps
     MAP_THE_OCULUS              = 578,  // The Oculus
     MAP_SUNWELL_PLATEAU         = 580,  // The Sunwell
     MAP_MAGISTERS_TERRACE       = 585,  // Magister's Terrace
-    MAP_COT_CILLING_OF_STRATHOLME = 595,  // The Culling of Stratholme
+    MAP_CULLING_OF_STRATHOLME   = 595,  // The Culling of Stratholme
     MAP_HALLS_OF_STONE          = 599,  // Halls of Stone
     MAP_DRAK_THARON_KEEP        = 600,  // Drak'Tharon Keep
     MAP_AZJOL_NERUB             = 601,  // Azjol-Nerub
@@ -195,6 +222,26 @@ enum InstanceMaps
     MAP_TRIAL_OF_THE_CHAMPION   = 650,  // Trial of the Champion
     MAP_PIT_OF_SARON            = 658,  // Pit of Saron.
     MAP_HALLSOFREFLECTION       = 668,  // Halls of Reflection
+
+    //Cataclysm Map Ids
+    MAP_LOST_CITY_OF_TOLVIR     = 747, // Lost city of Tol'vir
+    MAP_BLACKROCK_CAVERNS       = 753, // Blackrock Caverns
+    MAP_GRIM_BATOL              = 757, // Grim Batol
+    MAP_HALLS_OF_ORIGINATION    = 759, // Halls of Origination
+    MAP_THRONE_OF_THE_TIDES     = 767, // Throne of Tides
+    MAP_THE_STONECORE           = 768, // The Stonecore
+    MAP_THE_VORTEX_PINNACLE     = 769, // Vortex Pinnacle
+    MAP_ZUL_AMAN_CATACLYSM      = 781, // Zul'Aman (Cataclysm)
+    MAP_ZUL_GURUB_CATACLYSM     = 793, // ZUl'Gurub (Cataclysm)
+    MAP_WELL_OF_ETERNITY        = 816, // Well of Eternity
+    MAP_HOUR_OF_TWILIGHT        = 819, // Hour of Twilight
+    MAP_END_TIME                = 820, // End Time
+    MAP_BARADIN_HOLD            = 752, // Baradin Hold
+    MAP_BLACKWING_DESCENT       = 754, // Blackwing Descent
+    MAP_BASTION_OF_TWILIGHT     = 758, // Bastion of Twilight
+    MAP_THRONE_OF_FOUR_WINDS    = 773, // Throne of the Four Winds
+    MAP_FIRELANDS               = 800, // Firelands
+    MAP_DRAGON_SOUL             = 824, // Dragon Soul
 
 
     /*

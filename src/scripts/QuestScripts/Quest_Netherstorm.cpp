@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -23,12 +23,11 @@
 class Veronia : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (plr->hasQuestInQuestLog(10652))
         {
-            GossipMenu menu(pObject->getGuid(), 1, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 1, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 470, 1);     // I'm ready
             menu.sendGossipPacket(plr);
         }

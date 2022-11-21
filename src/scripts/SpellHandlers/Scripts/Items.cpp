@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -269,7 +269,7 @@ public:
             return false;
 
         // Check if caster has Chaos Bane buff active which prevents gathering Soul Fragments
-        if (spellProc->getProcOwner()->HasAura(SPELL_CHAOS_BANE_BUFF))
+        if (spellProc->getProcOwner()->hasAurasWithId(SPELL_CHAOS_BANE_BUFF))
             return false;
 
         return true;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,6 +19,7 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 //#define SAY_DOC1 "I'm saved! Thank you, doctor!"
 //#define SAY_DOC2 "HOORAY! I AM SAVED!"
@@ -40,10 +41,11 @@ const uint32_t hordeSoldierId[3] =
 
 class InjuredSoldier : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(InjuredSoldier)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new InjuredSoldier(c); }
     explicit InjuredSoldier(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnLoad()
+    void OnLoad() override
     {
         getCreature()->addUnitFlags(UNIT_FLAG_COMBAT);
         getCreature()->setStandState(STANDSTATE_DEAD);
@@ -54,15 +56,15 @@ class InjuredSoldier : public CreatureAIScript
         {
             case 12923: // not in db
             case 12938:
-                getCreature()->SetHealthPct(75);
+                getCreature()->setHealthPct(75);
                 break;
             case 12924: // not in db
             case 12936:
-                getCreature()->SetHealthPct(50);
+                getCreature()->setHealthPct(50);
                 break;
             case 12925: // not in db
             case 12937:
-                getCreature()->SetHealthPct(25);
+                getCreature()->setHealthPct(25);
                 break;
         }
     }

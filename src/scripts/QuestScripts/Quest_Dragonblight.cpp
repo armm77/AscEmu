@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,20 +18,21 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class WoodlandWalker : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(WoodlandWalker)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new WoodlandWalker(c); }
     explicit WoodlandWalker(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        pCreature->SetFaction(35);
+        pCreature->setFaction(35);
     }
 };
 
 class WoodlandWalkerGossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         Creature* pCreature = (pObject->isCreature()) ? (static_cast<Creature*>(pObject)) : nullptr;
@@ -41,13 +42,13 @@ public:
         uint32_t chance = Util::getRandomUInt(1);
         if (chance == 0)
         {
-            pCreature->SetFaction(14);
-            pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "The Woodlands Walker is angered by your request and attacks!");
+            pCreature->setFaction(14);
+            pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "The Woodlands Walker is angered by your request and attacks!");
         }
         else
         {
             plr->getItemInterface()->AddItemById(36786, 1, 0);
-            pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Breaking off a piece of its bark, the Woodlands Walker hands it to you before departing.");
+            pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Breaking off a piece of its bark, the Woodlands Walker hands it to you before departing.");
         }
     }
 };
@@ -55,7 +56,6 @@ public:
 class WrathGateQuestCinema : public QuestScript
 {
 public:
-
     void OnQuestComplete(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
 #if VERSION_STRING > TBC

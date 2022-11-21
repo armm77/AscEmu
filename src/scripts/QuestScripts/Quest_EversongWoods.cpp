@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2009-2012 ArcEmu Team <http://www.arcemu.org>
  *
@@ -18,13 +18,14 @@
  */
 
 #include "Setup.h"
-#include "Units/Creatures/AIInterface.h"
-#include "Management/Item.h"
-#include "Map/MapMgr.h"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Item.hpp"
+#include "Map/Management/MapMgr.hpp"
 #include "Management/ItemInterface.h"
 #include "Storage/MySQLDataStore.hpp"
 #include <Management/QuestLogEntry.hpp>
-#include "Map/MapScriptInterface.h"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Server/Script/CreatureAIScript.h"
 
 enum
 {
@@ -36,11 +37,9 @@ enum
 //////////////////////////////////////////////////////////////////////////////////////////
 //Quest: The Drwarfen Spy
 //ID: 8486
-
 class ProspectorAnvilwardGossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* Plr) override;
     void onSelectOption(Object* pObject, Player* Plr, uint32_t Id, const char* EnteredCode, uint32_t gossipId) override;
     void destroy() override { delete this; }
@@ -48,7 +47,7 @@ public:
 
 void ProspectorAnvilwardGossip::onHello(Object* pObject, Player * Plr)
 {
-    GossipMenu menu(pObject->getGuid(), ANVILWARD_1, Plr->GetSession()->language);
+    GossipMenu menu(pObject->getGuid(), ANVILWARD_1, Plr->getSession()->language);
     if (Plr->hasQuestInQuestLog(8483))
         menu.addItem(GOSSIP_ICON_CHAT, 460, 1);     // I need a moment of your time, Sir.
 
@@ -61,7 +60,7 @@ void ProspectorAnvilwardGossip::onSelectOption(Object* pObject, Player* Plr, uin
     {
         case 1:
         {
-            GossipMenu menu(pObject->getGuid(), 8240, Plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 8240, Plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 461, 2);     // Why... yes, of course. I've something to show you right inside this building. Mr. Anvilward.
             menu.sendGossipPacket(Plr);
         }break;
@@ -69,36 +68,40 @@ void ProspectorAnvilwardGossip::onSelectOption(Object* pObject, Player* Plr, uin
         {
             Creature* pCreature = static_cast<Creature*>(pObject);
 
-            pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Very well. Let's see what you have to show me.");
+            pCreature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Very well. Let's see what you have to show me.");
             GossipMenu::senGossipComplete(Plr);
-            pCreature->GetAIInterface()->setWaypointScriptType(Movement::WP_MOVEMENT_SCRIPT_QUEST);
 
-            pCreature->GetAIInterface()->StopMovement(10);
+            pCreature->getMovementManager()->movePath(pCreature->getWaypointPath(), false);
+            pCreature->pauseMovement(10);
         }break;
     }
 };
 
 class ProspectorAnvilward : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ProspectorAnvilward)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ProspectorAnvilward(c); }
     explicit ProspectorAnvilward(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        pCreature->GetAIInterface()->setWaypointScriptType(Movement::WP_MOVEMENT_SCRIPT_NONE);
+        stopMovement();
     }
 
-    void OnReachWP(uint32_t iWaypointId, bool /*bForwards*/) override
+    void OnReachWP(uint32_t type, uint32_t iWaypointId) override
     {
+        if (type != WAYPOINT_MOTION_TYPE)
+            return;
+
         if (iWaypointId == 9)
         {
-            getCreature()->SetFaction(38);
-            getCreature()->GetAIInterface()->SetAllowedToEnterCombat(true);
+            getCreature()->setFaction(38);
+            getCreature()->getAIInterface()->setAllowedToEnterCombat(true);
             getCreature()->Despawn(10 * 60 * 1000, 1000); //if failed allow other players to do quest from beggining
-            getCreature()->SendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "What manner of trick is this, blood elf? If you seek to ambush me, I warn you I will not go down quietly!");
-            getCreature()->GetAIInterface()->getNextTarget();
+            getCreature()->sendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "What manner of trick is this, blood elf? If you seek to ambush me, I warn you I will not go down quietly!");
+            getCreature()->getThreatManager().getCurrentVictim();
         }
         if (iWaypointId == 10)
         {
-            getCreature()->GetAIInterface()->setWaypointScriptType(Movement::WP_MOVEMENT_SCRIPT_NONE);
+            getCreature()->stopMoving();
         }
     }
 };

@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -121,7 +121,7 @@ namespace VMAP
     }
 
     StaticMapTree::StaticMapTree(uint32 mapID, const std::string &basePath) :
-        iMapID(mapID), iIsTiled(false), iTreeValues(NULL),
+        iMapID(mapID), iIsTiled(false), iTreeValues(nullptr),
         iNTreeValues(0), iBasePath(basePath)
     {
         if (iBasePath.length() > 0 && iBasePath[iBasePath.length()-1] != '/' && iBasePath[iBasePath.length()-1] != '\\')

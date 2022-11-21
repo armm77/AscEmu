@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -14,22 +14,21 @@ This file is released under the MIT license. See README-MIT for more information
 class PX238WinterWondervolt : public GameObjectAIScript
 {
 public:
-
     explicit PX238WinterWondervolt(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new PX238WinterWondervolt(GO); }
 
-    void OnSpawn()
+    void OnSpawn() override
     {
         RegisterAIUpdateEvent(1);
     }
 
-    void AIUpdate()
+    void AIUpdate() override
     {
-        Player* plr = _gameobject->GetMapMgr()->GetInterface()->GetPlayerNearestCoords(_gameobject->GetPositionX(), _gameobject->GetPositionY(), _gameobject->GetPositionZ());
+        Player* plr = _gameobject->getWorldMap()->getInterface()->getPlayerNearestCoords(_gameobject->GetPositionX(), _gameobject->GetPositionY(), _gameobject->GetPositionZ());
         if (!plr)
             return;
 
-        if (_gameobject->CalcDistance(_gameobject, plr) <= 1.050000f && !plr->HasAura(26273))       /// aura given by the PX-238 Winter Wondervolt
+        if (_gameobject->CalcDistance(_gameobject, plr) <= 1.050000f && !plr->hasAurasWithId(26273))       /// aura given by the PX-238 Winter Wondervolt
         {
             plr->castSpell(plr, 26275, true);   /// Spell that change into random gnome dispalyid (respect male & female)
         }
@@ -95,7 +94,7 @@ void WinterReveler(Player* pPlayer, Unit* pUnit)
             if (!item_add_result)
             {
                 DLLLogDetail("Error while adding item %u to player %s", item->getEntry(), pPlayer->getName().c_str());
-                item->DeleteMe();
+                item->deleteMe();
             }
             else
             {
@@ -107,13 +106,13 @@ void WinterReveler(Player* pPlayer, Unit* pUnit)
 
 void WinterVeilEmote(Player* pPlayer, uint32_t Emote, Unit* pUnit)
 {
-    pUnit = pPlayer->GetMapMgr()->GetUnit(pPlayer->getTargetGuid());
-    if (!pUnit || !pUnit->isAlive() || pUnit->GetAIInterface()->getNextTarget())
+    pUnit = pPlayer->getWorldMap()->getUnit(pPlayer->getTargetGuid());
+    if (!pUnit || !pUnit->isAlive() || pUnit->getAIInterface()->getCurrentTarget())
         return;
 
     if (Emote == EMOTE_ONESHOT_KISS)
     {
-        if (!pPlayer->HasAura(26218))
+        if (!pPlayer->hasAurasWithId(26218))
             WinterReveler(pPlayer, pUnit);
     }
 }

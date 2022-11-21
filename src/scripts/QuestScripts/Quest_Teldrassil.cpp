@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -22,13 +22,12 @@
 class Zenn_Foulhoof : public QuestScript
 {
 public:
-
     void OnQuestComplete(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
-        if (Creature* creature = mTarget->GetMapMgr()->GetSqlIdCreature(43727))
+        if (Creature* creature = mTarget->getWorldMap()->getSqlIdCreature(43727))
         {
             creature->setDisplayId(901);
-            creature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Ribbit! No! This cannot...ribbit...be! You have duped me with...ribbit..your foul trickery! Ribbit!");
+            creature->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Ribbit! No! This cannot...ribbit...be! You have duped me with...ribbit..your foul trickery! Ribbit!");
 
             sEventMgr.AddEvent(static_cast<Unit*>(creature), &Unit::setDisplayId, static_cast<uint32_t>(10035), EVENT_UNK, 50000, 0, 1);
         }

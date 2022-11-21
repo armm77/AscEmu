@@ -1,23 +1,21 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Management/Battleground/Battleground.h"
-#include "Units/Creatures/Vehicle.h"
+#include "Management/Battleground/Battleground.hpp"
+#include "Objects/Units/Creatures/Vehicle.h"
 #include "IsleOfConquestDefinitions.h"
 
-
-class IsleOfConquest : public CBattleground
+class IsleOfConquest : public Battleground
 {
 public:
-
-    IsleOfConquest(MapMgr* mgr, uint32_t id, uint32_t lgroup, uint32_t t);
+    IsleOfConquest(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t);
     ~IsleOfConquest();
 
-    static CBattleground* Create(MapMgr* m, uint32_t i, uint32_t l, uint32_t t) { return new IsleOfConquest(m, i, l, t); }
+    static Battleground* Create(BattlegroundMap* m, uint32_t i, uint32_t l, uint32_t t) { return new IsleOfConquest(m, i, l, t); }
 
     void Init();
     void OnCreate() override;
@@ -64,7 +62,6 @@ public:
     void EventHordeKeepCaptured();
 
 private:
-
     IOCTeleporter teleporter[IOC_NUM_TELEPORTERS];
     IOCControlPoint controlpoint[IOC_NUM_CONTROL_POINTS];
     IOCGate gates[MAX_PLAYER_TEAMS][IOC_NUM_GATES_PER_TEAM];

@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/MainServerDefines.h"
 #include "Chat/ChatHandler.hpp"
 #include "Server/WorldSession.h"
@@ -19,7 +19,7 @@ bool ChatHandler::HandleCheatListCommand(const char* /*args*/, WorldSession* m_s
         player_target->m_cheats.hasGodModeCheat || player_target->m_cheats.hasPowerCheat ||
         player_target->m_cheats.hasFlyCheat || player_target->m_cheats.hasAuraStackCheat ||
         player_target->m_cheats.hasItemStackCheat || player_target->m_cheats.hasTriggerpassCheat ||
-        player_target->m_isGmInvisible || player_target->bInvincible
+        player_target->m_isGmInvisible || player_target->m_isInvincible
         )
     {
         SystemMessage(m_session, "Player %s has the following cheats activated:", player_target->getName().c_str());
@@ -44,7 +44,7 @@ bool ChatHandler::HandleCheatListCommand(const char* /*args*/, WorldSession* m_s
             SystemMessage(m_session, "-- TaxiCheat is active.");
         if (player_target->m_isGmInvisible)
             SystemMessage(m_session, "-- Invisibility is active.");
-        if (player_target->bInvincible)
+        if (player_target->m_isInvincible)
             SystemMessage(m_session, "-- Invincibility is active.");
     }
     else
@@ -90,7 +90,7 @@ bool ChatHandler::HandleCheatTaxiCommand(const char* /*args*/, WorldSession* m_s
         else
         {
             GreenSystemMessage(m_session, "%s can just use discovered taxi nodes from now.", player_target->getName().c_str());
-            SystemMessage(player_target->GetSession(), "%s has deactivated taxi cheat on you.", m_session->GetPlayer()->getName().c_str());
+            SystemMessage(player_target->getSession(), "%s has deactivated taxi cheat on you.", m_session->GetPlayer()->getName().c_str());
             sGMLog.writefromsession(m_session, "has deactivated TaxiCheat on Player: %s", player_target->getName().c_str());
         }
 

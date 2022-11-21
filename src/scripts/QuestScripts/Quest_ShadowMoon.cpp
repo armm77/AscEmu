@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,6 +20,7 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 enum
 {
@@ -38,29 +39,31 @@ enum
 
 class InfiltratingDragonmawFortressQAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(InfiltratingDragonmawFortressQAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new InfiltratingDragonmawFortressQAI(c); }
     explicit InfiltratingDragonmawFortressQAI(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnDied(Unit* mKiller)
+    void OnDied(Unit* mKiller) override
     {
         if (mKiller->isPlayer())
         {
-            static_cast<Player*>(mKiller)->AddQuestKill(10836, 0, 0);
+            static_cast<Player*>(mKiller)->addQuestKill(10836, 0, 0);
         }
     }
 };
 
 class KneepadsQAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(KneepadsQAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new KneepadsQAI(c); }
     explicit KneepadsQAI(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnDied(Unit* mKiller)
+    void OnDied(Unit* mKiller) override
     {
         if (mKiller->isPlayer())
         {
-            static_cast<Player*>(mKiller)->AddQuestKill(10703, 0, 0);
-            static_cast<Player*>(mKiller)->AddQuestKill(10702, 0, 0);
+            static_cast<Player*>(mKiller)->addQuestKill(10703, 0, 0);
+            static_cast<Player*>(mKiller)->addQuestKill(10702, 0, 0);
         }
     }
 };
@@ -68,7 +71,7 @@ class KneepadsQAI : public CreatureAIScript
 // WP Coords Wait Times
 struct WPWaitTimes
 {
-    Movement::Location mCoords;
+    LocationVector mCoords;
     uint32_t WaitTime;
 };
 
@@ -83,14 +86,15 @@ const WPWaitTimes DeathbringerJovaanWP[] =
 
 class DeathbringerJovaanAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(DeathbringerJovaanAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new DeathbringerJovaanAI(c); }
     explicit DeathbringerJovaanAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         mJovaanTimer = 0;
         mJovaanPhase = -1;
 
         for (int i = 1; i < 5; ++i)
-            AddWaypoint(CreateWaypoint(i, DeathbringerJovaanWP[i].WaitTime, Movement::WP_MOVE_TYPE_WALK, DeathbringerJovaanWP[i].mCoords));
+            addWaypoint(1, createWaypoint(i, DeathbringerJovaanWP[i].WaitTime, WAYPOINT_MOVE_TYPE_WALK, DeathbringerJovaanWP[i].mCoords));
     }
 
     void AIUpdate() override
@@ -106,12 +110,11 @@ class DeathbringerJovaanAI : public CreatureAIScript
                     {
                         pRazuunAI->getCreature()->addUnitFlags(UNIT_FLAG_NON_ATTACKABLE);
                         pRazuunAI->setCanEnterCombat(false);
-                        pRazuunAI->SetWaypointMoveType(Movement::WP_MOVEMENT_SCRIPT_NONE);
                         pRazuunAI->setRooted(true);
                     }
                     getCreature()->setStandState(STANDSTATE_KNEEL);
                     getCreature()->emote(EMOTE_ONESHOT_TALK);
-                    getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Everything is in readiness, warbringer.");
+                    getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Everything is in readiness, warbringer.");
                     mJovaanPhase = 1;
                     _resetTimer(mJovaanTimer, 6000);
                 }
@@ -119,7 +122,7 @@ class DeathbringerJovaanAI : public CreatureAIScript
                 case 1:
                 {
                     getCreature()->emote(EMOTE_ONESHOT_TALK);
-                    getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Warbringer, that will require the use of all the hold's infernals. It may leave us vulnerable to a counterattack.");
+                    getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Warbringer, that will require the use of all the hold's infernals. It may leave us vulnerable to a counterattack.");
                     mJovaanPhase = 2;
                     _resetTimer(mJovaanTimer, 11000);
                 }
@@ -134,7 +137,7 @@ class DeathbringerJovaanAI : public CreatureAIScript
                 case 3:
                 {
                     getCreature()->emote(EMOTE_ONESHOT_SALUTE);
-                    getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "It shall be as you say, warbringer. One last question, if I may...");
+                    getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "It shall be as you say, warbringer. One last question, if I may...");
                     mJovaanPhase = 4;
                     _resetTimer(mJovaanTimer, 10000);
                 }
@@ -142,7 +145,7 @@ class DeathbringerJovaanAI : public CreatureAIScript
                 case 4:
                 {
                     getCreature()->emote(EMOTE_ONESHOT_QUESTION);
-                    getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "What's in the crate?");
+                    getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "What's in the crate?");
                     mJovaanPhase = 5;
                     _resetTimer(mJovaanTimer, 10000);
                 }
@@ -156,11 +159,13 @@ class DeathbringerJovaanAI : public CreatureAIScript
                 break;
             }
         }
-        
     }
 
-    void OnReachWP(uint32_t iWaypointId, bool /*bForwards*/) override
+    void OnReachWP(uint32_t type, uint32_t iWaypointId) override
     {
+        if (type != WAYPOINT_MOTION_TYPE)
+            return;
+
         switch (iWaypointId)
         {
             case 3:
@@ -179,13 +184,14 @@ class DeathbringerJovaanAI : public CreatureAIScript
         }
     }
 
-    uint32_t    mJovaanTimer;
-    int32_t    mJovaanPhase;
+    uint32_t mJovaanTimer;
+    int32_t mJovaanPhase;
 };
 
 class WarbringerRazuunAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(WarbringerRazuunAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new WarbringerRazuunAI(c); }
     explicit WarbringerRazuunAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);
@@ -202,7 +208,7 @@ class WarbringerRazuunAI : public CreatureAIScript
                 case 0:
                 {
                     getCreature()->emote(EMOTE_ONESHOT_TALK);
-                    getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Doom Lord Kazzak will be pleased. You are to increase the pace of your attacks. Destroy the orcish and dwarven strongholds with all haste.");
+                    getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Doom Lord Kazzak will be pleased. You are to increase the pace of your attacks. Destroy the orcish and dwarven strongholds with all haste.");
                     mRazuunPhase = 1;
                     _resetTimer(mRazuunTimer, 9000);
                 }
@@ -210,7 +216,7 @@ class WarbringerRazuunAI : public CreatureAIScript
                 case 1:
                 {
                     getCreature()->emote(EMOTE_ONESHOT_TALK);
-                    getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Don't worry about that. I've increased production at the Deathforge. You'll have all the infernals you need to carry out your orders. Don't fail, Jovaan.");
+                    getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Don't worry about that. I've increased production at the Deathforge. You'll have all the infernals you need to carry out your orders. Don't fail, Jovaan.");
                     mRazuunPhase = 2;
                     _resetTimer(mRazuunTimer, 15000);
                 }
@@ -218,7 +224,7 @@ class WarbringerRazuunAI : public CreatureAIScript
                 case 2:
                 {
                     getCreature()->emote(EMOTE_ONESHOT_QUESTION);
-                    getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Yes?");
+                    getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Yes?");
                     mRazuunPhase = 3;
                     _resetTimer(mRazuunTimer, 8000);
                 }
@@ -226,7 +232,7 @@ class WarbringerRazuunAI : public CreatureAIScript
                 case 3:
                 {
                     getCreature()->emote(EMOTE_ONESHOT_QUESTION);
-                    getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Crate? I didn't send you a crate, Jovaan. Don't you have more important things to worry about? Go see to them!");
+                    getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Crate? I didn't send you a crate, Jovaan. Don't you have more important things to worry about? Go see to them!");
                     mRazuunPhase = 4;
                     _resetTimer(mRazuunTimer, 5000);
                 }
@@ -240,7 +246,6 @@ class WarbringerRazuunAI : public CreatureAIScript
                 break;
             }
         }
-        
     }
 
     uint32_t mRazuunTimer;
@@ -250,12 +255,11 @@ class WarbringerRazuunAI : public CreatureAIScript
 class NeltharakusTale_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (plr->hasQuestInQuestLog(10814))
         {
-            GossipMenu menu(pObject->getGuid(), 10613, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 10613, plr->getSession()->language);
             if (plr->hasQuestInQuestLog(10583))
                 menu.addItem(GOSSIP_ICON_CHAT, 471, 1);     // I am listening, Dragon
 
@@ -269,25 +273,25 @@ public:
         {
             case 1:
             {
-                GossipMenu menu(pObject->getGuid(), 10614, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 10614, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 472, 2);     // But you are Dragons! How could orcs do this to you?
                 menu.sendGossipPacket(plr);
             } break;
             case 2:
             {
-                GossipMenu menu(pObject->getGuid(), 10615, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 10615, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 473, 3);     // Your mate?
                 menu.sendGossipPacket(plr);
             } break;
             case 3:
             {
-                GossipMenu menu(pObject->getGuid(), 10616, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 10616, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 474, 4);     // I have battled many beasts, Dragon. I will help you.
                 menu.sendGossipPacket(plr);
             } break;
             case 4:
             {
-                plr->AddQuestKill(10814, 0, 0);
+                plr->addQuestKill(10814, 0, 0);
             } break;
         }
     }
@@ -295,17 +299,21 @@ public:
 
 class EnslavedNetherwingDrakeAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(EnslavedNetherwingDrakeAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new EnslavedNetherwingDrakeAI(c); }
     explicit EnslavedNetherwingDrakeAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        Movement::LocationWithFlag WayPoint = { getCreature()->GetPositionX(), getCreature()->GetPositionY() + 30, getCreature()->GetPositionZ() + 100, getCreature()->GetOrientation(), Movement::WP_MOVE_TYPE_FLY };
+        LocationVector WayPoint = { getCreature()->GetPositionX(), getCreature()->GetPositionY() + 30, getCreature()->GetPositionZ() + 100, getCreature()->GetOrientation()};
         setRooted(true);
         getCreature()->addUnitFlags(UNIT_FLAG_FEIGN_DEATH | UNIT_FLAG_NON_ATTACKABLE);
-        AddWaypoint(CreateWaypoint(1, 0, WayPoint.wp_flag, WayPoint.wp_location));
+        addWaypoint(1, createWaypoint(1, 0, WAYPOINT_MOVE_TYPE_TAKEOFF, WayPoint));
     }
 
-    void OnReachWP(uint32_t iWaypointId, bool /*bForwards*/) override
+    void OnReachWP(uint32_t type, uint32_t iWaypointId) override
     {
+        if (type != WAYPOINT_MOTION_TYPE)
+            return;
+
         if (iWaypointId == 1)
         {
             despawn(0, 3 * 60 * 1000);
@@ -316,7 +324,6 @@ class EnslavedNetherwingDrakeAI : public CreatureAIScript
 class KarynakuChains : public GameObjectAIScript
 {
 public:
-
     explicit KarynakuChains(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new KarynakuChains(GO); }
 
@@ -325,7 +332,7 @@ public:
         if (auto* questLog = pPlayer->getQuestLogByQuestId(10872))
         {
             questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -336,14 +343,13 @@ public:
 class FlanisSwiftwing_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* Plr) override;
     void onSelectOption(Object* pObject, Player* Plr, uint32_t Id, const char* Code, uint32_t gossipId) override;
 };
 
 void FlanisSwiftwing_Gossip::onHello(Object* pObject, Player* plr)
 {
-    GossipMenu menu(pObject->getGuid(), 40002, plr->GetSession()->language);
+    GossipMenu menu(pObject->getGuid(), 40002, plr->getSession()->language);
     if (plr->hasQuestInQuestLog(10583))
         menu.addItem(GOSSIP_ICON_CHAT, 475, 1);     // Examine the corpse
 
@@ -359,8 +365,8 @@ void FlanisSwiftwing_Gossip::onSelectOption(Object* /*pObject*/, Player* Plr, ui
     item->setStackCount(1);
     if (!Plr->getItemInterface()->AddItemToFreeSlot(item))
     {
-        Plr->GetSession()->SendNotification("No free slots were found in your inventory!");
-        item->DeleteMe();
+        Plr->getSession()->SendNotification("No free slots were found in your inventory!");
+        item->deleteMe();
     }
     else
     {

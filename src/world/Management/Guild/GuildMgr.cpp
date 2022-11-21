@@ -1,14 +1,15 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 
 #include "GuildMgr.hpp"
 #include "Guild.hpp"
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 #include "Server/MainServerDefines.h"
+#include "Util/Strings.hpp"
 
 GuildMgr& GuildMgr::getInstance()
 {
@@ -77,11 +78,11 @@ Guild* GuildMgr::getGuildByLeader(uint64_t guid) const
 Guild* GuildMgr::getGuildByName(const std::string& guildName) const
 {
     std::string search = guildName;
-    Util::StringToUpperCase(search);
+    AscEmu::Util::Strings::toUpperCase(search);
     for (GuildContainer::const_iterator itr = GuildStore.begin(); itr != GuildStore.end(); ++itr)
     {
         std::string gname = itr->second->getName();
-        Util::StringToUpperCase(gname);
+        AscEmu::Util::Strings::toUpperCase(gname);
         if (search == gname)
             return itr->second;
     }
@@ -453,7 +454,7 @@ void GuildMgr::loadGuildXpForLevelFromDB()
 
         if (level >= worldConfig.guild.maxLevel)
         {
-            sLogger.debug("Table `guild_xp_for_level` includes invalid xp definitions for level %u which is higher than the defined levelcap in your config file! <skipped>", level);
+            sLogger.debugFlag(AscEmu::Logging::LF_DB_TABLES, "Table `guild_xp_for_level` includes invalid xp definitions for level %u which is higher than the defined levelcap in your config file! <skipped>", level);
             continue;
         }
 
@@ -468,7 +469,7 @@ void GuildMgr::loadGuildXpForLevelFromDB()
         if (!GuildXPperLevel[level])
         {
             sLogger.failure("Level %i does not have XP for guild level data. Using data of level [%i] + 1660000.", level + 1, level);
-            GuildXPperLevel[level] = GuildXPperLevel[level - 1] + 1660000;
+            GuildXPperLevel[level] = GuildXPperLevel[level - 1U] + 1660000;
         }
     }
 

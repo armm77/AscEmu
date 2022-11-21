@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -20,16 +20,18 @@
 
 #pragma once
 
-#include "Definitions/SpellFailure.h"
-#include "Definitions/SpellState.h"
-#include "Definitions/SpellTargetMod.h"
-#include "SpellCastTargets.h"
+#include "Definitions/SpellFailure.hpp"
+#include "Definitions/SpellState.hpp"
+#include "Definitions/SpellTargetMod.hpp"
+#include "SpellCastTargets.hpp"
 #include "SpellInfo.hpp"
-#include "SpellTargetConstraint.h"
+#include "SpellTargetConstraint.hpp"
 
-#include "Units/Creatures/Creature.h"
-#include "Units/Players/Player.h"
-#include "Units/Unit.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Objects/Units/Unit.hpp"
+
+#include "Movement/Spline/MovementTypedefs.h"
 
 class WorldSession;
 class Unit;
@@ -66,7 +68,7 @@ class SERVER_DECL Spell
         void handleHittedEffect(const uint64_t targetGuid, uint8_t effIndex, int32_t effDamage, bool reCheckTarget = false);
         // Handles missed targets and effects
         void handleMissedTarget(SpellTargetMod const missedTarget);
-        void handleMissedEffect(const uint64_t targetGuid);
+        void handleMissedEffect(SpellTargetMod const missedTarget, bool reCheckTarget = false);
         // Finishes the casted spell
         void finish(bool successful = true);
 
@@ -76,6 +78,7 @@ class SERVER_DECL Spell
         void cancel();
 
         int32_t calculateEffect(uint8_t effIndex);
+        void calculateJumpSpeeds(Unit* unitCaster, SpellInfo const* spellInfo, uint8_t i, float dist, float& speedXY, float& speedZ);
 
         //////////////////////////////////////////////////////////////////////////////////////////
         // Spell cast checks
@@ -176,6 +179,7 @@ class SERVER_DECL Spell
         // Stores hitted targets for each spell effect
         std::vector<uint64_t> m_effectTargets[MAX_SPELL_EFFECTS];
 
+        SpellCastResult checkExplicitTarget(Object* target, uint32_t requiredTargetMask) const;
         void safeAddMissedTarget(uint64_t targetGuid, SpellDidHitResult hitResult, SpellDidHitResult extendedHitResult);
 
         Unit* unitTarget = nullptr;
@@ -190,9 +194,12 @@ class SERVER_DECL Spell
         SpellInfo const* getSpellInfo() const;
 
         // Some spells inherit base points from the mother spell
-        uint32_t forced_basepoints[MAX_SPELL_EFFECTS];
+        SpellForcedBasePoints forced_basepoints = SpellForcedBasePoints();
 
         Aura* getTriggeredByAura() const;
+
+        // Returns how many combo points this spell used
+        int8_t getUsedComboPoints() const;
 
         void addUsedSpellModifier(AuraEffectModifier const* aurEff);
         void removeUsedSpellModifier(AuraEffectModifier const* aurEff);
@@ -201,6 +208,9 @@ class SERVER_DECL Spell
         // If called from spell scripts, this needs to be called either in
         // doBeforeEffectHit, doCalculateEffect or beforeSpellEffect script hooks to have any effect
         void setForceCritOnTarget(Unit const* target);
+
+        int32_t getDuration();
+        float_t getEffectRadius(uint8_t effectIndex);
 
         // used by spells that should have dynamic variables in spellentry
         // seems to be used only by LuaEngine -Appled
@@ -220,6 +230,12 @@ class SERVER_DECL Spell
             Aura* aur = nullptr;
         };
 
+        struct MissSpellEffect
+        {
+            uint32_t travelTime = 0;
+            SpellTargetMod missInfo = SpellTargetMod(0, SPELL_DID_HIT_SUCCESS, SPELL_DID_HIT_SUCCESS);
+        };
+
         bool canAttackCreatureType(Creature* target) const;
 
         // Removes used item and/or item charges
@@ -231,10 +247,22 @@ class SERVER_DECL Spell
 
         void _updateCasterPointers(Object* caster);
         void _updateTargetPointers(const uint64_t targetGuid);
+        // Loads initial target pointers from spell's SpellCastTargets
+        // Used only in spell cast check phase, proper targets are set in spell cast phase
+        void _loadInitialTargetPointers(bool reset = false);
         float_t _getSpellTravelTimeForTarget(uint64_t guid) const;
 
         // Spell reflect stuff
         bool m_canBeReflected = false;
+
+        bool m_requiresCP = false;
+        int8_t m_usedComboPoints = 0;
+
+        int32_t m_duration = 0;
+        bool isDurationSet = false;
+
+        float_t m_effectRadius[MAX_SPELL_EFFECTS] = {0.0f};
+        bool m_isEffectRadiusSet[MAX_SPELL_EFFECTS] = {false};
 
         // Spell proc
         DamageInfo m_casterDamageInfo = DamageInfo();
@@ -243,11 +271,12 @@ class SERVER_DECL Spell
         uint32_t m_casterProcFlags = 0;
         uint32_t m_targetProcFlags = 0;
         void _prepareProcFlags();
+        // Stores guids of targets who have handled procs on caster
+        std::set<uint64_t> m_doneTargetProcs;
 
         std::map<uint64_t, HitAuraEffect> m_pendingAuras;
         std::map<uint64_t, HitSpellEffect> m_hitEffects;
-        // <targetGuid, travelTime>
-        std::map<uint64_t, uint32_t> m_missEffects;
+        std::map<uint64_t, MissSpellEffect> m_missEffects;
         std::vector<uint64_t> m_critTargets;
 
         bool isForcedCrit = false;
@@ -298,7 +327,7 @@ class SERVER_DECL Spell
         void spellEffectSummonWild(uint8_t effectIndex);
         void spellEffectSummonGuardian(uint8_t effectIndex, DBC::Structures::SummonPropertiesEntry const* spe, CreatureProperties const* properties_, LocationVector& v);
         void spellEffectSummonTemporaryPet(uint8_t effectIndex, DBC::Structures::SummonPropertiesEntry const* spe, CreatureProperties const* properties_, LocationVector& v);
-        void spellEffectSummonTotem(uint8_t summonSlot, CreatureProperties const* properties, LocationVector& v);
+        void spellEffectSummonTotem(uint8_t effectIndex, DBC::Structures::SummonPropertiesEntry const* spe, CreatureProperties const* properties, LocationVector& v);
         void spellEffectSummonPossessed(uint8_t effectIndex, DBC::Structures::SummonPropertiesEntry const* spe, CreatureProperties const* properties_, LocationVector& v);
         void spellEffectSummonCompanion(uint8_t effectIndex, DBC::Structures::SummonPropertiesEntry const* spe, CreatureProperties const* properties_, LocationVector& v);
         void spellEffectSummonVehicle(uint8_t effectIndex, DBC::Structures::SummonPropertiesEntry const* spe, CreatureProperties const* properties_, LocationVector& v);
@@ -312,7 +341,6 @@ class SERVER_DECL Spell
         void spellEffectLearnSpell(uint8_t effectIndex);
         void spellEffectSpellDefense(uint8_t effectIndex);
         void spellEffectDispel(uint8_t effectIndex);
-        void spellEffectLanguage(uint8_t effectIndex);
         void spellEffectDualWield(uint8_t effectIndex);
         void spellEffectSkillStep(uint8_t effectIndex);
         void spellEffectAddHonor(uint8_t effectIndex);
@@ -330,6 +358,7 @@ class SERVER_DECL Spell
         void spellEffectPowerBurn(uint8_t effectIndex);
         void spellEffectThreat(uint8_t effectIndex);
         void spellEffectClearQuest(uint8_t effectIndex);
+        void spellEffectForceCast(uint8_t effectIndex);
         void spellEffectTriggerSpell(uint8_t effectIndex);
         void spellEffectApplyRaidAA(uint8_t effectIndex);
         void spellEffectPowerFunnel(uint8_t effectIndex);
@@ -451,7 +480,7 @@ class SERVER_DECL Spell
         bool hasAttributeExG(SpellAttributesExG attribute);
 
         // Handles Teleport function
-        void HandleTeleport(float x, float y, float z, uint32 mapid, Unit* Target);
+        void HandleTeleport(LocationVector position, uint32 mapid, Unit* Target);
         // Determines how much skill caster going to gain
         void DetermineSkillUp();
         // Increases cast time of the spell
@@ -482,12 +511,10 @@ class SERVER_DECL Spell
 
         void SpellEffectInstantKill(uint8_t effectIndex);
         void SpellEffectSchoolDMG(uint8_t effectIndex);
-        void SpellEffectDummy(uint8_t effectIndex);
         void SpellEffectTeleportUnits(uint8_t effectIndex);
         void SpellEffectApplyAura(uint8_t effectIndex);
         void SpellEffectEnvironmentalDamage(uint8_t effectIndex);
         void SpellEffectPowerDrain(uint8_t effectIndex);
-        void SpellEffectHealthLeech(uint8_t effectIndex);
         void SpellEffectHeal(uint8_t effectIndex);
         void SpellEffectBind(uint8_t effectIndex);
         void SpellEffectQuestComplete(uint8_t effectIndex);
@@ -498,8 +525,6 @@ class SERVER_DECL Spell
         void SpellEffectParry(uint8_t effectIndex);
         void SpellEffectBlock(uint8_t effectIndex);
         void SpellEffectCreateItem(uint8_t effectIndex);
-        void SpellEffectWeapon(uint8_t effectIndex);
-        void SpellEffectDefense(uint8_t effectIndex);
         void SpellEffectPersistentAA(uint8_t effectIndex);
 
         virtual void SpellEffectSummon(uint8_t effectIndex);
@@ -519,9 +544,6 @@ class SERVER_DECL Spell
         void SpellEffectLearnSpell(uint8_t effectIndex);
         void SpellEffectSpellDefense(uint8_t effectIndex);
         void SpellEffectDispel(uint8_t effectIndex);
-        void SpellEffectLanguage(uint8_t effectIndex);
-        void SpellEffectDualWield(uint8_t effectIndex);
-        void SpellEffectSkillStep(uint8_t effectIndex);
         void SpellEffectAddHonor(uint8_t effectIndex);
         void SpellEffectSpawn(uint8_t effectIndex);
         void SpellEffectSummonObject(uint8_t effectIndex);
@@ -532,12 +554,10 @@ class SERVER_DECL Spell
         void SpellEffectLearnPetSpell(uint8_t effectIndex);
         void SpellEffectWeapondamage(uint8_t effectIndex);
         void SpellEffectOpenLockItem(uint8_t effectIndex);
-        void SpellEffectProficiency(uint8_t effectIndex);
         void SpellEffectSendEvent(uint8_t effectIndex);
         void SpellEffectPowerBurn(uint8_t effectIndex);
         void SpellEffectThreat(uint8_t effectIndex);
         void SpellEffectClearQuest(uint8_t effectIndex);
-        void SpellEffectTriggerSpell(uint8_t effectIndex);
         void SpellEffectApplyRaidAA(uint8_t effectIndex);
         void SpellEffectPowerFunnel(uint8_t effectIndex);
         void SpellEffectHealMaxHealth(uint8_t effectIndex);
@@ -548,7 +568,6 @@ class SERVER_DECL Spell
         void SpellEffectUseGlyph(uint8_t effectIndex);
         void SpellEffectHealMechanical(uint8_t effectIndex);
         void SpellEffectSummonObjectWild(uint8_t effectIndex);
-        void SpellEffectScriptEffect(uint8_t effectIndex);
         void SpellEffectSanctuary(uint8_t effectIndex);
         void SpellEffectAddComboPoints(uint8_t effectIndex);
         void SpellEffectCreateHouse(uint8_t effectIndex);
@@ -564,6 +583,7 @@ class SERVER_DECL Spell
         void SpellEffectCharge(uint8_t effectIndex);
         void SpellEffectKnockBack(uint8_t effectIndex);
         void SpellEffectKnockBack2(uint8_t effectIndex);
+        void SpellEffectPullTowardsDest(uint8_t effectIndex);
         void SpellEffectDisenchant(uint8_t effectIndex);
         void SpellEffectInebriate(uint8_t effectIndex);
         void SpellEffectFeedPet(uint8_t effectIndex);
@@ -578,7 +598,6 @@ class SERVER_DECL Spell
         void SpellEffectResurrectNew(uint8_t effectIndex);
         void SpellEffectAttackMe(uint8_t effectIndex);
         void SpellEffectSkinPlayerCorpse(uint8_t effectIndex);
-        void SpellEffectSkill(uint8_t effectIndex);
         void SpellEffectApplyPetAA(uint8_t effectIndex);
         void SpellEffectDummyMelee(uint8_t effectIndex);
         void SpellEffectStartTaxi(uint8_t effectIndex);
@@ -620,16 +639,11 @@ class SERVER_DECL Spell
         Corpse* GetCorpseTarget() const;
 
         uint32 chaindamage;
-        // -------------------------------------------
 
         bool IsAspect();
         bool IsSeal();
 
         void InitProtoOverride();
-
-        uint32 GetDuration();
-
-        float GetRadius(uint32 i);
 
         static uint32 GetBaseThreat(uint32 dmg);
 
@@ -640,7 +654,6 @@ class SERVER_DECL Spell
 
         int32 damage;
         bool m_AreaAura;
-        bool m_requiresCP;
         int32 m_charges;
 
         int32 damageToHit;
@@ -671,18 +684,13 @@ class SERVER_DECL Spell
 
         bool m_IsCastedOnSelf;
 
-        int64 m_magnetTarget;
+        uint64_t m_magnetTarget;
 
         // Current Targets to be used in effect handler
         Creature* targetConstraintCreature;
         GameObject* targetConstraintGameObject;
         uint32 add_damage;
 
-        uint32 Dur;
-        bool bDurSet;
-        float Rad[3];
-        bool bRadSet[3];
-        bool m_isCasting;
         uint8 m_rune_avail_before;
         //void _DamageRangeUpdate();
 
@@ -701,8 +709,8 @@ class SERVER_DECL Spell
         void SafeAddTarget(std::vector<uint64_t>* tgt, uint64 guid);
 
         friend class DynamicObject;
-        void DetermineSkillUp(uint32 skillid, uint32 targetlevel, uint32 multiplicator = 1);
-        void DetermineSkillUp(uint32 skillid);
+        void DetermineSkillUp(uint16_t skillid, uint32 targetlevel, uint32 multiplicator = 1);
+        void DetermineSkillUp(uint16_t skillid);
 
         bool AddTarget(uint32 i, uint32 TargetType, Object* obj);
         void AddAOETargets(uint32 i, uint32 TargetType, float r, uint32 maxtargets);

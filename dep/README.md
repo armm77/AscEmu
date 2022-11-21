@@ -2,46 +2,34 @@
 
 # Opensource software in this folder:
 
-## Folder: utf8cpp
-- Web: https://github.com/nemtrif/utfcpp
-- Version: 944ef0561ddcd33eb4fd94934538458b2b2de252 (2020/03/15)
-
-## Folder: recastnavigation
-- Web: https://github.com/memononen/recastnavigation
-- Version: 64385e9ed0822427bca5814d03a3f4c4d7a6db9f (2016/08/17)  
-
-## Folder: OpenSSL
-- Web: https://www.openssl.org
-- Version: 1.0.2n (2017-12-7)
-
-## Folder: MySQL Connector/C
-- Web: http://www.mysql.com
-- Version: 6.1.11 (2017-07-13)
-
-## Folder: zlib
-- Web: http://www.zlib.net
-- Version: 1.2.11 (2017/01/15)
-
-## Folder: lualib
-- Web: https://www.lua.org
-- Version: 5.3.4 (2017-01-12)
+## Folder: bzip2
+- Web: https://www.sourceware.org/bzip2/
+- Version: 1.0.8 (2019/07/13)
 
 ## Folder: g3dlite
 - Web: http://g3d.cs.williams.edu
-- Version: 9 (2013/03/24)
+- Version: 9 (2013/06/11)
 
 ## Folder: libmpq
 - Web: https://github.com/mbroemme/libmpq
 - Version: d59b4cf1d107b5f6a0f67d6bc545c6c6ebef3d74 (2011/11/08)
 
+## Folder: lualib
+- Web: https://www.lua.org
+- Version: 5.4.4 (2022/01/26)
+
+## Folder: recastnavigation
+- Web: https://github.com/memononen/recastnavigation
+- Version: 64385e9ed0822427bca5814d03a3f4c4d7a6db9f (2016/08/17)  
+
 ## Folder: StormLib
-- Web: http://www.zezula.net/en/mpq/stormlib.html
-- Version: (2012/06/05)
+- Web: https://github.com/ladislav-zezula/StormLib
+- Version: e51472f (2022/02/13)
 
-## Folder: bzip2
-- Web: http://www.bzip.org
-- Version: 1.0.8 (2019/07/13)
+## Folder: utf8cpp
+- Web: https://github.com/nemtrif/utfcpp
+- Version: d8b92208fddde08d628004563a1a3614a32cf8c8 (2021/12/27)
 
-## Folder: cotire
-- Web: https://github.com/sakra/cotire
-- Version: 1.8.1 (2019/12/23)
+## Folder: zlib
+- Web: http://www.zlib.net
+- Version: 1.2.12 (2022/03/27)

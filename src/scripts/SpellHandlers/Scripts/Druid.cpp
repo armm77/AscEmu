@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -10,16 +10,12 @@ enum DruidSpells
     SPELL_FUROR_R1                          = 17056,
     SPELL_FUROR_R2                          = 17058,
     SPELL_FUROR_R3                          = 17059,
-#if VERSION_STRING < Cata
     SPELL_FUROR_R4                          = 17060,
     SPELL_FUROR_R5                          = 17061,
-#endif
     SPELL_FUROR_RAGE                        = 17057,
     SPELL_FUROR_ENERGY                      = 17099,
-#if VERSION_STRING < Cata
     SPELL_IMPROVED_LEADER_OF_THE_PACK_R1    = 34297,
     SPELL_IMPROVED_LEADER_OF_THE_PACK_R2    = 34300,
-#endif
     SPELL_LEADER_OF_THE_PACK_DUMMY          = 17007,
     SPELL_LEADER_OF_THE_PACK_AURA           = 24932,
     SPELL_LEADER_OF_THE_PACK_HEAL           = 34299,
@@ -72,6 +68,7 @@ public:
 };
 #endif
 
+#if VERSION_STRING < Cata
 class ImprovedLeaderOfThePackDummy : public SpellScript
 {
 public:
@@ -89,6 +86,7 @@ public:
     }
 #endif
 };
+#endif
 
 class LeaderOfThePack : public SpellScript
 {
@@ -125,12 +123,12 @@ public:
         if (apply)
         {
             if (aur->getPlayerOwner() != nullptr)
-                aur->getPlayerOwner()->AddShapeShiftSpell(SPELL_LEADER_OF_THE_PACK_AURA);
+                aur->getPlayerOwner()->addShapeShiftSpell(SPELL_LEADER_OF_THE_PACK_AURA);
         }
         else
         {
             if (aur->getPlayerOwner() != nullptr)
-                aur->getPlayerOwner()->RemoveShapeShiftSpell(SPELL_LEADER_OF_THE_PACK_AURA);
+                aur->getPlayerOwner()->removeShapeShiftSpell(SPELL_LEADER_OF_THE_PACK_AURA);
         }
 
         return SpellScriptCheckDummy::DUMMY_OK;

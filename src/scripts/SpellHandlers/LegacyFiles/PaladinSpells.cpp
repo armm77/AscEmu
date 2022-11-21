@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2011 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,12 +18,12 @@
  */
 
 #include "Setup.h"
-#include "Map/MapMgr.h"
-#include "Objects/Faction.h"
+#include "Map/Management/MapMgr.hpp"
+#include "Management/Faction.h"
 #include "Spell/SpellAuras.h"
 #include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.h"
-#include <Spell/Definitions/PowerType.h>
+#include "Spell/Definitions/ProcFlags.hpp"
+#include <Spell/Definitions/PowerType.hpp>
 
 bool HolyShock(uint8_t /*effectIndex*/, Spell* pSpell)
 {
@@ -157,7 +157,7 @@ bool JudgementLightWisdomJustice(uint8_t /*effectIndex*/, Spell* pSpell)
     uint64_t prev_target = caster->getSingleTargetGuidForAura(judgements, &index);
     if (prev_target)
     {
-        Unit* t = caster->GetMapMgr()->GetUnit(prev_target);
+        Unit* t = caster->getWorldMap()->getUnit(prev_target);
         if (t != nullptr)
         {
             t->removeAllAurasById(judgements[index]);
@@ -265,7 +265,7 @@ bool RighteousDefense(uint8_t /*effectIndex*/, Spell* s)
                 continue;
 
             Creature* cr = static_cast<Creature*>(itr);
-            if (cr->GetAIInterface()->getNextTarget() == unitTarget)
+            if (cr->getAIInterface()->getCurrentTarget() == unitTarget)
                 targets[targets_got++] = cr;
 
             if (targets_got == 3)
@@ -276,14 +276,14 @@ bool RighteousDefense(uint8_t /*effectIndex*/, Spell* s)
     for (uint32_t j = 0; j < targets_got; j++)
     {
         //set threat to this target so we are the msot hated
-        uint32_t threat_to_him = targets[j]->GetAIInterface()->getThreatByPtr(unitTarget);
-        uint32_t threat_to_us = targets[j]->GetAIInterface()->getThreatByPtr(s->getUnitCaster());
-        int threat_dif = threat_to_him - threat_to_us;
+        float threat_to_him = targets[j]->getThreatManager().getThreat(unitTarget);
+        float threat_to_us = targets[j]->getThreatManager().getThreat(s->getUnitCaster());
+        float threat_dif = threat_to_him - threat_to_us;
         if (threat_dif > 0) //should nto happen
-            targets[j]->GetAIInterface()->modThreatByPtr(s->getUnitCaster(), threat_dif);
+            targets[j]->getThreatManager().matchUnitThreatToHighestThreat(s->getUnitCaster());
 
-        targets[j]->GetAIInterface()->AttackReaction(s->getUnitCaster(), 1, 0);
-        targets[j]->GetAIInterface()->setNextTarget(s->getUnitCaster());
+        targets[j]->getAIInterface()->onHostileAction(s->getUnitCaster());
+        targets[j]->getAIInterface()->setCurrentTarget(s->getUnitCaster());
     }
 
     return true;
@@ -301,7 +301,7 @@ bool Illumination(uint8_t /*effectIndex*/, Spell* s)
         {
             if (s->getPlayerCaster() == NULL)
                 return false;
-            SpellInfo const* sp = s->getPlayerCaster()->last_heal_spell ? s->getPlayerCaster()->last_heal_spell : s->getSpellInfo();
+            SpellInfo const* sp = s->getPlayerCaster()->m_lastHealSpell ? s->getPlayerCaster()->m_lastHealSpell : s->getSpellInfo();
             s->getPlayerCaster()->energize(s->getPlayerCaster(), 20272, 60 * s->getPlayerCaster()->getBaseMana() * sp->getManaCostPercentage() / 10000, POWER_TYPE_MANA);
         }
         break;
@@ -328,7 +328,7 @@ bool GuardedByTheLight(uint8_t /*effectIndex*/, Spell* s)
         return false;
 
     if (Aura* aura = s->getPlayerCaster()->getAuraWithId(54428))
-        aura->refresh();
+        aura->refreshOrModifyStack();
 
     return true;
 }

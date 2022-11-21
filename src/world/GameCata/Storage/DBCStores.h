@@ -1,14 +1,16 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
+#include "DBCStructures.h"
 #include "../world/Storage/DBC/DBCGlobals.hpp"
-#include "Server/Definitions.h"
-
+#include "Map/Maps/InstanceDefines.hpp"
 #include "WorldConf.h"
+
+typedef std::map<uint32_t, DBC::Structures::MapDifficulty> MapDifficultyMap;
 
 #if VERSION_STRING == Cata
 inline float GetRadius(DBC::Structures::SpellRadiusEntry const* radius)
@@ -25,20 +27,6 @@ inline uint32 GetCastTime(DBC::Structures::SpellCastTimesEntry const* time)
 
     return time->CastTime;
 }
-inline float GetMaxRange(DBC::Structures::SpellRangeEntry const* range)
-{
-    if (range == nullptr)
-        return 0;
-
-    return range->maxRange;
-}
-inline float GetMinRange(DBC::Structures::SpellRangeEntry const* range)
-{
-    if (range == nullptr)
-        return 0;
-
-    return range->minRange;
-}
 inline uint32 GetDuration(DBC::Structures::SpellDurationEntry const* dur)
 {
     if (dur == nullptr)
@@ -47,6 +35,9 @@ inline uint32 GetDuration(DBC::Structures::SpellDurationEntry const* dur)
 }
 
 DBC::Structures::SpellEffectEntry const* GetSpellEffectEntry(uint32 spellId, uint8_t effect);
+
+extern SERVER_DECL DBC::DBCStorage<DBC::Structures::MountCapabilityEntry> sMountCapabilityStore;
+extern SERVER_DECL DBC::DBCStorage<DBC::Structures::MountTypeEntry> sMountTypeStore;
 
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::WorldMapOverlayEntry> sWorldMapOverlayStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::AchievementEntry> sAchievementStore;
@@ -94,6 +85,7 @@ extern SERVER_DECL DBC::DBCStorage<DBC::Structures::GameObjectDisplayInfoEntry> 
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::GuildPerkSpellsEntry> sGuildPerkSpellsStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::SpellItemEnchantmentEntry> sSpellItemEnchantmentStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::ItemRandomPropertiesEntry> sItemRandomPropertiesStore;
+extern SERVER_DECL DBC::DBCStorage<DBC::Structures::ItemReforgeEntry> sItemReforgeStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::SkillLineAbilityEntry> sSkillLineAbilityStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::SkillLineEntry> sSkillLineStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::TaxiNodesEntry> sTaxiNodesStore;
@@ -110,12 +102,16 @@ extern SERVER_DECL DBC::DBCStorage<DBC::Structures::ChrClassesEntry> sChrClasses
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::ChrRacesEntry> sChrRacesStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::ChrPowerTypesEntry> sChrPowerTypesEntry;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::CreatureDisplayInfoEntry>  sCreatureDisplayInfoStore;
+extern SERVER_DECL DBC::DBCStorage<DBC::Structures::CreatureModelDataEntry> sCreatureModelDataStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::CreatureDisplayInfoExtraEntry> sCreatureDisplayInfoExtraStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::MapEntry> sMapStore;
+extern SERVER_DECL DBC::DBCStorage<DBC::Structures::MapDifficultyEntry> sMapDifficultyStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::HolidaysEntry> sHolidaysStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::SpellRuneCostEntry> sSpellRuneCostStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::ItemRandomSuffixEntry> sItemRandomSuffixStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::GtCombatRatingsEntry> sGtCombatRatingsStore;
+extern SERVER_DECL DBC::DBCStorage<DBC::Structures::GtOCTBaseHPByClassEntry> sGtOCTBaseHPByClassStore;
+extern SERVER_DECL DBC::DBCStorage<DBC::Structures::GtOCTBaseMPByClassEntry> sGtOCTBaseMPByClassStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::ChatChannelsEntry> sChatChannelsStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::DurabilityCostsEntry> sDurabilityCostsStore;
 extern SERVER_DECL DBC::DBCStorage<DBC::Structures::DurabilityQualityEntry> sDurabilityQualityStore;
@@ -156,9 +152,16 @@ DBC::Structures::CharStartOutfitEntry const* getStartOutfitByRaceClass(uint8_t r
 
 DBC::Structures::WMOAreaTableEntry const* GetWMOAreaTableEntryByTriple(int32 root_id, int32 adt_id, int32 group_id);
 
+extern SERVER_DECL MapDifficultyMap sMapDifficultyMap;
+DBC::Structures::MapDifficulty const* getMapDifficultyData(uint32_t mapId, InstanceDifficulty::Difficulties difficulty);
+DBC::Structures::MapDifficulty const* getDownscaledMapDifficultyData(uint32_t mapId, InstanceDifficulty::Difficulties& difficulty);
+
+
 std::string generateName(uint32 type = 0);
 
 uint32 const* getTalentTabPages(uint8 playerClass);
+
+uint32_t getLiquidFlags(uint32_t liquidId);
 
 uint8_t getPowerIndexByClass(uint8_t playerClass, uint8_t powerIndex);
 

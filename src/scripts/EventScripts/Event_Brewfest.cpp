@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //\details <b>Brewfest</b>\n
@@ -29,13 +30,13 @@ enum
 class SCRIPT_DECL CorenDirebrewGossip : public GossipScript
 {
 public:
-    void onHello(Object* pObject, Player* Plr);
-    void onSelectOption(Object* pObject, Player* Plr, uint32_t Id, const char* EnteredCode, uint32_t gossipId);
+    void onHello(Object* pObject, Player* Plr) override;
+    void onSelectOption(Object* pObject, Player* Plr, uint32_t Id, const char* EnteredCode, uint32_t gossipId) override;
 };
 
 void CorenDirebrewGossip::onHello(Object* pObject, Player * Plr)
 {
-    GossipMenu menu(pObject->getGuid(), DIREBREW_1, Plr->GetSession()->language);
+    GossipMenu menu(pObject->getGuid(), DIREBREW_1, Plr->getSession()->language);
     menu.addItem(GOSSIP_ICON_CHAT, 439, 1);     // Insult Coren Direbrew's brew.
     menu.sendGossipPacket(Plr);
 }
@@ -48,32 +49,42 @@ void CorenDirebrewGossip::onSelectOption(Object* pObject, Player* Plr, uint32_t 
     {
         case 1:
         {
-            GossipMenu menu(pObject->getGuid(), DIREBREW_2, Plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), DIREBREW_2, Plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 440, 1);     // Fight.
             menu.addItem(GOSSIP_ICON_CHAT, 441, 1);     // Apologize.
             menu.sendGossipPacket(Plr);
         }break;
         case 2:
         {
-            pCreature->SendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "You'll pay for this insult, $c!");
+            pCreature->sendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "You'll pay for this insult, $c!");
             GossipMenu::senGossipComplete(Plr);
-            pCreature->GetAIInterface()->setWaypointScriptType(Movement::WP_MOVEMENT_SCRIPT_FORWARDTHENSTOP);
-            pCreature->MoveToWaypoint(1);
+
+            pCreature->GetScript()->DoAction(0);
         }break;
     }
 };
 
 class CorenDirebrew : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(CorenDirebrew)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new CorenDirebrew(c); }
     explicit CorenDirebrew(Creature* pCreature) : CreatureAIScript(pCreature)
-    { }
+    {
+        // whats the correct waypoint ?
+        addWaypoint(1, createWaypoint(1, 0, WAYPOINT_MOVE_TYPE_WALK, pCreature->GetPosition()));
+    }
+
+    void DoAction(int32 const action) override
+    {
+        if(action == 0)
+            setWaypointToMove(1, 1);
+    }
 };
 
 void SetupBrewfest(ScriptMgr* mgr)
 {
     mgr->register_creature_gossip(BOSS_DIREBREW, new CorenDirebrewGossip());
-    //mgr->register_creature_script(BOSS_DIREBREW, CorenDirebrew::Create);
+    mgr->register_creature_script(BOSS_DIREBREW, CorenDirebrew::Create);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////

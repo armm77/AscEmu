@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "StdAfx.h"
 #include "Server/MainServerDefines.h"
 #include "Server/Master.h"
 
@@ -27,9 +26,6 @@
 #endif
 #include "CrashHandler.h"
 #include "ServerState.h"
-
-
-uint8 loglevel = 0;
 
 #ifndef WIN32
 int unix_main(int argc, char** argv)

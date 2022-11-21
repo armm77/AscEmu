@@ -1,14 +1,14 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/MainServerDefines.h"
-#include "Spell/SpellMgr.h"
+#include "Spell/SpellMgr.hpp"
 #include "Chat/ChatHandler.hpp"
-#include "Objects/ObjectMgr.h"
-#include "Spell/Definitions/SpellEffects.h"
+#include "Management/ObjectMgr.h"
+#include "Spell/Definitions/SpellEffects.hpp"
 #include "Spell/SpellAuras.h"
 
 //.admin castall
@@ -44,9 +44,9 @@ bool ChatHandler::HandleAdminCastAllCommand(const char* args, WorldSession* m_se
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
         Player* player = itr->second;
-        if (player->GetSession() && player->IsInWorld())
+        if (player->getSession() && player->IsInWorld())
         {
-            if (player->GetMapMgr() != m_session->GetPlayer()->GetMapMgr())
+            if (player->getWorldMap() != m_session->GetPlayer()->getWorldMap())
             {
                 sEventMgr.AddEvent(static_cast< Unit* >(player), &Unit::eventCastSpell, static_cast< Unit* >(player), spell_entry, EVENT_PLAYER_CHECKFORCHEATS, 100, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
             }
@@ -77,15 +77,21 @@ bool ChatHandler::HandleAdminDispelAllCommand(const char* args, WorldSession* m_
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
         Player* player = itr->second;
-        if (player->GetSession() && player->IsInWorld())
+        if (player->getSession() && player->IsInWorld())
         {
-            if (player->GetMapMgr() != m_session->GetPlayer()->GetMapMgr())
+            if (player->getWorldMap() != m_session->GetPlayer()->getWorldMap())
             {
-                sEventMgr.AddEvent(static_cast< Unit* >(player), &Unit::DispelAll, pos ? true : false, EVENT_PLAYER_CHECKFORCHEATS, 100, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+                if (pos)
+                    sEventMgr.AddEvent(static_cast<Unit*>(player), &Unit::removeAllPositiveAuras, EVENT_PLAYER_CHECKFORCHEATS, 100, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+                else
+                    sEventMgr.AddEvent(static_cast<Unit*>(player), &Unit::removeAllNegativeAuras, EVENT_PLAYER_CHECKFORCHEATS, 100, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
             }
             else
             {
-                player->DispelAll(pos ? true : false);
+                if (pos)
+                    player->removeAllPositiveAuras();
+                else
+                    player->removeAllNegativeAuras();
             }
         }
     }
@@ -126,16 +132,16 @@ bool ChatHandler::HandleAdminMassSummonCommand(const char* args, WorldSession* m
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
         Player* plr = itr->second;
-        if (plr->GetSession() && plr->IsInWorld())
+        if (plr->getSession() && plr->IsInWorld())
         {
             if (faction > -1 && plr->getTeam() == static_cast<uint32>(faction))
             {
-                plr->SummonRequest(summon_player->getGuidLow(), summon_player->GetZoneId(), summon_player->GetMapId(), summon_player->GetInstanceID(), summon_player->GetPosition());
+                plr->sendSummonRequest(summon_player->getGuidLow(), summon_player->GetZoneId(), summon_player->GetMapId(), summon_player->GetInstanceID(), summon_player->GetPosition());
                 ++summon_count;
             }
             else if (faction == -1)
             {
-                plr->SummonRequest(summon_player->getGuidLow(), summon_player->GetZoneId(), summon_player->GetMapId(), summon_player->GetInstanceID(), summon_player->GetPosition());
+                plr->sendSummonRequest(summon_player->getGuidLow(), summon_player->GetZoneId(), summon_player->GetMapId(), summon_player->GetInstanceID(), summon_player->GetPosition());
                 ++summon_count;
             }
 

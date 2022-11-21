@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -26,8 +26,8 @@ namespace AscEmu::Packets
 
         SmsgCharEnum(uint8_t char_count, _charEnumData enum_data) :
             ManagedPacket(SMSG_CHAR_ENUM, 1 + char_count * 200),
-            char_count(char_count),
             enum_data(enum_data),
+            char_count(char_count),
             unk1(0)
         {
         }
@@ -85,7 +85,7 @@ namespace AscEmu::Packets
             {
                 for (auto const& data : enum_data)
                 {
-                    WoWGuid guid(data.guid, 0, HIGHGUID_TYPE_PLAYER);
+                    WoWGuid guid(data.guid);
                     WoWGuid guildGuid(data.guildId, 0, HIGHGUID_TYPE_GUILD);
 
                     packet.writeBit(guid[3]);

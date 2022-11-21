@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -13,7 +13,6 @@ namespace AscEmu::Packets
 {
     class CmsgPetLearnTalent : public ManagedPacket
     {
-#if VERSION_STRING > TBC
     public:
         WoWGuid guid;
         uint32_t talentId;
@@ -44,6 +43,5 @@ namespace AscEmu::Packets
             guid.Init(unpacked_guid);
             return true;
         }
-#endif
     };
 }

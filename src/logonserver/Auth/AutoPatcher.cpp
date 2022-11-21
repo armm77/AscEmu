@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,14 +17,15 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "LogonStdAfx.h"
-#include "../shared/Auth/MD5.h"
+#include <Auth/MD5.h>
+#include "Auth/AutoPatcher.h"
 
 #ifndef WIN32
 #include <fcntl.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #endif
+#include <Logging/Logger.hpp>
 
 PatchMgr& PatchMgr::getInstance()
 {
@@ -37,9 +38,9 @@ void PatchMgr::initialize()
     // load patches
 #ifdef WIN32
     sLogger.info("PatchMgr : Loading Patches...");
-    char Buffer[MAX_PATH * 10];
-    char Buffer2[MAX_PATH * 10];
-    char Buffer3[MAX_PATH * 10];
+    char Buffer[maxPathLength * 10];
+    char Buffer2[maxPathLength * 10];
+    char Buffer3[maxPathLength * 10];
 
     WIN32_FIND_DATA fd;
     HANDLE fHandle;
@@ -51,7 +52,7 @@ void PatchMgr::initialize()
     char locality[5];
     uint32 i;
 
-    if (!GetCurrentDirectory(MAX_PATH * 10, Buffer))
+    if (!GetCurrentDirectory(maxPathLength * 10, Buffer))
         return;
 
     strcpy(Buffer2, Buffer);
@@ -62,7 +63,7 @@ void PatchMgr::initialize()
 
     do
     {
-        snprintf(Buffer3, MAX_PATH * 10, "%s\\ClientPatches\\%s", Buffer2, fd.cFileName);
+        snprintf(Buffer3, maxPathLength * 10, "%s\\ClientPatches\\%s", Buffer2, fd.cFileName);
         if (sscanf(fd.cFileName, "%4s%u.", locality, &srcversion) != 2)
             continue;
 
@@ -112,9 +113,9 @@ void PatchMgr::initialize()
      *nix patch loader
      */
     sLogger.info("PatchMgr : Loading Patches...");
-    char Buffer[MAX_PATH * 10];
-    char Buffer2[MAX_PATH * 10];
-    char Buffer3[MAX_PATH * 10];
+    char Buffer[maxPathLength * 10];
+    char Buffer2[maxPathLength * 10];
+    char Buffer3[maxPathLength * 10];
 
     struct dirent** list;
     int filecount;
@@ -139,7 +140,7 @@ void PatchMgr::initialize()
 
     while (filecount--)
     {
-        snprintf(Buffer3, MAX_PATH * 10, "./ClientPatches/%s", list[filecount]->d_name);
+        snprintf(Buffer3, maxPathLength * 10, "./ClientPatches/%s", list[filecount]->d_name);
         if (sscanf(list[filecount]->d_name, "%4s%u.", locality, &srcversion) != 2)
             continue;
 
@@ -202,7 +203,7 @@ Patch* PatchMgr::FindPatchForClient(uint32 Version, const char* Locality)
     uint32 ulocality;
     uint32 i;
     std::vector<Patch*>::iterator itr;
-    Patch* fallbackPatch = NULL;
+    Patch* fallbackPatch = nullptr;
     for (i = 0; i < 4; ++i)
         tmplocality[i] = static_cast<char>(tolower(Locality[i]));
     tmplocality[4] = 0;
@@ -214,7 +215,7 @@ Patch* PatchMgr::FindPatchForClient(uint32 Version, const char* Locality)
         // saving a string compare ;)
         if ((*itr)->uLocality == ulocality)
         {
-            if (fallbackPatch == NULL && (*itr)->Version == 0)
+            if (fallbackPatch == nullptr && (*itr)->Version == 0)
                 fallbackPatch = (*itr);
 
             if ((*itr)->Version == Version)
@@ -247,7 +248,7 @@ void PatchMgr::UpdateJobs()
 
         if (!(*itr2)->Update())
         {
-            (*itr2)->GetClient()->m_patchJob = NULL;
+            (*itr2)->GetClient()->m_patchJob = nullptr;
             delete(*itr2);
             m_patchJobs.erase(itr2);
         }

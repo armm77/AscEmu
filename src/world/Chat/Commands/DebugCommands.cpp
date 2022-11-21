@@ -1,15 +1,152 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Chat/ChatHandler.hpp"
 #include "Server/WorldSession.h"
-#include "Spell/Definitions/SpellFailure.h"
+#include "Spell/Definitions/SpellFailure.hpp"
 #include "Server/ServerState.h"
-#include "Objects/ObjectMgr.h"
-#include "Management/WeatherMgr.h"
+#include "Management/ObjectMgr.h"
+#include "Management/WeatherMgr.hpp"
+#include "Server/Script/CreatureAIScript.h"
+#include "Storage/MySQLDataStore.hpp"
+#include "Objects/Units/ThreatHandler.h"
+
+bool ChatHandler::HandleMoveHardcodedScriptsToDBCommand(const char* args, WorldSession* session)
+{
+    uint32_t map = uint32_t(atoi(args));
+    if (map == 0)
+        return true;
+
+    std::vector<uint32_t> creatureEntries;
+
+    QueryResult* creature_spawn_result = WorldDatabase.Query("SELECT entry FROM creature_spawns WHERE map = %u GROUP BY(entry)", map);
+    if (creature_spawn_result)
+    {
+        {
+            do
+            {
+                Field* fields = creature_spawn_result->Fetch();
+                creatureEntries.push_back(fields[0].GetUInt32());
+
+            } while (creature_spawn_result->NextRow());
+        }
+
+        delete creature_spawn_result;
+    }
+
+    //prepare new table for dump
+    char my_table[1400];
+    sprintf(my_table, "CREATE TABLE `creature_ai_scripts_%s` (`min_build` int NOT NULL DEFAULT '12340',`max_build` int NOT NULL DEFAULT '12340',`entry` int unsigned NOT NULL,\
+            `difficulty` tinyint unsigned NOT NULL DEFAULT '0',`phase` tinyint unsigned NOT NULL DEFAULT '0',`event` tinyint unsigned NOT NULL DEFAULT '0',`action` tinyint unsigned NOT NULL DEFAULT '0',\
+            `maxCount` tinyint unsigned NOT NULL DEFAULT '0',`chance` float unsigned NOT NULL DEFAULT '1',`spell` int unsigned NOT NULL DEFAULT '0',`spell_type` int NOT NULL DEFAULT '0',`triggered` tinyint(1) NOT NULL DEFAULT '0',\
+            `target` tinyint NOT NULL DEFAULT '0',`cooldownMin` int NOT NULL DEFAULT '0',`cooldownMax` int unsigned NOT NULL DEFAULT '0',`minHealth` float NOT NULL DEFAULT '0',\
+            `maxHealth` float NOT NULL DEFAULT '100',`textId` int unsigned NOT NULL DEFAULT '0',`misc1` int NOT NULL DEFAULT '0',`comments` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,\
+            UNIQUE KEY `entry` (`min_build`,`max_build`,`entry`,`difficulty`,`phase`,`spell`,`event`,`action`,`textId`) USING BTREE) ENGINE = MyISAM DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'AI System'", args);
+
+    WorldDatabase.Execute(my_table);
+
+    uint32_t count = 0;
+    for (auto entry : creatureEntries)
+    {
+        auto creature_properties = sMySQLStore.getCreatureProperties(entry);
+        if (creature_properties == nullptr)
+        {
+            RedSystemMessage(session, "Creature with entry %u is not a valid entry (no properties information in database)", entry);
+            return true;
+        }
+
+        auto creature_spawn = new MySQLStructure::CreatureSpawn;
+        uint8 gender = creature_properties->generateRandomDisplayIdAndReturnGender(&creature_spawn->displayid);
+        creature_spawn->entry = entry;
+        creature_spawn->id = sObjectMgr.GenerateCreatureSpawnID();
+        creature_spawn->movetype = 0;
+        creature_spawn->x = session->GetPlayer()->GetPositionX();
+        creature_spawn->y = session->GetPlayer()->GetPositionY();
+        creature_spawn->z = session->GetPlayer()->GetPositionZ();
+        creature_spawn->o = session->GetPlayer()->GetOrientation();
+        creature_spawn->emote_state = 0;
+        creature_spawn->flags = creature_properties->NPCFLags;
+        creature_spawn->factionid = creature_properties->Faction;
+        creature_spawn->bytes0 = creature_spawn->setbyte(0, 2, gender);
+        creature_spawn->bytes1 = 0;
+        creature_spawn->bytes2 = 0;
+        creature_spawn->stand_state = 0;
+        creature_spawn->death_state = 0;
+        creature_spawn->channel_target_creature = creature_spawn->channel_target_go = creature_spawn->channel_spell = 0;
+        creature_spawn->MountedDisplayID = 0;
+
+        creature_spawn->Item1SlotEntry = creature_properties->itemslot_1;
+        creature_spawn->Item2SlotEntry = creature_properties->itemslot_2;
+        creature_spawn->Item3SlotEntry = creature_properties->itemslot_3;
+
+        creature_spawn->Item1SlotDisplay = sMySQLStore.getItemDisplayIdForEntry(creature_spawn->Item1SlotEntry);
+        creature_spawn->Item2SlotDisplay = sMySQLStore.getItemDisplayIdForEntry(creature_spawn->Item2SlotEntry);
+        creature_spawn->Item3SlotDisplay = sMySQLStore.getItemDisplayIdForEntry(creature_spawn->Item3SlotEntry);
+        creature_spawn->CanFly = 0;
+        creature_spawn->phase = session->GetPlayer()->GetPhase();
+
+        if (auto creature = session->GetPlayer()->getWorldMap()->createCreature(entry))
+        {
+            creature->Load(creature_spawn, 0, nullptr);
+            creature->m_loadedFromDB = true;
+            creature->PushToWorld(session->GetPlayer()->getWorldMap());
+
+            // Add to map
+            uint32 x = session->GetPlayer()->getWorldMap()->getPosX(session->GetPlayer()->GetPositionX());
+            uint32 y = session->GetPlayer()->getWorldMap()->getPosY(session->GetPlayer()->GetPositionY());
+            session->GetPlayer()->getWorldMap()->getBaseMap()->getSpawnsListAndCreate(x, y)->CreatureSpawns.push_back(creature_spawn);
+            MapCell* map_cell = session->GetPlayer()->getWorldMap()->getCell(x, y);
+            if (map_cell != nullptr)
+                map_cell->setLoaded();
+
+            for (auto aiSpells : creature->getAIInterface()->mCreatureAISpells)
+            {
+                if (aiSpells->fromDB)
+                    continue;
+
+                float chance = aiSpells->mCastChance;
+                uint32_t spell = aiSpells->mSpellInfo->getId();
+                uint32_t spelltype = aiSpells->spell_type;
+                uint32_t target = aiSpells->mTargetType;
+                uint32_t cooldown = aiSpells->mCooldown;
+                if (cooldown == 0xFFFFFFFF) //4294967295
+                    cooldown = 10000;
+
+                std::string remove = "'";
+                std::string name = sMySQLStore.getCreatureProperties(entry)->Name;
+                name.erase(std::remove_if(name.begin(), name.end(),
+                    [&remove](const char& c) {
+                        return remove.find(c) != std::string::npos;
+                    }),
+                    name.end());
+
+                std::string spellname = aiSpells->mSpellInfo->getName();
+                spellname.erase(std::remove_if(spellname.begin(), spellname.end(),
+                    [&remove](const char& c) {
+                        return remove.find(c) != std::string::npos;
+                    }),
+                    spellname.end());
+
+                std::string comment = name + " - " + spellname;
+
+                char my_insert1[700];
+                sprintf(my_insert1, "INSERT INTO creature_ai_scripts_%s VALUES (5875,12340,%u,4,0,5,1,0,%f,%u,%u,0,%u,%u,%u,0,100,0,0,'%s')", args, entry, chance, spell, spelltype, target, cooldown, cooldown, comment.c_str());
+
+                WorldDatabase.Execute(my_insert1);
+                ++count;
+            }
+
+            creature->RemoveFromWorld(false, true);
+        }
+    }
+
+    SystemMessage(session, "Dumped: %u hardcoded scripts to creature_ai_scripts_dump", count);
+
+    return true;
+}
 
 bool ChatHandler::HandleDoPercentDamageCommand(const char* args, WorldSession* session)
 {
@@ -23,7 +160,7 @@ bool ChatHandler::HandleDoPercentDamageCommand(const char* args, WorldSession* s
 
     uint32_t health = selected_unit->getHealth();
 
-    uint32_t calculatedDamage = static_cast<uint32_t>((health / 100) * percentDamage);
+    uint32_t calculatedDamage = health / 100 * percentDamage;
 
     selected_unit->takeDamage(session->GetPlayer(), calculatedDamage, 0);
 
@@ -54,7 +191,7 @@ bool ChatHandler::HandleAiChargeCommand(const char* /*args*/, WorldSession* sess
     if (selected_unit == nullptr)
         return true;
 
-    selected_unit->GetAIInterface()->splineMoveCharge(session->GetPlayer());
+    selected_unit->getMovementManager()->moveCharge(session->GetPlayer()->GetPositionX(), session->GetPlayer()->GetPositionY(), session->GetPlayer()->GetPositionZ());
     return true;
 }
 
@@ -66,7 +203,7 @@ bool ChatHandler::HandleAiKnockbackCommand(const char* /*args*/, WorldSession* s
 
     LocationVector pos = session->GetPlayer()->GetPosition();
 
-    selected_unit->GetAIInterface()->splineMoveKnockback(pos.x, pos.y, pos.z, 10.0f, 5.f);
+    selected_unit->getMovementManager()->moveKnockbackFrom(pos.x, pos.y, 10.0f, 5.f);
     return true;
 }
 
@@ -78,7 +215,7 @@ bool ChatHandler::HandleAiJumpCommand(const char* /*args*/, WorldSession* sessio
 
     LocationVector pos = session->GetPlayer()->GetPosition();
 
-    selected_unit->GetAIInterface()->splineMoveJump(pos.x, pos.y, pos.z, 0, 5.0f, false);
+    selected_unit->getMovementManager()->moveJump(pos, 1.0f, 5.0f);
     return true;
 }
 
@@ -88,9 +225,7 @@ bool ChatHandler::HandleAiFallingCommand(const char* /*args*/, WorldSession* ses
     if (selected_unit == nullptr)
         return true;
 
-    LocationVector pos = session->GetPlayer()->GetPosition();
-
-    selected_unit->GetAIInterface()->splineMoveFalling(pos.x, pos.y, pos.z);
+    selected_unit->getMovementManager()->moveFall();
     return true;
 }
 
@@ -100,8 +235,8 @@ bool ChatHandler::HandleMoveToSpawnCommand(const char* /*args*/, WorldSession* s
     if (selected_unit == nullptr)
         return true;
 
-    LocationVector spawnPos = selected_unit->GetSpawnPosition();
-    selected_unit->GetAIInterface()->generateAndSendSplinePath(spawnPos.x, spawnPos.y, spawnPos.z, spawnPos.o);
+    selected_unit->getMovementManager()->moveTargetedHome();
+
     return true;
 }
 
@@ -162,17 +297,9 @@ bool ChatHandler::HandleDebugMoveInfo(const char* /*args*/, WorldSession* m_sess
     bool in_front_of_creature = m_session->GetPlayer()->isInFront(selected_unit);
     float distance_to_creature = m_session->GetPlayer()->CalcDistance(selected_unit);
 
-    uint32 creature_state = selected_unit->GetAIInterface()->getCreatureState();
-    uint32 ai_state = selected_unit->GetAIInterface()->getAiState();
-    uint32 ai_type = selected_unit->GetAIInterface()->getAiScriptType();
-    uint32 ai_agent = selected_unit->GetAIInterface()->getCurrentAgent();
+    uint32 ai_agent = selected_unit->getAIInterface()->getCurrentAgent();
 
-    uint32 current_wp = selected_unit->GetAIInterface()->getCurrentWayPointId();
-    uint32 wp_script_type = selected_unit->GetAIInterface()->getWaypointScriptType();
-
-    uint32 walk_mode = selected_unit->GetAIInterface()->getWalkMode();
-
-    uint32 attackerscount = static_cast<uint32>(selected_unit->GetAIInterface()->getAITargetsCount());
+    uint32 attackerscount = static_cast<uint32>(selected_unit->getThreatManager().getThreatListSize());
 
     if (selected_unit->isCreature())
         BlueSystemMessage(m_session, "Showing creature moveinfo for %s", static_cast<Creature*>(selected_unit)->GetCreatureProperties()->Name.c_str());
@@ -184,15 +311,11 @@ bool ChatHandler::HandleDebugMoveInfo(const char* /*args*/, WorldSession* m_sess
     SystemMessage(m_session, "In front of the target: %u", in_front_of_creature);
     SystemMessage(m_session, "Current distance to target: %f", distance_to_creature);
     SystemMessage(m_session, "=== States ===");
-    SystemMessage(m_session, "Current state: %u", creature_state);
-    SystemMessage(m_session, "Current AI state: %u | AIType: %u | AIAgent: %u", ai_state, ai_type, ai_agent);
-    SystemMessage(m_session, "Current waypoint id: %u | wp script type: %u", current_wp, wp_script_type);
-    SystemMessage(m_session, "Walkmode: %u", walk_mode);
+    SystemMessage(m_session, "AIAgent: %u", ai_agent);
     SystemMessage(m_session, "=== Misc ===");
     SystemMessage(m_session, "Attackers count: %u", attackerscount);
     SystemMessage(m_session, "=== UnitMovementFlags ===");
     SystemMessage(m_session, "MovementFlags: %u", selected_unit->getUnitMovementFlags());
-
     return true;
 }
 
@@ -260,16 +383,13 @@ bool ChatHandler::HandleDebugFly(const char* /*args*/, WorldSession* m_session)
     if (selected_creature->hasUnitMovementFlag(MOVEFLAG_CAN_FLY))
     {
         GreenSystemMessage(m_session, "Unset Fly for creature %s.", selected_creature->GetCreatureProperties()->Name.c_str());
-        selected_creature->GetAIInterface()->unsetSplineFlying();
         selected_creature->setMoveCanFly(false);
     }
     else
     {
         GreenSystemMessage(m_session, "Set Fly for creature %s.", selected_creature->GetCreatureProperties()->Name.c_str());
-        selected_creature->GetAIInterface()->setSplineFlying();
         selected_creature->setMoveCanFly(true);
     }
-
     return true;
 }
 
@@ -479,7 +599,7 @@ bool ChatHandler::HandlePlayMovie(const char* args, WorldSession* m_session)
     selected_player->sendMovie(movie);
 
     if (selected_player != m_session->GetPlayer())
-        GreenSystemMessage(selected_player->GetSession(), "Movie started for player %s", selected_player->getName().c_str());
+        GreenSystemMessage(selected_player->getSession(), "Movie started for player %s", selected_player->getName().c_str());
 
     return true;
 }
@@ -510,7 +630,6 @@ bool ChatHandler::HandleDebugSendCreatureMove(const char* /*args*/, WorldSession
         return true;
     }
 
-    target->getMovementAI().moveTo(m_session->GetPlayer()->GetPosition());
     return true;
 }
 

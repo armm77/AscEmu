@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,26 +19,26 @@
  *
  */
 
-#include "StdAfx.h"
+
 
 #include "WorldConf.h"
 #include "Management/GameEvent.h"
-#include "Management/Item.h"
+#include "Objects/Item.hpp"
 #include "Storage/MySQLDataStore.hpp"
 #include <git_version.h>
 
 #include <fstream>
-#include <mutex>
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Spell/SpellAuras.h"
-#include "Spell/SpellMgr.h"
-#include "Objects/ObjectMgr.h"
+#include "Spell/SpellMgr.hpp"
+#include "Management/ObjectMgr.h"
 #include "ScriptMgr.h"
-#include "Map/MapScriptInterface.h"
-#include "Objects/Faction.h"
+#include "Map/Maps/MapScriptInterface.h"
 #include "Common.hpp"
+#include "CreatureAIScript.h"
 #include "Management/LFG/LFGMgr.hpp"
 #include "Server/Packets/SmsgUpdateInstanceEncounterUnit.h"
+#include "Spell/Definitions/SpellEffects.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -50,6 +50,17 @@ ScriptMgr& ScriptMgr::getInstance()
     static ScriptMgr mInstance;
     return mInstance;
 }
+
+#ifdef FT_ACHIEVEMENTS
+bool ScriptMgr::callScriptedAchievementCriteriaCanComplete(uint32_t criteriaId, Player* player, Object* target) const
+{
+    const auto achievementCriteriaScript = getAchievementCriteriaScript(criteriaId);
+    if (achievementCriteriaScript == nullptr)
+        return true;
+
+    return achievementCriteriaScript->canCompleteCriteria(criteriaId, player, target);
+}
+#endif
 
 SpellCastResult ScriptMgr::callScriptedSpellCanCast(Spell* spell, uint32_t* parameter1, uint32_t* parameter2) const
 {
@@ -112,6 +123,15 @@ SpellScriptExecuteState ScriptMgr::callScriptedSpellBeforeSpellEffect(Spell* spe
         return SpellScriptExecuteState::EXECUTE_NOT_HANDLED;
 
     return spellScript->beforeSpellEffect(spell, effectIndex);
+}
+
+SpellScriptCheckDummy ScriptMgr::callScriptedSpellOnDummyOrScriptedEffect(Spell* spell, uint8_t effectIndex) const
+{
+    const auto spellScript = getSpellScript(spell->getSpellInfo()->getId());
+    if (spellScript == nullptr)
+        return SpellScriptCheckDummy::DUMMY_NOT_HANDLED;
+
+    return spellScript->onDummyOrScriptedEffect(spell, effectIndex);
 }
 
 void ScriptMgr::callScriptedSpellAfterSpellEffect(Spell* spell, uint8_t effectIndex)
@@ -268,9 +288,48 @@ SpellScriptExecuteState ScriptMgr::callScriptedSpellProcCastSpell(SpellProc* spe
     return spellScript->onCastProcSpell(spellProc, caster, victim, spellToProc);
 }
 
+#ifdef FT_ACHIEVEMENTS
+AchievementCriteriaScript* ScriptMgr::getAchievementCriteriaScript(uint32_t criteriaId) const
+{
+    for (const auto& itr : _achievementCriteriaScripts)
+    {
+        if (itr.first == criteriaId)
+            return itr.second;
+    }
+
+    return nullptr;
+}
+
+void ScriptMgr::register_achievement_criteria_script(uint32_t criteriaId, AchievementCriteriaScript* acs)
+{
+    const auto criteriaEntry = sAchievementCriteriaStore.LookupEntry(criteriaId);
+    if (criteriaEntry == nullptr)
+    {
+        sLogger.failure("ScriptMgr tried to register a script for achievement criteria id %u but criteria does not exist!", criteriaId);
+        return;
+    }
+
+    if (_achievementCriteriaScripts.find(criteriaId) != _achievementCriteriaScripts.end())
+    {
+        sLogger.debug("ScriptMgr tried to register a script for achievement criteria id %u but this criteria has already one.", criteriaId);
+        return;
+    }
+
+    _achievementCriteriaScripts[criteriaId] = acs;
+}
+
+void ScriptMgr::register_achievement_criteria_script(uint32_t* criteriaIds, AchievementCriteriaScript* acs)
+{
+    for (uint32_t i = 0; criteriaIds[i] != 0; ++i)
+    {
+        register_achievement_criteria_script(criteriaIds[i], acs);
+    }
+}
+#endif
+
 SpellScript* ScriptMgr::getSpellScript(uint32_t spellId) const
 {
-    for (const auto& itr : _spellscripts)
+    for (const auto& itr : _spellScripts)
     {
         if (itr.first == spellId)
             return itr.second;
@@ -279,7 +338,7 @@ SpellScript* ScriptMgr::getSpellScript(uint32_t spellId) const
     return nullptr;
 }
 
-void ScriptMgr::register_spell_script(uint32_t spellId, SpellScript* ss)
+void ScriptMgr::register_spell_script(uint32_t spellId, SpellScript* ss, bool registerAllDifficulties/* = true*/)
 {
     const auto spellInfo = sSpellMgr.getSpellInfo(spellId);
     if (spellInfo == nullptr)
@@ -288,13 +347,28 @@ void ScriptMgr::register_spell_script(uint32_t spellId, SpellScript* ss)
         return;
     }
 
-    if (_spellscripts.find(spellId) != _spellscripts.end())
+    if (registerAllDifficulties)
     {
-        sLogger.debug("ScriptMgr tried to register a script for spell id %u but this spell has already one.", spellId);
-        return;
+        if (spellInfo->getSpellDifficultyID() != 0)
+        {
+            uint8_t registeredSpells = 0;
+            for (uint8_t i = 0; i < InstanceDifficulty::MAX_DIFFICULTY; ++i)
+            {
+                const auto spellDifficultyInfo = sSpellMgr.getSpellInfoByDifficulty(spellInfo->getSpellDifficultyID(), i);
+                if (spellDifficultyInfo == nullptr)
+                    continue;
+
+                _register_spell_script(spellDifficultyInfo->getId(), ss);
+                ++registeredSpells;
+            }
+
+            // Make sure to register at least the original spell
+            if (registeredSpells > 0)
+                return;
+        }
     }
 
-    _spellscripts[spellId] = ss;
+    _register_spell_script(spellId, ss);
 }
 
 void ScriptMgr::register_spell_script(uint32_t* spellIds, SpellScript* ss)
@@ -303,6 +377,17 @@ void ScriptMgr::register_spell_script(uint32_t* spellIds, SpellScript* ss)
     {
         register_spell_script(spellIds[i], ss);
     }
+}
+
+void ScriptMgr::_register_spell_script(uint32_t spellId, SpellScript* ss)
+{
+    if (_spellScripts.find(spellId) != _spellScripts.end())
+    {
+        sLogger.debug("ScriptMgr tried to register a script for spell id %u but this spell has already one.", spellId);
+        return;
+    }
+
+    _spellScripts[spellId] = ss;
 }
 
 // MIT End
@@ -439,9 +524,13 @@ void ScriptMgr::UnloadScripts()
         delete *itr;
     _questscripts.clear();
 
-    for (auto& itr : _spellscripts)
-        delete itr.second;
-    _spellscripts.clear();
+#ifdef FT_ACHIEVEMENTS
+    for (auto itr = _achievementCriteriaScripts.begin(); itr != _achievementCriteriaScripts.end();)
+        itr = _achievementCriteriaScripts.erase(itr);
+#endif
+
+    for (auto itr = _spellScripts.begin(); itr != _spellScripts.end();)
+        itr = _spellScripts.erase(itr);
 
     UnloadScriptEngines();
 
@@ -479,7 +568,7 @@ void ScriptMgr::DumpUnimplementedSpells()
 
         std::stringstream ss;
         ss << sp->getId();
-        ss << std::endl;
+        ss << "\n";
 
         of.write(ss.str().c_str(), ss.str().length());
 
@@ -512,7 +601,7 @@ void ScriptMgr::DumpUnimplementedSpells()
 
         std::stringstream ss;
         ss << sp->getId();
-        ss << std::endl;
+        ss << "\n";
 
         of2.write(ss.str().c_str(), ss.str().length());
 
@@ -577,12 +666,14 @@ void ScriptMgr::register_dummy_aura(uint32 entry, exp_handle_dummy_aura callback
     SpellInfo const* sp = sSpellMgr.getSpellInfo(entry);
     if (sp == NULL)
     {
-        sLogger.debug("ScriptMgr tried to register a dummy aura handler for invalid Spell ID: %u.", entry);
+        sLogger.debugFlag(AscEmu::Logging::LF_SPELL, "ScriptMgr tried to register a dummy aura handler for invalid Spell ID: %u.", entry);
         return;
     }
 
+#if VERSION_STRING >= TBC
     if (!sp->hasEffectApplyAuraName(SPELL_AURA_DUMMY) && !sp->hasEffectApplyAuraName(SPELL_AURA_PERIODIC_TRIGGER_DUMMY))
-        sLogger.debug("ScriptMgr registered a dummy aura handler for Spell ID: %u (%s), but spell has no dummy aura!", entry, sp->getName().c_str());
+        sLogger.debugFlag(AscEmu::Logging::LF_SPELL, "ScriptMgr registered a dummy aura handler for Spell ID: %u (%s), but spell has no dummy aura!", entry, sp->getName().c_str());
+#endif
 
     _auras.insert(HandleDummyAuraMap::value_type(entry, callback));
 }
@@ -591,19 +682,19 @@ void ScriptMgr::register_dummy_spell(uint32 entry, exp_handle_dummy_spell callba
 {
     if (_spells.find(entry) != _spells.end())
     {
-        sLogger.debug("ScriptMgr tried to register a script for Spell ID: %u but this spell has already one", entry);
+        sLogger.debugFlag(AscEmu::Logging::LF_SPELL, "ScriptMgr tried to register a script for Spell ID: %u but this spell has already one", entry);
         return;
     }
 
     SpellInfo const* sp = sSpellMgr.getSpellInfo(entry);
     if (sp == NULL)
     {
-        sLogger.debug("ScriptMgr tried to register a dummy handler for invalid Spell ID: %u.", entry);
+        sLogger.debugFlag(AscEmu::Logging::LF_SPELL, "ScriptMgr tried to register a dummy handler for invalid Spell ID: %u.", entry);
         return;
     }
 
     if (!sp->hasEffect(SPELL_EFFECT_DUMMY) && !sp->hasEffect(SPELL_EFFECT_SCRIPT_EFFECT) && !sp->hasEffect(SPELL_EFFECT_SEND_EVENT))
-        sLogger.debug("ScriptMgr registered a dummy handler for Spell ID: %u (%s), but spell has no dummy/script/send event effect!", entry, sp->getName().c_str());
+        sLogger.debugFlag(AscEmu::Logging::LF_SPELL_EFF, "ScriptMgr registered a dummy handler for Spell ID: %u (%s), but spell has no dummy/script/send event effect!", entry, sp->getName().c_str());
 
     _spells.insert(HandleDummySpellMap::value_type(entry, callback));
 }
@@ -693,19 +784,19 @@ void ScriptMgr::register_script_effect(uint32 entry, exp_handle_script_effect ca
 
     if (itr != SpellScriptEffects.end())
     {
-        sLogger.debug("ScriptMgr tried to register more than 1 script effect handlers for Spell %u", entry);
+        sLogger.debugFlag(AscEmu::Logging::LF_SPELL_EFF, "ScriptMgr tried to register more than 1 script effect handlers for Spell %u", entry);
         return;
     }
 
     SpellInfo const* sp = sSpellMgr.getSpellInfo(entry);
     if (sp == NULL)
     {
-        sLogger.debug("ScriptMgr tried to register a script effect handler for invalid Spell %u.", entry);
+        sLogger.debugFlag(AscEmu::Logging::LF_SPELL_EFF, "ScriptMgr tried to register a script effect handler for invalid Spell %u.", entry);
         return;
     }
 
     if (!sp->hasEffect(SPELL_EFFECT_SCRIPT_EFFECT) && !sp->hasEffect(SPELL_EFFECT_SEND_EVENT))
-        sLogger.debug("ScriptMgr registered a script effect handler for Spell ID: %u (%s), but spell has no scripted effect!", entry, sp->getName().c_str());
+        sLogger.debugFlag(AscEmu::Logging::LF_SPELL_EFF, "ScriptMgr registered a script effect handler for Spell ID: %u (%s), but spell has no scripted effect!", entry, sp->getName().c_str());
 
     SpellScriptEffects.insert(std::pair< uint32, exp_handle_script_effect >(entry, callback));
 }
@@ -735,9 +826,9 @@ GameObjectAIScript* ScriptMgr::CreateAIScriptClassForGameObject(uint32 /*uEntryI
     return (function_ptr)(pGameObject);
 }
 
-InstanceScript* ScriptMgr::CreateScriptClassForInstance(uint32 /*pMapId*/, MapMgr* pMapMgr)
+InstanceScript* ScriptMgr::CreateScriptClassForInstance(uint32 /*pMapId*/, WorldMap* pMapMgr)
 {
-    InstanceCreateMap::iterator Iter = mInstances.find(pMapMgr->GetMapId());
+    InstanceCreateMap::iterator Iter = mInstances.find(pMapMgr->getBaseMap()->getMapId());
     if (Iter == mInstances.end())
         return NULL;
     exp_create_instance_ai function_ptr = Iter->second;
@@ -796,10 +887,6 @@ TargetType::TargetType(uint32_t pTargetGen, TargetFilter pTargetFilter, uint32_t
     mTargetNumber[1] = pMaxTargetNumber;
 }
 
-TargetType::~TargetType()
-{
-}
-
 /* GameObjectAI Stuff */
 
 GameObjectAIScript::GameObjectAIScript(GameObject* goinstance) : _gameobject(goinstance)
@@ -821,13 +908,28 @@ void GameObjectAIScript::RegisterAIUpdateEvent(uint32_t frequency)
     sEventMgr.AddEvent(_gameobject, &GameObject::CallScriptUpdate, EVENT_SCRIPT_UPDATE_EVENT, frequency, 0, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////
+// instance
+InstanceScript* GameObjectAIScript::getInstanceScript()
+{
+    WorldMap* mapMgr = _gameobject->getWorldMap();
+    return (mapMgr) ? mapMgr->getScript() : nullptr;
+}
+
+bool GameObjectAIScript::_isHeroic()
+{
+    WorldMap* mapMgr = _gameobject->getWorldMap();
+    if (mapMgr == nullptr || mapMgr->getDifficulty() != InstanceDifficulty::DUNGEON_HEROIC)
+        return false;
+
+    return true;
+}
+
 /* InstanceAI Stuff */
 
-InstanceScript::InstanceScript(MapMgr* pMapMgr) : mInstance(pMapMgr), mSpawnsCreated(false), mTimerCount(0), mUpdateFrequency(defaultUpdateFrequency)
+InstanceScript::InstanceScript(WorldMap* pMapMgr) : mInstance(pMapMgr), mSpawnsCreated(false), mTimerCount(0), mUpdateFrequency(defaultUpdateFrequency)
 {
-    Difficulty = pMapMgr->pInstance->m_difficulty;
-
-    generateBossDataState();
+    Difficulty = pMapMgr->getDifficulty();
     registerUpdateEvent();
 }
 
@@ -835,58 +937,17 @@ InstanceScript::InstanceScript(MapMgr* pMapMgr) : mInstance(pMapMgr), mSpawnsCre
 //////////////////////////////////////////////////////////////////////////////////////////
 // data
 
-void InstanceScript::addData(uint32_t data, uint32_t state /*= NotStarted*/)
-{
-    auto Iter = mInstanceData.find(data);
-    if (Iter == mInstanceData.end())
-        mInstanceData.insert(std::pair<uint32_t, uint32_t>(data, state));
-    else
-        sLogger.debug("InstanceScript::addData - tried to set state for entry %u. The entry is already available with a state!", data);
-}
-
-void InstanceScript::setData(uint32_t data, uint32_t state)
-{
-    auto Iter = mInstanceData.find(data);
-    if (Iter != mInstanceData.end())
-    {
-        Iter->second = state;
-        OnEncounterStateChange(data, state);
-    }
-    else
-        sLogger.debug("InstanceScript::setData - tried to set state for entry %u on map %u. The entry is not defined in table instance_bosses or manually to handle states!", data, mInstance->GetMapId());
-}
-
-uint32_t InstanceScript::getData(uint32_t data)
-{
-    auto Iter = mInstanceData.find(data);
-    if (Iter != mInstanceData.end())
-        return Iter->second;
-
-    return InvalidState;
-}
-
-bool InstanceScript::isDataStateFinished(uint32_t data)
-{
-    return getData(data) == Finished;
-}
-
 //used for debug
-std::string InstanceScript::getDataStateString(uint32_t bossEntry)
+std::string InstanceScript::getDataStateString(uint8_t state)
 {
-    uint32_t eState = NotStarted;
-
-    auto it = mInstanceData.find(bossEntry);
-    if (it != mInstanceData.end())
-        eState = it->second;
-
-    switch (eState)
+    switch (state)
     {
         case NotStarted:
             return "Not started";
         case InProgress:
             return "In Progress";
-        case Finished:
-            return "Finished";
+        case Failed:
+            return "Failed";
         case Performed:
             return "Performed";
         case PreProgress:
@@ -897,55 +958,225 @@ std::string InstanceScript::getDataStateString(uint32_t bossEntry)
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// Instance Script Data Fast Access
+void InstanceScript::setupInstanceData(ObjectData const* creatureData, ObjectData const* gameObjectData)
+{
+    if (creatureData)
+        setupObjectData(creatureData, _creatureInfo);
+
+    if (gameObjectData)
+        setupObjectData(gameObjectData, _gameObjectInfo);
+}
+
+void InstanceScript::setupObjectData(ObjectData const* data, ObjectInfoMap& objectInfo)
+{
+    while (data->entry)
+    {
+        ASSERT(objectInfo.find(data->entry) == objectInfo.end());
+        objectInfo[data->entry] = data->type;
+        ++data;
+    }
+}
+void InstanceScript::addObject(Object* obj)
+{
+    WoWGuid guid = obj->getGuid();
+
+    if (obj->isCreature())
+    {
+        ObjectInfoMap::const_iterator j = _creatureInfo.find(obj->getEntry());
+        if (j != _creatureInfo.end())
+            _objectGuids[j->second] = guid.getGuidLowPart();
+    }
+    else if (obj->isGameObject())
+    {
+        ObjectInfoMap::const_iterator j = _gameObjectInfo.find(obj->getEntry());
+        if (j != _gameObjectInfo.end())
+            _objectGuids[j->second] = guid.getGuidLowPart();
+    }
+}
+
+void InstanceScript::removeObject(Object* obj)
+{
+    WoWGuid guid = obj->getGuid();
+
+    if (obj->isCreature())
+    {
+        ObjectInfoMap::const_iterator j = _creatureInfo.find(obj->getEntry());
+        if (j != _creatureInfo.end())
+        {
+            ObjectGuidMap::iterator i = _objectGuids.find(j->second);
+            if (i != _objectGuids.end() && i->second == guid.getGuidLowPart())
+                _objectGuids.erase(i);
+        }
+    }
+    else if (obj->isGameObject())
+    {
+        ObjectInfoMap::const_iterator j = _gameObjectInfo.find(obj->getEntry());
+        if (j != _gameObjectInfo.end())
+        {
+            ObjectGuidMap::iterator i = _objectGuids.find(j->second);
+            if (i != _objectGuids.end() && i->second == guid.getGuidLowPart())
+                _objectGuids.erase(i);
+        }
+    }
+}
+
+uint32_t InstanceScript::getGuidFromData(uint32_t type)
+{
+    ObjectGuidMap::const_iterator i = _objectGuids.find(type);
+    if (i != _objectGuids.end())
+        return i->second;
+
+    return 0;
+}
+
+Creature* InstanceScript::getCreatureFromData(uint32_t type)
+{
+    return GetCreatureByGuid(getGuidFromData(type));
+}
+
+GameObject* InstanceScript::getGameObjectFromData(uint32_t type)
+{
+    return GetGameObjectByGuid(getGuidFromData(type));
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////
 // encounters
+void InstanceScript::generateBossDataState()
+{
+    const auto* encounters = sObjectMgr.GetDungeonEncounterList(getWorldMap()->getBaseMap()->getMapId(), getWorldMap()->getDifficulty());
+    uint32_t i = 0;
+
+    for (DungeonEncounterList::const_iterator itr = encounters->begin(); itr != encounters->end(); ++itr, ++i)
+    {
+        DungeonEncounter const* encounter = *itr;
+
+        BossInfo* bossInfo = &bosses[i];
+        bossInfo->entry = encounter->creditEntry;
+        bossInfo->state = NotStarted;
+    }
+
+    // Set States
+    for (i = 0; i < bosses.size(); ++i)
+        setBossState(i, NotStarted);
+}
+
+bool InstanceScript::setBossState(uint32_t id, EncounterStates state)
+{
+    if (id < bosses.size())
+    {
+        BossInfo* bossInfo = &bosses[id];
+        if (bossInfo->state == InvalidState) // loading
+        {
+            bossInfo->state = state;
+            return false;
+        }
+        else
+        {
+            if (bossInfo->state == state)
+                return false;
+
+            if (bossInfo->state == Performed)
+            {
+                return false;
+            }
+
+            bossInfo->state = state;
+            saveToDB();
+        }
+
+        OnEncounterStateChange(id, state);
+
+        if (state == NotStarted)
+            getInstance()->respawnBossLinkedGroups(bossInfo->entry);
+
+        return true;
+    }
+    return false;
+}
+
+void InstanceScript::saveToDB()
+{
+    std::string data = getSaveData();
+    if (data.empty())
+        return;
+
+    CharacterDatabase.Execute("UPDATE instance SET completedEncounters=%u, data=\'%s\' WHERE id=%u", getCompletedEncounterMask(), data.c_str(), mInstance->getInstanceId());
+}
+
+void InstanceScript::loadSavedInstanceData(char const* data)
+{
+    if (!data)
+    {
+        sLogger.failure("Unable to load Saved Instance Data for Instance %s (Map %d, Instance Id: %d).", mInstance->getBaseMap()->getMapName().c_str(), mInstance->getBaseMap()->getMapId(), mInstance->getInstanceId());
+        return;
+    }
+
+    std::istringstream loadStream(data);
+
+    readSaveDataBossStates(loadStream);
+    readSaveDataExtended(loadStream);
+
+    sLogger.debug("Saved Instance Data Loaded for Instance %s (Map %d, Instance Id: %d) is complete.", mInstance->getBaseMap()->getMapName().c_str(), mInstance->getBaseMap()->getMapId(), mInstance->getInstanceId());
+}
+
+void InstanceScript::readSaveDataBossStates(std::istringstream& data)
+{
+    const auto* encounters = sObjectMgr.GetDungeonEncounterList(getWorldMap()->getBaseMap()->getMapId(), getWorldMap()->getDifficulty());
+    size_t i = 0;
+
+    for (DungeonEncounterList::const_iterator itr = encounters->begin(); itr != encounters->end(); ++itr, ++i)
+    {
+        DungeonEncounter const* encounter = *itr;
+
+        BossInfo* bossInfo = &bosses[i];
+        bossInfo->entry = encounter->creditEntry;
+    }
+
+    uint32_t bossId = 0;
+    for (std::vector<BossInfo>::iterator itr = bosses.begin(); itr != bosses.end(); ++itr, ++bossId)
+    {
+        uint32_t buff;
+        data >> buff;
+        if (buff == InProgress || buff == Failed || buff == PreProgress)
+            buff = NotStarted;
+
+        if (buff < InvalidState)
+        {
+            setBossState(bossId, EncounterStates(buff));
+        }
+    }
+}
+
+void InstanceScript::writeSaveDataBossStates(std::ostringstream& data)
+{
+    for (auto const& bossInfo : bosses)
+        data << uint32_t(bossInfo.state) << ' ';
+}
+
+std::string InstanceScript::getSaveData()
+{
+    std::ostringstream saveStream;
+
+    writeSaveDataBossStates(saveStream);
+    writeSaveDataExtended(saveStream);
+
+    return saveStream.str();
+}
+
 #if VERSION_STRING >= WotLK
-void InstanceScript::generateBossDataState()
+void InstanceScript::updateEncounterState(EncounterCreditType type, uint32_t creditEntry)
 {
-    auto encounters = sObjectMgr.GetDungeonEncounterList(mInstance->GetMapId(), mInstance->pInstance->m_difficulty);
-
-    if (encounters != nullptr)
-    {
-        completedEncounters = 0;
-
-        for (DungeonEncounterList::const_iterator itr = encounters->begin(); itr != encounters->end(); ++itr)
-        {
-            DungeonEncounter const* encounter = *itr;
-            if (encounter->creditType == ENCOUNTER_CREDIT_KILL_CREATURE)
-            {
-                CreatureProperties const* creature = sMySQLStore.getCreatureProperties(encounter->creditEntry);
-                if (creature == nullptr)
-                    sLogger.failure("Your instance_encounters table includes invalid data for boss entry %u!", encounter->creditEntry);
-                else
-                    mInstanceData.insert(std::pair<uint32_t, uint32_t>(encounter->creditEntry, NotStarted));
-            }           
-        }
-
-        for (const auto& killedNpc : mInstance->pInstance->m_killedNpcs)
-        {
-            for (DungeonEncounterList::const_iterator itr = encounters->begin(); itr != encounters->end(); ++itr)
-            {
-                DungeonEncounter const* encounter = *itr;
-                if (encounter->creditType == ENCOUNTER_CREDIT_KILL_CREATURE && encounter->creditEntry == killedNpc)
-                    setData(encounter->creditEntry, Finished);
-            }
-        }
-    }
-
-    sLogger.debug("InstanceScript::generateBossDataState() - Boss State generated for map %u.", mInstance->GetMapId());
-}
-
-void InstanceScript::UpdateEncountersStateForCreature(uint32_t creditEntry, uint8_t difficulty)
-{
-    DungeonEncounterList const* encounters = sObjectMgr.GetDungeonEncounterList(mInstance->GetMapId(), difficulty);
+    DungeonEncounterList const* encounters = sObjectMgr.GetDungeonEncounterList(mInstance->getBaseMap()->getMapId(), mInstance->getDifficulty());
     if (!encounters)
         return;
 
-    uint32 dungeonId = 0;
+    uint32_t dungeonId = 0;
 
-    for (DungeonEncounterList::const_iterator itr = encounters->begin(); itr != encounters->end(); ++itr)
+    for (auto const& encounter : *encounters)
     {
-        DungeonEncounter const* encounter = *itr;
-        if (encounter->creditType == ENCOUNTER_CREDIT_KILL_CREATURE && encounter->creditEntry == creditEntry)
+        if (encounter->creditType == type && encounter->creditEntry == creditEntry)
         {
             completedEncounters |= 1 << encounter->dbcEntry->encounterIndex;
             if (encounter->lastEncounterDungeon)
@@ -958,108 +1189,58 @@ void InstanceScript::UpdateEncountersStateForCreature(uint32_t creditEntry, uint
 
     if (dungeonId)
     {
-        for (const auto& itr : mInstance->m_PlayerStorage)
+        for (auto const& ref : mInstance->getPlayers())
         {
-            Player* p = itr.second;
-            sLfgMgr.RewardDungeonDoneFor(dungeonId, p);
+            if (Player* player = ref.second)
+            {
+                if (Group* grp = player->getGroup())
+                {
+                    if (grp->isLFGGroup())
+                    {
+                        sLfgMgr.RewardDungeonDoneFor(dungeonId, player);
+                        return;
+                    }
+                }
+            }
         }
     }
 }
 
-void InstanceScript::UpdateEncountersStateForSpell(uint32_t creditEntry, uint8_t difficulty)
+void InstanceScript::updateEncountersStateForCreature(uint32_t creditEntry, uint8_t /*difficulty*/)
 {
-    DungeonEncounterList const* encounters = sObjectMgr.GetDungeonEncounterList(mInstance->GetMapId(), difficulty);
-    if (!encounters)
-        return;
-
-    uint32 dungeonId = 0;
-
-    for (DungeonEncounterList::const_iterator itr = encounters->begin(); itr != encounters->end(); ++itr)
-    {
-        DungeonEncounter const* encounter = *itr;
-        if (encounter->creditType == ENCOUNTER_CREDIT_CAST_SPELL && encounter->creditEntry == creditEntry)
-        {
-            completedEncounters |= 1 << encounter->dbcEntry->encounterIndex;
-            if (encounter->lastEncounterDungeon)
-            {
-                dungeonId = encounter->lastEncounterDungeon;
-                break;
-            }
-        }
-    }
-
-    if (dungeonId)
-    {
-        for (const auto& itr : mInstance->m_PlayerStorage)
-        {
-            Player* p = itr.second;
-            sLfgMgr.RewardDungeonDoneFor(dungeonId, p);
-        }
-    }
+    updateEncounterState(ENCOUNTER_CREDIT_KILL_CREATURE, creditEntry);
 }
-#endif
 
-#if VERSION_STRING <= TBC
-void InstanceScript::generateBossDataState()
+void InstanceScript::updateEncountersStateForSpell(uint32_t creditEntry, uint8_t /*difficulty*/)
 {
-    auto encounters = sObjectMgr.GetDungeonEncounterList(mInstance->GetMapId());
-
-    if (encounters != nullptr)
-    {
-        completedEncounters = 0;
-
-        for (DungeonEncounterList::const_iterator itr = encounters->begin(); itr != encounters->end(); ++itr)
-        {
-            DungeonEncounter const* encounter = *itr;
-            if (encounter->creditType == ENCOUNTER_CREDIT_KILL_CREATURE)
-            {
-                CreatureProperties const* creature = sMySQLStore.getCreatureProperties(encounter->creditEntry);
-                if (creature == nullptr)
-                    sLogger.failure("Your instance_encounters table includes invalid data for boss entry %u!", encounter->creditEntry);
-                else
-                    mInstanceData.insert(std::pair<uint32_t, uint32_t>(encounter->creditEntry, NotStarted));
-            }
-        }
-
-        for (const auto& killedNpc : mInstance->pInstance->m_killedNpcs)
-        {
-            for (DungeonEncounterList::const_iterator itr = encounters->begin(); itr != encounters->end(); ++itr)
-            {
-                DungeonEncounter const* encounter = *itr;
-                if (encounter->creditType == ENCOUNTER_CREDIT_KILL_CREATURE && encounter->creditEntry == killedNpc)
-                    setData(encounter->creditEntry, Finished);
-            }
-        }
-    }
-
-    sLogger.debug("InstanceScript::generateBossDataState() - Boss State generated for map %u.", mInstance->GetMapId());
+    updateEncounterState(ENCOUNTER_CREDIT_CAST_SPELL, creditEntry);
 }
 #endif
 
 void InstanceScript::sendUnitEncounter(uint32_t type, Unit* unit, uint8_t value_a, uint8_t value_b)
 {
-    MapMgr* instance = GetInstance();
-    instance->SendPacketToAllPlayers(SmsgUpdateInstanceEncounterUnit(type, unit ? unit->GetNewGUID() : WoWGuid(), value_a, value_b).serialise().get());
+    WorldMap* instance = getInstance();
+    instance->sendPacketToAllPlayers(SmsgUpdateInstanceEncounterUnit(type, unit ? unit->GetNewGUID() : WoWGuid(), value_a, value_b).serialise().get());
 }
 
 void InstanceScript::displayDataStateList(Player* player)
 {
-    player->BroadcastMessage("=== DataState for instance %s ===", mInstance->GetMapInfo()->name.c_str());
+    player->broadcastMessage("=== DataState for instance %s ===", mInstance->getBaseMap()->getMapInfo()->name.c_str());
 
-    for (const auto& encounter : mInstanceData)
+    for (const auto& encounters : bosses)
     {
-        CreatureProperties const* creature = sMySQLStore.getCreatureProperties(encounter.first);
+        CreatureProperties const* creature = sMySQLStore.getCreatureProperties(encounters.entry);
         if (creature != nullptr)
         {
-            player->BroadcastMessage("  Boss '%s' (%u) - %s", creature->Name.c_str(), encounter.first, getDataStateString(encounter.first).c_str());
+            player->broadcastMessage("  Boss '%s' (%u) - %s", creature->Name.c_str(), encounters.entry, getDataStateString(encounters.state).c_str());
         }
         else
         {
-            GameObjectProperties const* gameobject = sMySQLStore.getGameObjectProperties(encounter.first);
+            GameObjectProperties const* gameobject = sMySQLStore.getGameObjectProperties(encounters.entry);
             if (gameobject != nullptr)
-                player->BroadcastMessage("  Object '%s' (%u) - %s", gameobject->name.c_str(), encounter.first, getDataStateString(encounter.first).c_str());
+                player->broadcastMessage("  Object '%s' (%u) - %s", gameobject->name.c_str(), encounters.entry, getDataStateString(encounters.state).c_str());
             else
-                player->BroadcastMessage("  MiscData %u - %s", encounter.first, getDataStateString(encounter.first).c_str());
+                player->broadcastMessage("  MiscData %u - %s", encounters.entry, getDataStateString(encounters.state).c_str());
         }
     }
 }
@@ -1142,16 +1323,16 @@ void InstanceScript::updateTimers()
 
 void InstanceScript::displayTimerList(Player* player)
 {
-    player->BroadcastMessage("=== Timers for instance %s ===", mInstance->GetMapInfo()->name.c_str());
+    player->broadcastMessage("=== Timers for instance %s ===", mInstance->getBaseMap()->getMapInfo()->name.c_str());
 
     if (mTimers.empty())
     {
-        player->BroadcastMessage("  No Timers available!");
+        player->broadcastMessage("  No Timers available!");
     }
     else
     {
         for (const auto& intTimer : mTimers)
-            player->BroadcastMessage("  TimerId (%u)  %u ms left", intTimer.first, intTimer.second);
+            player->broadcastMessage("  TimerId (%u)  %u ms left", intTimer.first, intTimer.second);
     }
 }
 
@@ -1160,7 +1341,7 @@ void InstanceScript::displayTimerList(Player* player)
 
 void InstanceScript::registerUpdateEvent()
 {
-    sEventMgr.AddEvent(mInstance, &MapMgr::CallScriptUpdate, EVENT_SCRIPT_UPDATE_EVENT, getUpdateFrequency(), 0, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+    sEventMgr.AddEvent(mInstance, &WorldMap::callScriptUpdate, EVENT_SCRIPT_UPDATE_EVENT, getUpdateFrequency(), 0, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
 }
 
 void InstanceScript::modifyUpdateEvent(uint32_t frequencyInMs)
@@ -1190,20 +1371,20 @@ void InstanceScript::setCellForcedStates(float xMin, float xMax, float yMin, flo
     {
         while (yMin < yMax)
         {
-            MapCell* CurrentCell = mInstance->GetCellByCoords(xMin, yMin);
+            MapCell* CurrentCell = mInstance->getCellByCoords(xMin, yMin);
             if (forceActive && CurrentCell == nullptr)
             {
-                CurrentCell = mInstance->CreateByCoords(xMin, yMin);
+                CurrentCell = mInstance->createByCoords(xMin, yMin);
                 if (CurrentCell != nullptr)
-                    CurrentCell->Init(mInstance->GetPosX(xMin), mInstance->GetPosY(yMin), mInstance);
+                    CurrentCell->init(mInstance->getPosX(xMin), mInstance->getPosY(yMin), mInstance);
             }
 
             if (CurrentCell != nullptr)
             {
                 if (forceActive)
-                    mInstance->AddForcedCell(CurrentCell);
+                    mInstance->addForcedCell(CurrentCell);
                 else
-                    mInstance->RemoveForcedCell(CurrentCell);
+                    mInstance->removeForcedCell(CurrentCell);
             }
 
             yMin += 40.0f;
@@ -1223,33 +1404,33 @@ Creature* InstanceScript::spawnCreature(uint32_t entry, float posX, float posY, 
         return nullptr;
     }
 
-    Creature* creature = mInstance->GetInterface()->SpawnCreature(entry, posX, posY, posZ, posO, true, true, 0, 0);
+    Creature* creature = mInstance->getInterface()->spawnCreature(entry, LocationVector(posX, posY, posZ, posO), true, true, 0, 0);
     if (creature == nullptr)
         return nullptr;
 
     if (factionId != 0)
-        creature->SetFaction(factionId);
+        creature->setFaction(factionId);
     else
-        creature->SetFaction(creatureProperties->Faction);
+        creature->setFaction(creatureProperties->Faction);
 
     return creature;
 }
 
 Creature* InstanceScript::getCreatureBySpawnId(uint32_t entry)
 {
-    return mInstance->GetSqlIdCreature(entry);
+    return mInstance->getSqlIdCreature(entry);
 }
 
 Creature* InstanceScript::GetCreatureByGuid(uint32_t guid)
 {
-    return mInstance->GetCreature(guid);
+    return mInstance->getCreature(guid);
 }
 
 CreatureSet InstanceScript::getCreatureSetForEntry(uint32_t entry, bool debug /*= false*/, Player* player /*= nullptr*/)
 {
     CreatureSet creatureSet;
     uint32_t countCreatures = 0;
-    for (auto creature : mInstance->CreatureStorage)
+    for (auto creature : mInstance->getCreatures())
     {
         if (creature != nullptr)
         {
@@ -1265,7 +1446,7 @@ CreatureSet InstanceScript::getCreatureSetForEntry(uint32_t entry, bool debug /*
     if (debug == true)
     {
         if (player != nullptr)
-            player->BroadcastMessage("%u Creatures with entry %u found.", countCreatures, entry);
+            player->broadcastMessage("%u Creatures with entry %u found.", countCreatures, entry);
     }
 
     return creatureSet;
@@ -1274,7 +1455,7 @@ CreatureSet InstanceScript::getCreatureSetForEntry(uint32_t entry, bool debug /*
 CreatureSet InstanceScript::getCreatureSetForEntries(std::vector<uint32_t> entryVector)
 {
     CreatureSet creatureSet;
-    for (auto creature : mInstance->CreatureStorage)
+    for (auto creature : mInstance->getCreatures())
     {
         if (creature != nullptr)
         {
@@ -1289,20 +1470,26 @@ CreatureSet InstanceScript::getCreatureSetForEntries(std::vector<uint32_t> entry
     return creatureSet;
 }
 
+Creature* InstanceScript::findNearestCreature(Object* pObject, uint32_t entry, float maxSearchRange /*= 250.0f*/)
+{
+    Creature* pCreature = mInstance->getInterface()->findNearestCreature(pObject, entry, maxSearchRange);
+    return pCreature;
+}
+
 GameObject* InstanceScript::spawnGameObject(uint32_t entry, float posX, float posY, float posZ, float posO, bool addToWorld /*= true*/, uint32_t misc1 /*= 0*/, uint32_t phase /*= 0*/)
 {
-    GameObject* spawnedGameObject = mInstance->GetInterface()->SpawnGameObject(entry, posX, posY, posZ, posO, addToWorld, misc1, phase);
+    GameObject* spawnedGameObject = mInstance->getInterface()->spawnGameObject(entry, LocationVector(posX, posY, posZ, posO), addToWorld, misc1, phase);
     return spawnedGameObject;
 }
 
 GameObject* InstanceScript::getGameObjectBySpawnId(uint32_t entry)
 {
-    return mInstance->GetSqlIdGameObject(entry);
+    return mInstance->getSqlIdGameObject(entry);
 }
 
 GameObject* InstanceScript::GetGameObjectByGuid(uint32_t guid)
 {
-    return mInstance->GetGameObject(guid);
+    return mInstance->getGameObject(guid);
 }
 
 GameObject* InstanceScript::getClosestGameObjectForPosition(uint32_t entry, float posX, float posY, float posZ)
@@ -1337,7 +1524,7 @@ GameObject* InstanceScript::getClosestGameObjectForPosition(uint32_t entry, floa
 GameObjectSet InstanceScript::getGameObjectsSetForEntry(uint32_t entry)
 {
     GameObjectSet gameobjectSet;
-    for (auto gameobject : mInstance->GOStorage)
+    for (auto gameobject : mInstance->getGameObjects())
     {
         if (gameobject != nullptr)
         {
@@ -1384,8 +1571,10 @@ void InstanceScript::setGameObjectStateForEntry(uint32_t entry, uint8_t state)
 /* Hook Stuff */
 void ScriptMgr::register_hook(ServerHookEvents event, void* function_pointer)
 {
-    ARCEMU_ASSERT(event < NUM_SERVER_HOOKS);
-    _hooks[event].insert(function_pointer);
+    if (event < NUM_SERVER_HOOKS)
+        _hooks[event].insert(function_pointer);
+    else
+        sLogger.failure("ScriptMgr::register_hook tried to register invalid event %u", event);
 }
 
 bool ScriptMgr::has_creature_script(uint32 entry) const

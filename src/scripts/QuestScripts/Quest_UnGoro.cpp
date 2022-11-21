@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,96 +20,95 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class RingoDeadNPC : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(RingoDeadNPC)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new RingoDeadNPC(c); }
     explicit RingoDeadNPC(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnLoad() override
     {
         getCreature()->setStandState(STANDSTATE_DEAD);
         getCreature()->setDeathState(CORPSE);
-        getCreature()->GetAIInterface()->m_canMove = false;
+        getCreature()->setControlled(true, UNIT_STATE_ROOTED);
     }
 };
-
 
 class NorthernPylon : public GameObjectAIScript
 {
 public:
-
     explicit NorthernPylon(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new NorthernPylon(GO); }
 
     void OnActivate(Player* pPlayer) override
     {
-        if (pPlayer->HasFinishedQuest(4284))
+        if (pPlayer->hasQuestFinished(4284))
         {
-            pPlayer->AddQuestKill(4285, 0, 0);
+            pPlayer->addQuestKill(4285, 0, 0);
         }
         else
         {
-            pPlayer->BroadcastMessage("You need to have completed the quest : Crystals of Power");
+            pPlayer->broadcastMessage("You need to have completed the quest : Crystals of Power");
         }
     }
 };
 
-
 class EasternPylon : public GameObjectAIScript
 {
 public:
-
     explicit EasternPylon(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new EasternPylon(GO); }
 
     void OnActivate(Player* pPlayer) override
     {
-        if (pPlayer->HasFinishedQuest(4284))
+        if (pPlayer->hasQuestFinished(4284))
         {
-            pPlayer->AddQuestKill(4287, 0, 0);
+            pPlayer->addQuestKill(4287, 0, 0);
         }
         else
         {
-            pPlayer->BroadcastMessage("You need to have completed the quest : Crystals of Power");
+            pPlayer->broadcastMessage("You need to have completed the quest : Crystals of Power");
         }
     }
 };
 
-
 class WesternPylon : public GameObjectAIScript
 {
 public:
-
     explicit WesternPylon(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new WesternPylon(GO); }
 
     void OnActivate(Player* pPlayer) override
     {
-        if (pPlayer->HasFinishedQuest(4284))
+        if (pPlayer->hasQuestFinished(4284))
         {
-            pPlayer->AddQuestKill(4288, 0, 0);
+            pPlayer->addQuestKill(4288, 0, 0);
         }
         else
         {
-            pPlayer->BroadcastMessage("You need to have completed the quest : Crystals of Power");
+            pPlayer->broadcastMessage("You need to have completed the quest : Crystals of Power");
         }
     }
 };
 
-
 class A_Me01 : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(A_Me01)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new A_Me01(c); }
     explicit A_Me01(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnReachWP(uint32_t iWaypointId, bool /*bForwards*/) override
+    void OnReachWP(uint32_t type, uint32_t iWaypointId) override
     {
+        if (type != WAYPOINT_MOTION_TYPE)
+            return;
+
         if (iWaypointId == 28)
         {
-            getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Tr..........");
+            getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Tr..........");
             getCreature()->Despawn(5000, 1000);
-            getCreature()->DeleteWaypoints();
+            getCreature()->stopMoving();
             if (getCreature()->m_escorter == nullptr)
                 return;
 

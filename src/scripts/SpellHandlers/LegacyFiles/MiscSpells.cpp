@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,14 +19,14 @@
 
 #include "Setup.h"
 #include "Management/QuestLogEntry.hpp"
-#include "Management/Skill.h"
+#include "Management/Skill.hpp"
 #include "Management/ItemInterface.h"
-#include "Management/Battleground/Battleground.h"
+#include "Management/Battleground/Battleground.hpp"
 #include "Storage/MySQLDataStore.hpp"
-#include "Map/MapMgr.h"
-#include "Map/MapScriptInterface.h"
-#include "Spell/SpellMgr.h"
+#include "Map/Management/MapMgr.hpp"
+#include "Map/Maps/MapScriptInterface.h"
 #include "Spell/SpellAuras.h"
+#include "Spell/Definitions/SpellEffects.hpp"
 
 enum
 {
@@ -45,7 +45,7 @@ bool FrostWarding(uint8_t /*effectIndex*/, Spell* s)
 
     uint32_t spellId = s->getSpellInfo()->getId();
 
-    unitTarget->RemoveReflect(spellId, true);
+    unitTarget->removeReflect(spellId, true);
 
     ReflectSpellSchool* rss = new ReflectSpellSchool;
 
@@ -67,7 +67,7 @@ bool MoltenShields(uint8_t /*effectIndex*/, Spell* s)
     if (!unitTarget)
         return false;
 
-    unitTarget->RemoveReflect(s->getSpellInfo()->getId(), true);
+    unitTarget->removeReflect(s->getSpellInfo()->getId(), true);
 
     ReflectSpellSchool* rss = new ReflectSpellSchool;
 
@@ -88,7 +88,7 @@ bool Cannibalize(uint8_t effectIndex, Spell* s)
         return false;
 
     bool check = false;
-    float rad = s->GetRadius(effectIndex);
+    float rad = s->getEffectRadius(effectIndex);
     rad *= rad;
 
     for (const auto& itr : s->getPlayerCaster()->getInRangeObjectsSet())
@@ -112,9 +112,9 @@ bool Cannibalize(uint8_t effectIndex, Spell* s)
 
     if (check)
     {
-        s->getPlayerCaster()->cannibalize = true;
-        s->getPlayerCaster()->cannibalizeCount = 0;
-        sEventMgr.AddEvent(s->getPlayerCaster(), &Player::EventCannibalize, uint32_t(7), EVENT_CANNIBALIZE, 2000, 5, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+        s->getPlayerCaster()->m_cannibalize = true;
+        s->getPlayerCaster()->m_cannibalizeCount = 0;
+        sEventMgr.AddEvent(s->getPlayerCaster(), &Player::eventCannibalize, uint32_t(7), EVENT_CANNIBALIZE, 2000, 5, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
         s->getPlayerCaster()->setEmoteState(EMOTE_STATE_CANNIBALIZE);
     }
 
@@ -180,6 +180,7 @@ bool Give5kGold(uint8_t /*effectIndex*/, Spell* s)
     return true;
 }
 
+#if VERSION_STRING >= WotLK
 bool NorthRendInscriptionResearch(uint8_t /*effectIndex*/, Spell* s)
 {
     // http://www.wowwiki.com/Minor_Inscription_Research :
@@ -221,7 +222,7 @@ bool NorthRendInscriptionResearch(uint8_t /*effectIndex*/, Spell* s)
                             {
                                 if (glyph_properties->Type == glyphType)
                                 {
-                                    if (!s->getPlayerCaster()->HasSpell(skill_line_ability->spell))
+                                    if (!s->getPlayerCaster()->hasSpell(skill_line_ability->spell))
                                     {
                                         discoverableGlyphs.push_back(skill_line_ability->spell);
                                     }
@@ -243,6 +244,7 @@ bool NorthRendInscriptionResearch(uint8_t /*effectIndex*/, Spell* s)
 
     return true;
 }
+#endif
 
 bool DeadlyThrowInterrupt(uint8_t /*effectIndex*/, Aura* a, bool apply)
 {
@@ -269,7 +271,7 @@ bool DeadlyThrowInterrupt(uint8_t /*effectIndex*/, Aura* a, bool apply)
             m_target->interruptSpellWithSpellType(CURRENT_GENERIC_SPELL);
         }
 
-        m_target->SchoolCastPrevent[school] = 3000 + Util::getMSTime();
+        m_target->m_schoolCastPrevent[school] = 3000 + Util::getMSTime();
     }
 
     return true;
@@ -287,17 +289,17 @@ bool WaitingToResurrect(uint8_t /*effectIndex*/, Aura* a, bool apply)
     if (apply)        // already applied in opcode handler
         return true;
 
-    uint64_t crtguid = p_target->m_areaSpiritHealer_guid;
+    uint64_t crtguid = p_target->getAreaSpiritHealerGuid();
 
     WoWGuid wowGuid;
     wowGuid.Init(crtguid);
 
-    Creature* pCreature = p_target->IsInWorld() ? p_target->GetMapMgr()->GetCreature(wowGuid.getGuidLowPart()) : nullptr;
+    Creature* pCreature = p_target->IsInWorld() ? p_target->getWorldMap()->getCreature(wowGuid.getGuidLowPart()) : nullptr;
 
-    if (pCreature == nullptr || p_target->m_bg == nullptr)
+    if (pCreature == nullptr || p_target->getBattleground() == nullptr)
         return true;
 
-    p_target->m_bg->RemovePlayerFromResurrect(p_target, pCreature);
+    p_target->getBattleground()->removePlayerFromResurrect(p_target, pCreature);
 
     return true;
 }
@@ -343,14 +345,13 @@ bool EatenRecently(uint8_t /*effectIndex*/, Aura* pAura, bool apply)
 
     if (apply)
     {
-        NetherDrake->GetAIInterface()->SetAllowedToEnterCombat(false);
+        NetherDrake->getAIInterface()->setAllowedToEnterCombat(false);
         NetherDrake->emote(EMOTE_ONESHOT_EAT);
     }
     else
     {
-        NetherDrake->GetAIInterface()->SetAllowedToEnterCombat(true);
-        NetherDrake->GetAIInterface()->setSplineFlying();
-        NetherDrake->GetAIInterface()->MoveTo(NetherDrake->GetSpawnX(), NetherDrake->GetSpawnY(), NetherDrake->GetSpawnZ());
+        NetherDrake->getAIInterface()->setAllowedToEnterCombat(true);
+        NetherDrake->getMovementManager()->moveTakeoff(0, NetherDrake->GetSpawnPosition());
     }
     return true;
 }
@@ -360,16 +361,16 @@ bool Temper(uint8_t /*effectIndex*/, Spell* pSpell)
     if (pSpell->getUnitCaster() == NULL)
         return true;
 
-    Unit* pHated = pSpell->getUnitCaster()->GetAIInterface()->GetMostHated();
+    Unit* pHated = pSpell->getUnitCaster()->getThreatManager().getCurrentVictim();
 
-    MapScriptInterface* pMap = pSpell->getUnitCaster()->GetMapMgr()->GetInterface();
-    Creature* pCreature1 = pMap->SpawnCreature(28695, 1335.296265f, -89.237503f, 56.717800f, 1.994538f, true, true, 0, 0, 1);
+    MapScriptInterface* pMap = pSpell->getUnitCaster()->getWorldMap()->getInterface();
+    Creature* pCreature1 = pMap->spawnCreature(28695, LocationVector(1335.296265f, -89.237503f, 56.717800f, 1.994538f), true, true, 0, 0, 1);
     if (pCreature1)
-        pCreature1->GetAIInterface()->AttackReaction(pHated, 1);
+        pCreature1->getAIInterface()->onHostileAction(pHated);
 
-    Creature* pCreature2 = pMap->SpawnCreature(28695, 1340.615234f, -89.083313f, 56.717800f, 0.028982f, true, true, 0, 0, 1);
+    Creature* pCreature2 = pMap->spawnCreature(28695, LocationVector(1340.615234f, -89.083313f, 56.717800f, 0.028982f), true, true, 0, 0, 1);
     if (pCreature2)
-        pCreature2->GetAIInterface()->AttackReaction(pHated, 1);
+        pCreature2->getAIInterface()->onHostileAction(pHated);
 
     return true;
 };
@@ -391,7 +392,7 @@ bool Dummy_Solarian_WrathOfTheAstromancer(uint8_t /*effectIndex*/, Spell* pSpell
     if (!Caster)
         return true;
 
-    Unit* Target = Caster->GetAIInterface()->getNextTarget();
+    Unit* Target = Caster->getAIInterface()->getCurrentTarget();
     if (!Target)
         return true;
 
@@ -411,7 +412,7 @@ bool PreparationForBattle(uint8_t /*effectIndex*/, Spell* pSpell)
 
     Player* pPlayer = pSpell->getPlayerCaster();
 
-    pPlayer->AddQuestKill(12842, 0, 0);
+    pPlayer->addQuestKill(12842, 0, 0);
 
     return true;
 };
@@ -425,22 +426,22 @@ bool CrystalSpikes(uint8_t /*effectIndex*/, Spell* pSpell)
 
     for (uint8_t i = 1; i < 6; ++i)
     {
-        pCaster->GetMapMgr()->GetInterface()->SpawnCreature(CN_CRYSTAL_SPIKE, pCaster->GetPositionX() + (3 * i) + Util::getRandomUInt(2), pCaster->GetPositionY() + (3 * i) + Util::getRandomUInt(2), pCaster->GetPositionZ(), pCaster->GetOrientation(), true, false, 0, 0);
+        pCaster->getWorldMap()->getInterface()->spawnCreature(CN_CRYSTAL_SPIKE, LocationVector(pCaster->GetPositionX() + (3 * i) + Util::getRandomUInt(2), pCaster->GetPositionY() + (3 * i) + Util::getRandomUInt(2), pCaster->GetPositionZ(), pCaster->GetOrientation()), true, false, 0, 0);
     }
 
     for (uint8_t i = 1; i < 6; ++i)
     {
-        pCaster->GetMapMgr()->GetInterface()->SpawnCreature(CN_CRYSTAL_SPIKE, pCaster->GetPositionX() - (3 * i) - Util::getRandomUInt(2), pCaster->GetPositionY() + (3 * i) + Util::getRandomUInt(2), pCaster->GetPositionZ(), pCaster->GetOrientation(), true, false, 0, 0);
+        pCaster->getWorldMap()->getInterface()->spawnCreature(CN_CRYSTAL_SPIKE, LocationVector(pCaster->GetPositionX() - (3 * i) - Util::getRandomUInt(2), pCaster->GetPositionY() + (3 * i) + Util::getRandomUInt(2), pCaster->GetPositionZ(), pCaster->GetOrientation()), true, false, 0, 0);
     }
 
     for (uint8_t i = 1; i < 6; ++i)
     {
-        pCaster->GetMapMgr()->GetInterface()->SpawnCreature(CN_CRYSTAL_SPIKE, pCaster->GetPositionX() + (3 * i) + Util::getRandomUInt(2), pCaster->GetPositionY() - (3 * i) - Util::getRandomUInt(2), pCaster->GetPositionZ(), pCaster->GetOrientation(), true, false, 0, 0);
+        pCaster->getWorldMap()->getInterface()->spawnCreature(CN_CRYSTAL_SPIKE, LocationVector(pCaster->GetPositionX() + (3 * i) + Util::getRandomUInt(2), pCaster->GetPositionY() - (3 * i) - Util::getRandomUInt(2), pCaster->GetPositionZ(), pCaster->GetOrientation()), true, false, 0, 0);
     }
 
     for (uint8_t i = 1; i < 6; ++i)
     {
-        pCaster->GetMapMgr()->GetInterface()->SpawnCreature(CN_CRYSTAL_SPIKE, pCaster->GetPositionX() - (3 * i) - Util::getRandomUInt(2), pCaster->GetPositionY() - (3 * i) - Util::getRandomUInt(2), pCaster->GetPositionZ(), pCaster->GetOrientation(), true, false, 0, 0);
+        pCaster->getWorldMap()->getInterface()->spawnCreature(CN_CRYSTAL_SPIKE, LocationVector(pCaster->GetPositionX() - (3 * i) - Util::getRandomUInt(2), pCaster->GetPositionY() - (3 * i) - Util::getRandomUInt(2), pCaster->GetPositionZ(), pCaster->GetOrientation()), true, false, 0, 0);
     }
 
     return true;
@@ -491,7 +492,7 @@ bool TeleportToCoordinates(uint8_t /*effectIndex*/, Spell* s)
         return true;
     }
 
-    s->HandleTeleport(teleport_coord->x, teleport_coord->y, teleport_coord->z, teleport_coord->mapId, s->getPlayerCaster());
+    s->HandleTeleport(LocationVector(teleport_coord->x, teleport_coord->y, teleport_coord->z), teleport_coord->mapId, s->getPlayerCaster());
     return true;
 }
 
@@ -524,11 +525,11 @@ bool IOCTeleporterIn(uint8_t /*effectIndex*/, Spell* s)
         return true;
 
     // recently used the teleporter
-    if (p->HasAura(66550) || p->HasAura(66551))
+    if (p->hasAurasWithId(66550) || p->hasAurasWithId(66551))
         return true;
 
     // Let's not teleport in/out before the battle starts
-    if ((p->m_bg != NULL) && !p->m_bg->HasStarted())
+    if (p->getBattleground() && !p->getBattleground()->hasStarted())
         return true;
 
     uint32_t j;
@@ -543,7 +544,7 @@ bool IOCTeleporterIn(uint8_t /*effectIndex*/, Spell* s)
         return true;
 
     LocationVector v(IOCTeleInLocations[j][0], IOCTeleInLocations[j][1], IOCTeleInLocations[j][2]);
-    p->SafeTeleport(p->GetMapId(), p->GetInstanceID(), v);
+    p->safeTeleport(p->GetMapId(), p->GetInstanceID(), v);
 
     return true;
 }
@@ -555,11 +556,11 @@ bool IOCTeleporterOut(uint8_t /*effectIndex*/, Spell* s)
         return true;
 
     // recently used the teleporter
-    if (p->HasAura(66550) || p->HasAura(66551))
+    if (p->hasAurasWithId(66550) || p->hasAurasWithId(66551))
         return true;
 
     // Let's not teleport in/out before the battle starts
-    if ((p->m_bg != NULL) && !p->m_bg->HasStarted())
+    if (p->getBattleground() && !p->getBattleground()->hasStarted())
         return true;
 
     uint32_t j;
@@ -574,7 +575,7 @@ bool IOCTeleporterOut(uint8_t /*effectIndex*/, Spell* s)
         return true;
 
     LocationVector v(IOCTeleOutLocations[j][0], IOCTeleOutLocations[j][1], IOCTeleOutLocations[j][2]);
-    p->SafeTeleport(p->GetMapId(), p->GetInstanceID(), v);
+    p->safeTeleport(p->GetMapId(), p->GetInstanceID(), v);
 
     return true;
 }
@@ -612,7 +613,7 @@ bool SOTATeleporter(uint8_t /*effectIndex*/, Spell* s)
 
     dest.ChangeCoords({ sotaTransDest[closest_platform][0], sotaTransDest[closest_platform][1], sotaTransDest[closest_platform][2], sotaTransDest[closest_platform][3] });
 
-    plr->SafeTeleport(plr->GetMapId(), plr->GetInstanceID(), dest);
+    plr->safeTeleport(plr->GetMapId(), plr->GetInstanceID(), dest);
     return true;
 }
 
@@ -624,7 +625,7 @@ bool EyeOfAcherusVisual(uint8_t /*effectIndex*/, Spell* spell)
     if (player == nullptr)
         return true;
 
-    if (player->HasAura(51892))
+    if (player->hasAurasWithId(51892))
         player->removeAllAurasById(51892);
     return true;
 }
@@ -706,9 +707,11 @@ void SetupLegacyMiscSpellhandlers(ScriptMgr* mgr)
 
     mgr->register_script_effect(46642, &Give5kGold);
 
+#if VERSION_STRING >= WotLK
     mgr->register_script_effect(61288, &NorthRendInscriptionResearch);
 
     mgr->register_script_effect(61177, &NorthRendInscriptionResearch);
+#endif
 
     mgr->register_dummy_aura(32748, &DeadlyThrowInterrupt);
 

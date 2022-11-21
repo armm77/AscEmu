@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -20,8 +20,8 @@
 #include "Setup.h"
 #include "Spell/SpellAuras.h"
 #include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.h"
-#include <Spell/Definitions/PowerType.h>
+#include "Spell/Definitions/ProcFlags.hpp"
+#include <Spell/Definitions/PowerType.hpp>
 
 bool Execute(uint8_t effectIndex, Spell* pSpell)
 {
@@ -35,7 +35,7 @@ bool Execute(uint8_t effectIndex, Spell* pSpell)
 
     uint32_t rage = Caster->getPower(POWER_TYPE_RAGE);
 
-    if (Caster->HasAura(58367))     // Glyph of Execution: Your Execute ability deals damage as if you had 10 additional rage.
+    if (Caster->hasAurasWithId(58367))     // Glyph of Execution: Your Execute ability deals damage as if you had 10 additional rage.
     {
         rage += 10;
     }
@@ -57,7 +57,7 @@ bool Execute(uint8_t effectIndex, Spell* pSpell)
     dmg += Caster->getAttackPower() / 5;
     dmg += toadd;
 
-    Caster->Strike(Target, MELEE, pSpell->getSpellInfo(), 0, 0, dmg, false, false);
+    Caster->strike(Target, MELEE, pSpell->getSpellInfo(), 0, 0, dmg, false, false);
 
     return true;
 }
@@ -95,27 +95,19 @@ bool HeroicFury(uint8_t /*effectIndex*/, Spell* s)
         return false;
     }
 
-    if (p_caster->HasSpell(20252))
+    if (p_caster->hasSpell(20252))
     {
         p_caster->clearCooldownForSpell(20252);
     }
 
-    for (uint32_t x = MAX_NEGATIVE_AURAS_EXTEDED_START; x < MAX_NEGATIVE_AURAS_EXTEDED_END; ++x)
+    SpellMechanic mechanics[3] =
     {
-        if (p_caster->m_auras[x])
-        {
-            for (uint8_t y = 0; y < 3; ++y)
-            {
-                switch (p_caster->m_auras[x]->getSpellInfo()->getEffectApplyAuraName(y))
-                {
-                    case SPELL_AURA_MOD_ROOT:
-                    case SPELL_AURA_MOD_DECREASE_SPEED:
-                        p_caster->m_auras[x]->removeAura();
-                        break;
-                }
-            }
-        }
-    }
+        MECHANIC_ENSNARED,
+        MECHANIC_ROOTED,
+        MECHANIC_NONE
+    };
+
+    p_caster->removeAllAurasBySpellMechanic(mechanics);
 
     return true;
 }
@@ -130,7 +122,7 @@ bool Charge(uint8_t effectIndex, Spell* s)
     uint32_t rage_to_gen = s->getSpellInfo()->getEffectBasePoints(effectIndex) + 1;
     if (s->getPlayerCaster())
     {
-        for (std::set<uint32_t>::iterator itr = s->getPlayerCaster()->mSpells.begin(); itr != s->getPlayerCaster()->mSpells.end(); ++itr)
+        for (std::set<uint32_t>::iterator itr = s->getPlayerCaster()->m_spells.begin(); itr != s->getPlayerCaster()->m_spells.end(); ++itr)
         {
             if (*itr == 12697)
             {
@@ -185,25 +177,29 @@ bool BerserkerRage(uint8_t /*effectIndex*/, Aura* a, bool apply)
 
     if (apply)
     {
-        p_target->rageFromDamageTaken += 100;
+        p_target->m_rageFromDamageTaken += 100;
     }
     else
     {
-        p_target->rageFromDamageTaken -= 100;
+        p_target->m_rageFromDamageTaken -= 100;
     }
 
+    SpellMechanic mechanics[4] = { MECHANIC_NONE };
     for (uint8_t i = 0; i < 3; i++)
     {
         if (apply)
         {
-            p_target->MechanicsDispels[a->getSpellInfo()->getEffectMiscValue(i)]++;
-            p_target->RemoveAllAurasByMechanic(a->getSpellInfo()->getEffectMiscValue(i), 0, false);
+            p_target->m_mechanicsDispels[a->getSpellInfo()->getEffectMiscValue(i)]++;
+            mechanics[i] = static_cast<SpellMechanic>(a->getSpellInfo()->getEffectMiscValue(i));
         }
         else
         {
-            p_target->MechanicsDispels[a->getSpellInfo()->getEffectMiscValue(i)]--;
+            p_target->m_mechanicsDispels[a->getSpellInfo()->getEffectMiscValue(i)]--;
         }
     }
+
+    if (apply)
+        p_target->removeAllAurasBySpellMechanic(mechanics);
 
     return true;
 }
@@ -213,9 +209,9 @@ bool SweepingStrikes(uint8_t /*effectIndex*/, Aura* a, bool apply)
     Unit* m_target = a->getOwner();
 
     if (apply)
-        m_target->AddExtraStrikeTarget(a->getSpellInfo(), 10);
+        m_target->addExtraStrikeTarget(a->getSpellInfo(), 10);
     else
-        m_target->RemoveExtraStrikeTarget(a->getSpellInfo());
+        m_target->removeExtraStrikeTarget(a->getSpellInfo());
 
     return true;
 }
@@ -233,9 +229,9 @@ bool TacticalAndStanceMastery(uint8_t effectIndex, Aura* a, bool apply)
         return true;
 
     if (apply)
-        p_target->m_retainedrage += (a->getEffectDamage(effectIndex) * 10);     //don't really know if value is all value or needs to be multiplied with 10
+        p_target->m_retaineDrage += (a->getEffectDamage(effectIndex) * 10);     //don't really know if value is all value or needs to be multiplied with 10
     else
-        p_target->m_retainedrage -= (a->getEffectDamage(effectIndex) * 10);
+        p_target->m_retaineDrage -= (a->getEffectDamage(effectIndex) * 10);
 
     return true;
 }
@@ -248,9 +244,9 @@ bool SecondWind(uint8_t /*effectIndex*/, Aura* a, bool apply)
         return true;
 
     if (apply)
-        caster->SetTriggerStunOrImmobilize(29841, 100, true);  //fixed 100% chance
+        caster->setTriggerStunOrImmobilize(29841, 100, true);  //fixed 100% chance
     else
-        caster->SetTriggerStunOrImmobilize(0, 0, true);
+        caster->setTriggerStunOrImmobilize(0, 0, true);
 
     return true;
 }
@@ -263,9 +259,9 @@ bool SecondWind2(uint8_t /*effectIndex*/, Aura* a, bool apply)
         return true;
 
     if (apply)
-        caster->SetTriggerStunOrImmobilize(29842, 100, true);  //fixed 100% chance
+        caster->setTriggerStunOrImmobilize(29842, 100, true);  //fixed 100% chance
     else
-        caster->SetTriggerStunOrImmobilize(0, 0, true);
+        caster->setTriggerStunOrImmobilize(0, 0, true);
 
     return true;
 }

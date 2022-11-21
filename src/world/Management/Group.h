@@ -1,14 +1,19 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "../world/WorldConf.h"
-#include "Map/InstanceDefines.hpp"
-#include "Units/Players/Player.h"
+#include <WorldConf.h>
+#include "Map/Maps/InstanceDefines.hpp"
+#include "Map/Maps/InstanceMgr.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Objects/Units/Players/PlayerDefines.hpp"
 #include "Server/Packets/CmsgMessageChat.h"
+#include "Map/Maps/WorldMap.hpp"
+
+class BaseMap;
 
 enum PartyErrors
 {
@@ -90,18 +95,25 @@ enum GroupMemberOnlineStatus
     MEMBER_STATUS_DND       = 0x0080        // Lua_UnitIsDND
 };
 
-class PlayerInfo;
+class CachedCharacterInfo;
 
 typedef struct
 {
-    PlayerInfo* player_info;
+    CachedCharacterInfo* player_info;
     Player* player;
 } GroupMember;
+
+struct InstanceGroupBind
+{
+    InstanceSaved* save;
+    bool perm;
+    InstanceGroupBind() : save(nullptr), perm(false) { }
+};
 
 class Group;
 class Player;
 
-typedef std::set<PlayerInfo*> GroupMembersSet;
+typedef std::set<CachedCharacterInfo*> GroupMembersSet;
 
 class SERVER_DECL SubGroup // Most stuff will be done through here, not through the "Group" class.
 {
@@ -109,13 +121,16 @@ public:
     friend class Group;
 
     SubGroup(Group* parent, uint32 id) : m_Parent(parent), m_Id(id)  {}
-    ~SubGroup();
+    ~SubGroup() = default;
 
     inline GroupMembersSet::iterator GetGroupMembersBegin(void) { return m_GroupMembers.begin(); }
     inline GroupMembersSet::iterator GetGroupMembersEnd(void)   { return m_GroupMembers.end(); }
 
-    bool AddPlayer(PlayerInfo* info);
-    void RemovePlayer(PlayerInfo* info);
+    //MIT
+    GroupMembersSet getGroupMembers() const { return m_GroupMembers; }
+
+    bool AddPlayer(CachedCharacterInfo* info);
+    void RemovePlayer(CachedCharacterInfo* info);
 
     inline bool IsFull(void)                 { return m_GroupMembers.size() >= MAX_GROUP_SIZE_PARTY; }
     inline size_t GetMemberCount(void)       { return m_GroupMembers.size(); }
@@ -147,9 +162,11 @@ public:
     Group(bool Assign);
     ~Group();
 
+    typedef std::unordered_map<uint32_t, InstanceGroupBind> BoundInstancesMap;
+
     // Adding/Removal Management
-    bool AddMember(PlayerInfo* info, int32 subgroupid = -1);
-    void RemovePlayer(PlayerInfo* info);
+    bool AddMember(CachedCharacterInfo* info, int32 subgroupid = -1);
+    void RemovePlayer(CachedCharacterInfo* info);
 
     // Leaders and Looting
     void SetLeader(Player* pPlayer, bool silent);
@@ -183,13 +200,13 @@ public:
 
     inline uint8 GetMethod(void) { return m_LootMethod; }
     inline uint16 GetThreshold(void) { return m_LootThreshold; }
-    inline PlayerInfo* GetLeader(void) { return m_Leader; }
-    inline PlayerInfo* GetLooter(void) { return m_Looter; }
+    inline CachedCharacterInfo* GetLeader(void) { return m_Leader; }
+    inline CachedCharacterInfo* GetLooter(void) { return m_Looter; }
 
-    void MovePlayer(PlayerInfo* info, uint8 subgroup);
+    void MovePlayer(CachedCharacterInfo* info, uint8 subgroup);
 
     bool HasMember(Player* pPlayer);
-    bool HasMember(PlayerInfo* info);
+    bool HasMember(CachedCharacterInfo* info);
     inline uint32 MemberCount(void) { return m_MemberCount; }
     inline bool IsFull() { return ((m_GroupType == GROUP_TYPE_PARTY && m_MemberCount >= MAX_GROUP_SIZE_PARTY) || (m_GroupType == GROUP_TYPE_RAID && m_MemberCount >= MAX_GROUP_SIZE_RAID)); }
 
@@ -215,19 +232,34 @@ public:
     inline void Unlock() { return m_groupLock.Release(); }
     bool m_isqueued;
 
-    void SetAssistantLeader(PlayerInfo* pMember);
-    void SetMainTank(PlayerInfo* pMember);
-    void SetMainAssist(PlayerInfo* pMember);
+    void SetAssistantLeader(CachedCharacterInfo* pMember);
+    void SetMainTank(CachedCharacterInfo* pMember);
+    void SetMainAssist(CachedCharacterInfo* pMember);
 
-    inline PlayerInfo* GetAssistantLeader() { return m_assistantLeader; }
-    inline PlayerInfo* GetMainTank() { return m_mainTank; }
-    inline PlayerInfo* GetMainAssist() { return m_mainAssist; }
+    inline CachedCharacterInfo* GetAssistantLeader() { return m_assistantLeader; }
+    inline CachedCharacterInfo* GetMainTank() { return m_mainTank; }
+    inline CachedCharacterInfo* GetMainAssist() { return m_mainAssist; }
 
-    uint32 m_instanceIds[MAX_NUM_MAPS][InstanceDifficulty::MAX_DIFFICULTY];
+    InstanceGroupBind* bindToInstance(InstanceSaved* save, bool permanent, bool load = false);
+    void unbindInstance(uint32_t mapid, uint8_t difficulty, bool unload = false);
+    InstanceGroupBind* getBoundInstance(Player* player);
+    InstanceGroupBind* getBoundInstance(BaseMap* aMap);
+    InstanceGroupBind* getBoundInstance(DBC::Structures::MapEntry const* mapEntry);
+    InstanceGroupBind* getBoundInstance(InstanceDifficulty::Difficulties difficulty, uint32_t mapId);
+    BoundInstancesMap& getBoundInstances(InstanceDifficulty::Difficulties difficulty);
 
+    void resetInstances(uint8_t method, bool isRaid, Player* SendMsgTo);
+
+    InstanceDifficulty::Difficulties getDifficulty(bool isRaid) const;
     void SetDungeonDifficulty(uint8 diff);
     void SetRaidDifficulty(uint8 diff);
     void SendLootUpdates(Object* o);
+    void sendLooter(Creature* creature, Player* pLooter);
+
+    void updateLooterGuid(Object* pLootedObject);
+
+    // checks for Loot Threshold to roll our Items
+    void sendGroupLoot(Loot* loot, Object* object, Player* plr, uint32_t mapId);
 
     //////////////////////////////////////////////////////////////////////////////////////////
     /// Player* GetRandomPlayerInRangeButSkip(Player* plr, float range, Player* plr_skip)
@@ -245,7 +277,10 @@ public:
 #if VERSION_STRING > TBC
     void UpdateAchievementCriteriaForInrange(Object* o, AchievementCriteriaTypes type, int32 miscvalue1, int32 miscvalue2, uint32 time);
 #endif
-    void Teleport(WorldSession* m_session);
+    void teleport(WorldSession* m_session);
+    bool isRaidGroup() { return (m_GroupType & GROUP_TYPE_RAID) != 0; }
+    bool isBGGroup() { return (m_GroupType & GROUP_TYPE_BG) != 0; }
+    bool isBFGroup() { return (m_GroupType & GROUP_TYPE_BGRAID) != 0; }
     bool isLFGGroup()
     {
         if(m_GroupType & GROUP_TYPE_LFD)
@@ -261,11 +296,13 @@ public:
     void GoOffline(Player* p);
 
 protected:
-    PlayerInfo* m_Leader;
-    PlayerInfo* m_Looter;
-    PlayerInfo* m_assistantLeader;
-    PlayerInfo* m_mainTank;
-    PlayerInfo* m_mainAssist;
+    CachedCharacterInfo* m_Leader;
+    CachedCharacterInfo* m_Looter;
+    CachedCharacterInfo* m_assistantLeader;
+    CachedCharacterInfo* m_mainTank;
+    CachedCharacterInfo* m_mainAssist;
+
+    BoundInstancesMap   m_boundInstances[InstanceDifficulty::MAX_DIFFICULTY];
 
     uint8 m_LootMethod;
     uint16 m_LootThreshold;

@@ -1,11 +1,11 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Server/WorldSession.h"
-#include "Units/Creatures/Creature.h"
+#include "Objects/Units/Creatures/Creature.h"
 #include "Management/Gossip/GossipScript.hpp"
 #include "Server/Script/ScriptMgr.h"
 #include "Management/Gossip/GossipMenu.hpp"
@@ -13,7 +13,6 @@ This file is released under the MIT license. See README-MIT for more information
 class MasterHammersmith : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         GossipMenu menu(pObject->getGuid(), 7245);
@@ -28,13 +27,13 @@ public:
         uint32_t textid;
         if (1 == Id)
         {
-            if (!plr->_HasSkillLine(164) || plr->_GetSkillLineCurrent(164, false) < 300)
+            if (!plr->hasSkillLine(164) || plr->getSkillLineCurrent(164, false) < 300)
                 textid = 20001;
-            else if (!plr->HasSpell(9787))
+            else if (!plr->hasSpell(9787))
                 textid = 20002;
-            else if (plr->HasSpell(17040))
+            else if (plr->hasSpell(17040))
                 textid = 20003;
-            else if (plr->HasSpell(17041) || plr->HasSpell(17039) || plr->HasSpell(9788))
+            else if (plr->hasSpell(17041) || plr->hasSpell(17039) || plr->hasSpell(9788))
                 textid = 20004;
             else
             {
@@ -51,7 +50,7 @@ public:
         }
         else
         {
-            if (!plr->HasSpell(17040))
+            if (!plr->hasSpell(17040))
                 textid = 20007;
             else if (!plr->hasEnoughCoinage(250000) && plr->getLevel() <= 50 || !plr->hasEnoughCoinage(500000) && plr->getLevel() > 50 && plr->getLevel() <= 65
                 || !plr->hasEnoughCoinage(1000000) && plr->getLevel() > 65)
@@ -81,7 +80,6 @@ public:
 class MasterSwordsmith : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         GossipMenu menu(pObject->getGuid(), 7247);
@@ -95,13 +93,13 @@ public:
         uint32_t textid;
         if (1 == Id)
         {
-            if (!plr->_HasSkillLine(164) || plr->_GetSkillLineCurrent(164, false) < 300)
+            if (!plr->hasSkillLine(164) || plr->getSkillLineCurrent(164, false) < 300)
                 textid = 20001;
-            else if (!plr->HasSpell(9787))
+            else if (!plr->hasSpell(9787))
                 textid = 20002;
-            else if (plr->HasSpell(17039))
+            else if (plr->hasSpell(17039))
                 textid = 20003;
-            else if (plr->HasSpell(17041) || plr->HasSpell(17040) || plr->HasSpell(9788))
+            else if (plr->hasSpell(17041) || plr->hasSpell(17040) || plr->hasSpell(9788))
                 textid = 20004;
             else
             {
@@ -118,7 +116,7 @@ public:
         }
         else
         {
-            if (!plr->HasSpell(17039))
+            if (!plr->hasSpell(17039))
                 textid = 20007;
             else if (!plr->hasEnoughCoinage(250000) && plr->getLevel() <= 50 || !plr->hasEnoughCoinage(500000) && plr->getLevel() > 50 && plr->getLevel() <= 65
                 || !plr->hasEnoughCoinage(1000000) && plr->getLevel() > 65)
@@ -145,7 +143,6 @@ public:
 class MasterAxesmith : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         GossipMenu menu(pObject->getGuid(), 7243);
@@ -159,13 +156,13 @@ public:
         uint32_t textid;
         if (1 == Id)
         {
-            if (!plr->_HasSkillLine(164) || plr->_GetSkillLineCurrent(164, false) < 300)
+            if (!plr->hasSkillLine(164) || plr->getSkillLineCurrent(164, false) < 300)
                 textid = 20001;
-            else if (!plr->HasSpell(9787))
+            else if (!plr->hasSpell(9787))
                 textid = 20002;
-            else if (plr->HasSpell(17041))
+            else if (plr->hasSpell(17041))
                 textid = 20003;
-            else if (plr->HasSpell(17039) || plr->HasSpell(17040) || plr->HasSpell(9788))
+            else if (plr->hasSpell(17039) || plr->hasSpell(17040) || plr->hasSpell(9788))
                 textid = 20004;
             else
             {
@@ -182,7 +179,7 @@ public:
         }
         else
         {
-            if (!plr->HasSpell(17041))
+            if (!plr->hasSpell(17041))
                 textid = 20007;
             else if (!plr->hasEnoughCoinage(250000) && plr->getLevel() <= 50 || !plr->hasEnoughCoinage(500000) && plr->getLevel() > 50 && plr->getLevel() <= 65
                 || !plr->hasEnoughCoinage(1000000) && plr->getLevel() > 65)

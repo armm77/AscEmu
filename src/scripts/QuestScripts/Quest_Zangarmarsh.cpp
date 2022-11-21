@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -24,7 +24,6 @@
 class AncientMarks : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         uint32_t entry = pObject->getEntry();
@@ -42,9 +41,9 @@ public:
             TextId = 9177;
         }
 
-        if (plr->HasFinishedQuest(9785) || plr->hasQuestInQuestLog(9785))
+        if (plr->hasQuestFinished(9785) || plr->hasQuestInQuestLog(9785))
         {
-            GossipMenu menu(pObject->getGuid(), TextId, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), TextId, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 0, 1, text);
             menu.sendGossipPacket(plr);
         }
@@ -57,29 +56,29 @@ public:
         {
             case 17900:
             {
-                plr->AddQuestKill(9785, 0, 0);
+                plr->addQuestKill(9785, 0, 0);
 
-                if (plr->GetStandingRank(942) == 4)
+                if (plr->getFactionStandingRank(942) == 4)
                     casta->castSpell(plr, 31808, true);
-                else if (plr->GetStandingRank(942) == 5)
+                else if (plr->getFactionStandingRank(942) == 5)
                     casta->castSpell(plr, 31810, true);
-                else if (plr->GetStandingRank(942) == 6)
+                else if (plr->getFactionStandingRank(942) == 6)
                     casta->castSpell(plr, 31811, true);
-                else if (plr->GetStandingRank(942) == 7)
+                else if (plr->getFactionStandingRank(942) == 7)
                     casta->castSpell(plr, 31815, true);
 
             } break;
             case 17901:
             {
-                plr->AddQuestKill(9785, 1, 0);
+                plr->addQuestKill(9785, 1, 0);
 
-                if (plr->GetStandingRank(942) == 4)
+                if (plr->getFactionStandingRank(942) == 4)
                     casta->castSpell(plr, 31807, true);
-                else if (plr->GetStandingRank(942) == 5)
+                else if (plr->getFactionStandingRank(942) == 5)
                     casta->castSpell(plr, 31814, true);
-                else if (plr->GetStandingRank(942) == 6)
+                else if (plr->getFactionStandingRank(942) == 6)
                     casta->castSpell(plr, 31813, true);
-                else if (plr->GetStandingRank(942) == 7)
+                else if (plr->getFactionStandingRank(942) == 7)
                     casta->castSpell(plr, 31812, true);
 
             } break;
@@ -90,12 +89,11 @@ public:
 class ElderKuruti : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (!plr->getItemInterface()->GetItemCount(24573, true))
         {
-            GossipMenu menu(pObject->getGuid(), 9226, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 9226, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 502, 1);     // Offer treat
             menu.sendGossipPacket(plr);
         }
@@ -107,13 +105,13 @@ public:
         {
             case 1:
             {
-                GossipMenu menu(pObject->getGuid(), 9227, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 9227, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 503, 2); // I'm a messenger for Draenei
                 menu.sendGossipPacket(plr);
             }break;
             case 2:
             {
-                GossipMenu menu(pObject->getGuid(), 9229, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 9229, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, 504, 3); // Get message
                 menu.sendGossipPacket(plr);
             }break;

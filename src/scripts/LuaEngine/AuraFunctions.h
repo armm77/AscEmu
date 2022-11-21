@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -26,7 +26,8 @@ namespace LuaAura
     {
         if (!aura)
         {
-            RET_NIL();
+            lua_pushnil(L);
+            return 1;
         }
         lua_pushstring(L, "Aura");
         return 1;
@@ -35,7 +36,10 @@ namespace LuaAura
     int GetSpellId(lua_State* L, Aura* aura)
     {
         if (!aura)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
         lua_pushnumber(L, aura->getSpellId());
         return 1;
     }
@@ -43,33 +47,41 @@ namespace LuaAura
     int GetCaster(lua_State* L, Aura* aura)
     {
         if (!aura)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
         Object* caster = aura->getCaster();
         if (caster->isCreatureOrPlayer())  //unit caster
         {
             PUSH_UNIT(L, caster);
             return 1;
         }
-        else if (caster->isGameObject())  //gameobject
+        
+        if (caster->isGameObject())  //gameobject
         {
             PUSH_GO(L, caster);
             return 1;
         }
-        else if (caster->getObjectTypeId() == TYPEID_ITEM)  //item
+        
+        if (caster->getObjectTypeId() == TYPEID_ITEM)  //item
         {
             PUSH_ITEM(L, caster);
             return 1;
         }
-        else
-        {
-            RET_NIL();
-        }
+
+        lua_pushnil(L);
+        return 1;
     }
 
     int GetTarget(lua_State* L, Aura* aura)
     {
         if (!aura)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
+
         PUSH_UNIT(L, aura->getOwner());
         return 1;
     }
@@ -77,7 +89,10 @@ namespace LuaAura
     int GetDuration(lua_State* L, Aura* aura)
     {
         if (!aura)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
         RET_NUMBER(aura->getMaxDuration()); //in milliseconds
     }
 
@@ -95,7 +110,10 @@ namespace LuaAura
     int GetTimeLeft(lua_State* L, Aura* aura)
     {
         if (!aura)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
         RET_NUMBER(aura->getTimeLeft()); //in milliseconds
     }
 
@@ -161,7 +179,10 @@ namespace LuaAura
         SpellInfo const* proto = aura->getSpellInfo();
         LuaSpellEntry l = GetLuaSpellEntryByName(var);
         if (!l.name)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
         switch (l.typeId)  //0: int, 1: char*, 2: bool, 3: float
         {
             case 0:
@@ -183,15 +204,18 @@ namespace LuaAura
     int GetAuraSlot(lua_State* L, Aura* aura)
     {
         if (!aura)
-            RET_NIL();
-        RET_INT(aura->GetAuraSlot());
+        {
+            lua_pushnil(L);
+            return 1;
+        }
+        RET_INT(aura->getAuraSlot());
     }
 
     int SetAuraSlot(lua_State* L, Aura* aura)
     {
         if (!aura) return 0;
         uint16_t slot = CHECK_USHORT(L, 1);
-        aura->SetAuraSlot(slot);
+        aura->setAuraSlot(slot);
         return 0;
     }
 };

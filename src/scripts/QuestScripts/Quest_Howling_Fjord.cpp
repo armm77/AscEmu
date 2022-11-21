@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -19,43 +19,49 @@
 
 #include "Setup.h"
 #include "Management/TaxiMgr.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class NorthFleet : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(NorthFleet)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new NorthFleet(c); }
     explicit NorthFleet(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnDied(Unit* mKiller) override
     {
         if (mKiller->isPlayer())
         {
-            static_cast<Player*>(mKiller)->AddQuestKill(11230, 0, 0);
+            static_cast<Player*>(mKiller)->addQuestKill(11230, 0, 0);
         }
     }
 };
+
 class ChillmereScourge : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ChillmereScourge)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ChillmereScourge(c); }
     explicit ChillmereScourge(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnDied(Unit* mKiller) override
     {
         if (mKiller->isPlayer())
         {
-            static_cast<Player*>(mKiller)->AddQuestKill(11397, 0, 0);
+            static_cast<Player*>(mKiller)->addQuestKill(11397, 0, 0);
         }
     }
 };
+
 class Baleheim : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Baleheim)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Baleheim(c); }
     explicit Baleheim(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnDied(Unit* mKiller) override
     {
         if (mKiller->isPlayer())
         {
-            static_cast<Player*>(mKiller)->AddQuestKill(11283, 0, 0);
+            static_cast<Player*>(mKiller)->addQuestKill(11283, 0, 0);
         }
     }
 };
@@ -63,10 +69,9 @@ class Baleheim : public CreatureAIScript
 class Plaguethis_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        GossipMenu menu(pObject->getGuid(), 40002, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), 40002, plr->getSession()->language);
         menu.addItem(GOSSIP_ICON_CHAT, 464, 2); // Where would you like to fly too ?
 
         if (plr->hasQuestInQuestLog(11332))
@@ -91,8 +96,8 @@ public:
 
                 if (!plr->getItemInterface()->AddItemToFreeSlot(item))
                 {
-                    plr->GetSession()->SendNotification("No free slots were found in your inventory!");
-                    item->DeleteMe();
+                    plr->getSession()->SendNotification("No free slots were found in your inventory!");
+                    item->deleteMe();
                 }
                 else
                 {
@@ -105,13 +110,13 @@ public:
                 if (pCreature->getEntry() == 23859)
                 {
                     TaxiPath* path = sTaxiMgr.GetTaxiPath(745);
-                    plr->TaxiStart(path, 17759, 0);
+                    plr->startTaxiPath(path, 17759, 0);
                 }
                 break;
             }
             case 2:
             {
-                plr->GetSession()->sendTaxiList(pCreature);
+                plr->getSession()->sendTaxiList(pCreature);
                 break;
             }
         }

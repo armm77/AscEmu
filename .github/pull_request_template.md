@@ -7,15 +7,14 @@
 - [] Checked AE-Coding standards.
 
 **Tests Performed:** 
-- [] Build AE.
+- [] Build AE with "TREAT_WARNINGS_AS_ERRORS" flag turned on.
 - [] Server startup.
 - [] Log into world.
 
 <!--
-***Multiversion Ingame Tests Performed:***
-- [] BC
+**Multiversion Ingame Tests Performed:**
+- [] Classic
+- [] TBC
 - [] WotLK
 - [] Cata
 -->
-
-

@@ -1,29 +1,28 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Event_Darkmoon_Faire.h"
 
- //////////////////////////////////////////////////////////////////////////////////////////
+#include "Server/Script/CreatureAIScript.h"
+
+//////////////////////////////////////////////////////////////////////////////////////////
  //\details <b>Darkmoon Faire (Elwynn Forest)</b>\n
  // event_properties entry: 4 \n
  // event_properties holiday: 374 \n
  //\todo Check all Darkmoon Faire events
-
 
  //////////////////////////////////////////////////////////////////////////////////////////
  //\details <b>Darkmoon Faire (Mulgore)</b>\n
  // event_properties entry: 5 \n
  // event_properties holiday: 375 \n
 
-
  //////////////////////////////////////////////////////////////////////////////////////////
  //\details <b>Darkmoon Faire (Terokkar Forest)</b>\n
  // event_properties entry: 3 \n
  // event_properties holiday: 376 \n
-
 
  //////////////////////////////////////////////////////////////////////////////////////////
  //\details <b>Darkmoon Faire Gameobjects</b>\n
@@ -64,28 +63,27 @@ public:
             return;
         }
 
-        if (CurrentPlayer->GetMapId() == 530)           /// Shattrath
+        if (CurrentPlayer->GetMapId() == 530) // Shattrath
         {
-            CurrentPlayer->SafeTeleport(530, 0, -1742.640869f, 5454.712402f, -7.928009f, 4.606363f);
+            CurrentPlayer->safeTeleport(530, 0, LocationVector(-1742.640869f, 5454.712402f, -7.928009f, 4.606363f));
         }
-        else if (CurrentPlayer->GetMapId() == 0)        /// Elwynn Forest
+        else if (CurrentPlayer->GetMapId() == 0) // Elwynn Forest
         {
-            CurrentPlayer->SafeTeleport(0, 0, -9569.150391f, -14.753426f, 68.051422f, 4.874008f);
+            CurrentPlayer->safeTeleport(0, 0, LocationVector(-9569.150391f, -14.753426f, 68.051422f, 4.874008f));
         }
-        else if (CurrentPlayer->GetMapId() == 1)        /// Mulgore
+        else if (CurrentPlayer->GetMapId() == 1) // Mulgore
         {
-            CurrentPlayer->SafeTeleport(1, 0, -1326.711914f, 86.301125f, 133.093918f, 3.510725f);
+            CurrentPlayer->safeTeleport(1, 0, LocationVector(-1326.711914f, 86.301125f, 133.093918f, 3.510725f));
         }
 
         CurrentPlayer->setMoveRoot(false);
-        CurrentPlayer->castSpell(CurrentPlayer, 42867, true);   // 24742
+        CurrentPlayer->castSpell(CurrentPlayer, 42867, true); // 24742
         _gameobject->setFlags(GO_FLAG_NONE);
         mPlayerGuid = 0;
         RemoveAIUpdateEvent();
     }
 
 protected:
-
     uint32_t mPlayerGuid;
 };
 
@@ -97,74 +95,73 @@ Mortor - 25003
 Drop Mine - 39685, 25024
 Nitrous Boost - 27746
 
-
-const uint32_t CANNON = 24933            //39692, 34154
-const uint32_t MORTAR = 25003            //33861 -- Triggers Explosion, 39695 --- Summons Mortar
-const uint32_t NITROUS = 27746           //Needs Scripting
-const uint32_t FLAMETHROWER = 39693      //25027
+//const uint32_t CANNON = 24933         // 39692, 34154
+//const uint32_t MORTAR = 25003         // 33861 -- Triggers Explosion, 39695 --- Summons Mortar
+//const uint32_t NITROUS = 27746        // Needs Scripting
+const uint32_t FLAMETHROWER = 39693     // 25027
 const uint32_t MACHINEGUN = 25026
 const uint32_t DROPMINE = 25024
 const uint32_t SHIELD = 27759
 
 static uint32_t TonkSpecials[4] = { FLAMETHROWER, MACHINEGUN, DROPMINE, SHIELD };
 
-/// Tonk Control Consoles
+// Tonk Control Consoles
 class TonkControlConsole : public GameObjectAIScript
 {
 public:
-explicit TonkControlConsole(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
-static GameObjectAIScript *Create(GameObject* GO) { return new TonkControlConsole(GO); }
+    explicit TonkControlConsole(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
+    static GameObjectAIScript *Create(GameObject* GO) { return new TonkControlConsole(GO); }
 
 // Click the Console
 void OnActivate(Player* pPlayer)
 {
-// Pre-flight checks
-GameObject* tonkConsole = NULL;
-tonkConsole = pPlayer->GetMapMgr()->GetInterface()->GetGameObjectNearestCoords(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), 180524);
+    // Pre-flight checks
+    GameObject* tonkConsole = NULL;
+    tonkConsole = pPlayer->getWorldMap()->GetInterface()->GetGameObjectNearestCoords(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), 180524);
 
-// Open and disable the Tonk Console
-tonkConsole->SetFlags(GO_FLAG_NONSELECTABLE);
-tonkConsole->setState(GO_STATE_OPEN);
+    // Open and disable the Tonk Console
+    tonkConsole->SetFlags(GO_FLAG_NONSELECTABLE);
+    tonkConsole->setState(GO_STATE_OPEN);
 
-// Spawn Steam Tonk
-pPlayer->GetMapMgr()->GetInterface()->SpawnCreature(19405, pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), pPlayer->GetOrientation(), true, false, 0, 0)->Despawn(310000, 0);;
+    // Spawn Steam Tonk
+    pPlayer->getWorldMap()->GetInterface()->SpawnCreature(19405, pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), pPlayer->GetOrientation(), true, false, 0, 0)->Despawn(310000, 0);;
 
-// Store the tonk just spawned
-Creature* pTonk = NULL;
-pTonk = pPlayer->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), 19405);
+    // Store the tonk just spawned
+    Creature* pTonk = NULL;
+    pTonk = pPlayer->getWorldMap()->GetInterface()->GetCreatureNearestCoords(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), 19405);
 
-// Cast the tonk control spell on the tonk
-pPlayer->castSpell(pTonk, 33849, false);
+    // Cast the tonk control spell on the tonk
+    pPlayer->castSpell(pTonk, 33849, false);
 
-// Start checks to see if player still has aura
-RegisterAIUpdateEvent(1000);
+    // Start checks to see if player still has aura
+    RegisterAIUpdateEvent(1000);
 
-Plr = pPlayer;
-Tonk = pTonk;
-Console = tonkConsole;
+    Plr = pPlayer;
+    Tonk = pTonk;
+    Console = tonkConsole;
 }
 
 void AIUpdate()
 {
-if (!Plr->HasAura(33849) || Tonk->isDead())
-{
-// Kill then Despawn Tonk after 10 seconds
-Plr->castSpell(Tonk, 5, false); // Kill spell
-Plr->castSpell(Plr, 2880, false); // Stun Player
-Plr->RemoveAura(33849);
-Tonk->Despawn(10000,0);
+    if (!Plr->hasAurasWithId(33849) || Tonk->isDead())
+    {
+        // Kill then Despawn Tonk after 10 seconds
+        Plr->castSpell(Tonk, 5, false); // Kill spell
+        Plr->castSpell(Plr, 2880, false); // Stun Player
+        Plr->removeAllAurasById(33849);
+        Tonk->Despawn(10000,0);
 
-// Close the console so others can access it
-Console->SetFlags(0);
-Console->setState(GO_STATE_CLOSED);
-RemoveAIUpdateEvent();
-}
+        // Close the console so others can access it
+        Console->SetFlags(0);
+        Console->setState(GO_STATE_CLOSED);
+        RemoveAIUpdateEvent();
+    }
 }
 
 protected:
-Player* Plr;
-Creature* Tonk;
-GameObject* Console;
+    Player* Plr;
+    Creature* Tonk;
+    GameObject* Console;
 };
 */
 
@@ -195,15 +192,15 @@ public:
                 break;
         }
 
-        GossipMenu menu(pObject->getGuid(), textId, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), textId, plr->getSession()->language);
         menu.sendGossipPacket(plr);
     }
 };
 
-
 class Flik_Bark : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Flik_Bark)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Flik_Bark(c); }
     explicit Flik_Bark(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);
@@ -222,7 +219,6 @@ class Flik_Bark : public CreatureAIScript
 class FliksFrog_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         uint32_t textId = 0;
@@ -238,14 +234,15 @@ public:
                 break;
         }
 
-        GossipMenu menu(pObject->getGuid(), textId, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), textId, plr->getSession()->language);
         menu.sendGossipPacket(plr);
     }
 };
 
 class GelvasGrimegate_Bark : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(GelvasGrimegate_Bark)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new GelvasGrimegate_Bark(c); }
     explicit GelvasGrimegate_Bark(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);
@@ -262,7 +259,8 @@ class GelvasGrimegate_Bark : public CreatureAIScript
 
 class Lhara_Bark : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Lhara_Bark)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Lhara_Bark(c); }
     explicit Lhara_Bark(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);
@@ -280,24 +278,24 @@ class Lhara_Bark : public CreatureAIScript
 class MaximaBlastenheimer_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        GossipMenu menu(pObject->getGuid(), BARK_MAXIMA_1, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), BARK_MAXIMA_1, plr->getSession()->language);
         menu.addItem(GOSSIP_ICON_CHAT, GI_ULTRA_CANNON, 1);
         menu.sendGossipPacket(plr);
     }
 
     void onSelectOption(Object* pObject, Player* plr, uint32_t /*Id*/, const char* /*Code*/, uint32_t /*gossipId*/) override
     {
-        GossipMenu menu(pObject->getGuid(), BARK_MAXIMA_2, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), BARK_MAXIMA_2, plr->getSession()->language);
         menu.sendGossipPacket(plr);
     }
 };
 
 class Morja_Bark : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Morja_Bark)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Morja_Bark(c); }
     explicit Morja_Bark(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);
@@ -312,10 +310,9 @@ class Morja_Bark : public CreatureAIScript
 class ProfessorThaddeusPaleo_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        GossipMenu menu(pObject->getGuid(), 60016, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), 60016, plr->getSession()->language);
 
         if (static_cast<Creature*>(pObject)->getNpcFlags() & UNIT_NPC_FLAG_VENDOR)
             menu.addItem(GOSSIP_ICON_VENDOR, GI_BROWS_GOODS, 1);
@@ -331,11 +328,11 @@ public:
         switch (Id)
         {
             case 1:
-                plr->GetSession()->sendInventoryList(pCreature);
+                plr->getSession()->sendInventoryList(pCreature);
                 break;
             case 2:
             {
-                GossipMenu menu(pObject->getGuid(), 60017, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60017, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_TELL_BEAST_DECK, 5);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_TELL_PORTAL_DECK, 6);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_TELL_ELEMENTALS_DECK, 7);
@@ -378,7 +375,8 @@ public:
 
 class ProfessorThaddeusPaleo_Bark : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ProfessorThaddeusPaleo_Bark)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ProfessorThaddeusPaleo_Bark(c); }
     explicit ProfessorThaddeusPaleo_Bark(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);
@@ -398,18 +396,17 @@ class ProfessorThaddeusPaleo_Bark : public CreatureAIScript
 class Sayge_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         // Check to see if the player already has a buff from Sayge.
-        if (plr->HasAura(23768) || plr->HasAura(23769) || plr->HasAura(23767) || plr->HasAura(23738) || plr->HasAura(23766) || plr->HasAura(23737) || plr->HasAura(23735) || plr->HasAura(23736))
+        if (plr->hasAurasWithId(23768) || plr->hasAurasWithId(23769) || plr->hasAurasWithId(23767) || plr->hasAurasWithId(23738) || plr->hasAurasWithId(23766) || plr->hasAurasWithId(23737) || plr->hasAurasWithId(23735) || plr->hasAurasWithId(23736))
         {
-            GossipMenu menu(pObject->getGuid(), 60034, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 60034, plr->getSession()->language);
             menu.sendGossipPacket(plr);
         }
         else
         {
-            GossipMenu menu(pObject->getGuid(), 60026, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 60026, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, GI_READY_DISC_FORTUNE, 1);
             menu.sendGossipPacket(plr);
         }
@@ -423,7 +420,7 @@ public:
         {
             case 1:        // Question 1 (Initial question, always the same)
             {
-                GossipMenu menu(pObject->getGuid(), 60027, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60027, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_1_1, 10);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_1_2, 11);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_1_3, 12);
@@ -432,7 +429,7 @@ public:
             }break;
             case 10:    // Question 2 (First Answer = 1)
             {
-                GossipMenu menu(pObject->getGuid(), 60028, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60028, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_2_1, 14);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_2_2, 15);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_2_3, 16);
@@ -440,7 +437,7 @@ public:
             }break;
             case 11:     // Question 2 (First Answer = 2)
             {
-                GossipMenu menu(pObject->getGuid(), 60029, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60029, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_3_1, 17);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_3_2, 18);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_3_3, 19);
@@ -448,7 +445,7 @@ public:
             }break;
             case 12:     // Question 2 (First Answer = 3)
             {
-                GossipMenu menu(pObject->getGuid(), 60030, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60030, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_4_1, 20);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_4_2, 21);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_4_3, 22);
@@ -456,7 +453,7 @@ public:
             }break;
             case 13:     // Question 2 (First Answer = 4)
             {
-                GossipMenu menu(pObject->getGuid(), 60031, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60031, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_5_1, 23);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_5_2, 24);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ANSWER_5_3, 25);
@@ -465,21 +462,21 @@ public:
             // Answers 1-#
             case 14:     // Answers: 1-1
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23768, true);
                 menu.sendGossipPacket(plr);
             }break;
             case 15:     // Answers: 1-2
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23769, true);
                 menu.sendGossipPacket(plr);
             }break;
             case 16:     // Answers: 1-3
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23767, true);
                 menu.sendGossipPacket(plr);
@@ -487,21 +484,21 @@ public:
             // Answers 2-#
             case 17:     // Answers: 2-1
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23738, true);
                 menu.sendGossipPacket(plr);
             }break;
             case 18:     // Answers: 2-2
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23766, true);
                 menu.sendGossipPacket(plr);
             }break;
             case 19:     // Answers: 2-3
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23769, true);
                 menu.sendGossipPacket(plr);
@@ -509,21 +506,21 @@ public:
             // Answers 3-#
             case 20:     // Answers: 3-1
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23737, true);
                 menu.sendGossipPacket(plr);
             }break;
             case 21:     // Answers: 3-2
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23735, true);
                 menu.sendGossipPacket(plr);
             }break;
             case 22:     // Answers: 3-3
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23736, true);
                 menu.sendGossipPacket(plr);
@@ -531,28 +528,28 @@ public:
             // Answers 4-#
             case 23:     // Answers: 4-1
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23766, true);
                 menu.sendGossipPacket(plr);
             }break;
             case 24:     // Answers: 4-2
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23738, true);
                 menu.sendGossipPacket(plr);
             }break;
             case 25:     // Answers: 4-3
             {
-                GossipMenu menu(pObject->getGuid(), 60032, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60032, plr->getSession()->language);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WRITTEN_FORTUNES, 30);
                 pCreature->castSpell(plr, 23737, true);
                 menu.sendGossipPacket(plr);
             }break;
             case 30:
             {
-                GossipMenu menu(pObject->getGuid(), 60033, plr->GetSession()->language);
+                GossipMenu menu(pObject->getGuid(), 60033, plr->getSession()->language);
                 menu.sendGossipPacket(plr);
                 // Cast the fortune into the player's inventory - Not working?
                 pCreature->castSpell(plr, 23765, true);
@@ -577,7 +574,7 @@ public:
                     if (!result)
                     {
                         DLLLogDetail("Error while adding item %u to player %s", item->getEntry(), plr->getName().c_str());
-                        item->DeleteMe();
+                        item->deleteMe();
                         return;
                     }
                 }
@@ -591,7 +588,8 @@ public:
 
 class Sayge_Bark : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Sayge_Bark)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Sayge_Bark(c); }
     explicit Sayge_Bark(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);
@@ -611,10 +609,9 @@ class Sayge_Bark : public CreatureAIScript
 class SelinaDourman_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        GossipMenu menu(pObject->getGuid(), 60035, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), 60035, plr->getSession()->language);
         menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WHAT_PURCHASE, 1);
         menu.addItem(GOSSIP_ICON_CHAT, GI_DF_FAIRE_PRIZE, 2);
         menu.addItem(GOSSIP_ICON_CHAT, GI_DF_WHAT_ARE_DARKMOON, 3);
@@ -629,32 +626,32 @@ public:
         switch (IntId)
         {
             case 1:
-                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60036, plr);           // What can I purchase?
+                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60036, plr);                 // What can I purchase?
                 break;
             case 2:
-                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60037, plr);           // What are Darkmoon Faire Prize Tickets and how do I get them?
+                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60037, plr);                 // What are Darkmoon Faire Prize Tickets and how do I get them?
                 break;
             case 3:
             {
-                GossipMenu menu(pObject->getGuid(), 60038, plr->GetSession()->language);          // What are Darkmoon Cards?
+                GossipMenu menu(pObject->getGuid(), 60038, plr->getSession()->language);    // What are Darkmoon Cards?
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_MORE, 10);
                 menu.sendGossipPacket(plr);
             }break;
             case 4:
             {
-                GossipMenu menu(pObject->getGuid(), 60040, plr->GetSession()->language);          // What other things can I do at the faire?
+                GossipMenu menu(pObject->getGuid(), 60040, plr->getSession()->language);    // What other things can I do at the faire?
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_TONK_CONTROLS, 20);
                 menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ABOUT_CANON, 21);
                 menu.sendGossipPacket(plr);
             }break;
             case 10:
-                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60039, plr);            // What are Darkmoon Cards? <more>
+                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60039, plr);                 // What are Darkmoon Cards? <more>
                 break;
             case 20:
-                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60041, plr);           // What are these Tonk Control Consoles?
+                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60041, plr);                 // What are these Tonk Control Consoles?
                 break;
             case 21:
-                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60042, plr);           // Tell me about the cannon.
+                GossipMenu::sendSimpleMenu(pObject->getGuid(), 60042, plr);                 // Tell me about the cannon.
                 break;
             default:
                 break;
@@ -665,10 +662,9 @@ public:
 class SilasDarkmoon_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        GossipMenu menu(pObject->getGuid(), 60013, plr->GetSession()->language);                // \todo find right text
+        GossipMenu menu(pObject->getGuid(), 60013, plr->getSession()->language);                // \todo find right text
         menu.addItem(GOSSIP_ICON_CHAT, GI_DF_ASK_PROFIT, 1);    // Silas, why is most everything at the fair free? How do you make a profit?
         menu.sendGossipPacket(plr);
     }
@@ -681,7 +677,8 @@ public:
 
 class SilasDarkmoon_Bark : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(SilasDarkmoon_Bark)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new SilasDarkmoon_Bark(c); }
     explicit SilasDarkmoon_Bark(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);
@@ -700,7 +697,8 @@ class SilasDarkmoon_Bark : public CreatureAIScript
 
 class StampThunderhorn_Bark : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(StampThunderhorn_Bark)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new StampThunderhorn_Bark(c); }
     explicit StampThunderhorn_Bark(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);
@@ -718,7 +716,8 @@ class StampThunderhorn_Bark : public CreatureAIScript
 
 class Sylannia_Bark : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Sylannia_Bark)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Sylannia_Bark(c); }
     explicit Sylannia_Bark(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         RegisterAIUpdateEvent(1000);

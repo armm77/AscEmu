@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -31,12 +31,7 @@ static void arcAssertFailed(const char* fname, int line, const char* expr)
 
 ///\todo handle errors better
 
-#if CODE_ANALYSIS
-#include<codeanalysis\sourceannotations.h>
-#define ANALYSIS_ASSUME(EXPR) __analysis_assume(EXPR)
-#else
 #define ANALYSIS_ASSUME(EXPR)
-#endif
 
 // An assert isn't necessarily fatal, but we want to stop anyways
 #define WPAssert(EXPR) if (!(EXPR)) { arcAssertFailed(__FILE__,__LINE__,#EXPR); ((void(*)())0)(); } ANALYSIS_ASSUME(EXPR)
@@ -48,8 +43,5 @@ static void arcAssertFailed(const char* fname, int line, const char* expr)
 #define WPFatal(assertion, errmsg) if(!(assertion)) { Log::getSingleton().outError("%s:%i FATAL ERROR:\n  %s\n", __FILE__, __LINE__, (char*)errmsg); assert(#assertion &&0); abort(); }
 
 #define ASSERT WPAssert
-
-
-#define ARCEMU_ASSERT WPAssert
 
 #endif      //_ERRORS_H

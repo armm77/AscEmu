@@ -1,24 +1,28 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 
 #include "Management/HonorHandler.h"
-#include "Management/Item.h"
-#include "Management/Container.h"
+#include "Objects/Item.hpp"
+#include "Objects/Container.h"
 #include "Management/ItemInterface.h"
 #include "Storage/MySQLDataStore.hpp"
 #include "Server/MainServerDefines.h"
-#include "Map/InstanceDefines.hpp"
-#include "Map/MapMgr.h"
+#include "Map/Maps/InstanceDefines.hpp"
+#include "Map/Management/MapMgr.hpp"
 #include "Spell/SpellAuras.h"
-#include "Map/WorldCreator.h"
 #include "Chat/ChatHandler.hpp"
-#include "Objects/ObjectMgr.h"
-#include "Spell/Definitions/Spec.h"
-#include "Units/Creatures/Pet.h"
+#include "Management/ObjectMgr.h"
+#include "Spell/Definitions/Spec.hpp"
+#include "Spell/Definitions/SpellEffects.hpp"
+#include "Objects/Units/Creatures/Pet.h"
+#include "Util/Strings.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Map/Maps/InstanceMap.hpp"
+#include "Map/Maps/BattleGroundMap.hpp"
 
 //.character clearcooldowns
 bool ChatHandler::HandleCharClearCooldownsCommand(const char* /*args*/, WorldSession* m_session)
@@ -45,7 +49,7 @@ bool ChatHandler::HandleCharDeMorphCommand(const char* /*args*/, WorldSession* m
     if (player_target == nullptr)
         return true;
 
-    player_target->DeMorph();
+    player_target->deMorph();
 
     return true;
 }
@@ -85,7 +89,7 @@ bool ChatHandler::HandleCharLevelUpCommand(const char* args, WorldSession* m_ses
     if (player_target != m_session->GetPlayer())
     {
         BlueSystemMessage(m_session, "%s leveled up to level: %u", player_target->getName().c_str(), levels);
-        BlueSystemMessage(player_target->GetSession(), "%s leveled you up to %u.", m_session->GetPlayer()->getName().c_str(), levels);
+        BlueSystemMessage(player_target->getSession(), "%s leveled you up to %u.", m_session->GetPlayer()->getName().c_str(), levels);
         sGMLog.writefromsession(m_session, "leveled player %s to level %u", player_target->getName().c_str(), levels);
     }
     else
@@ -117,9 +121,9 @@ bool ChatHandler::HandleCharUnlearnCommand(const char* args, WorldSession* m_ses
     }
 
     sGMLog.writefromsession(m_session, "removed spell %u from %s", spell_id, player_target->getName().c_str());
-    if (player_target->HasSpell(spell_id))
+    if (player_target->hasSpell(spell_id))
     {
-        GreenSystemMessage(player_target->GetSession(), "Removed spell %u.", spell_id);
+        GreenSystemMessage(player_target->getSession(), "Removed spell %u.", spell_id);
         GreenSystemMessage(m_session, "Removed spell %u from %s.", spell_id, player_target->getName().c_str());
         player_target->removeSpell(spell_id, false, false, 0);
     }
@@ -133,11 +137,11 @@ bool ChatHandler::HandleCharUnlearnCommand(const char* args, WorldSession* m_ses
 //.character learnskill
 bool ChatHandler::HandleCharLearnSkillCommand(const char* args, WorldSession* m_session)
 {
-    uint32 skill;
-    uint32 min;
-    uint32 max;
+    uint16_t skill;
+    uint16_t min;
+    uint16_t max;
 
-    if (sscanf(args, "%u %u %u", &skill, &min, &max) < 1)
+    if (sscanf(args, "%hu %hu %hu", &skill, &min, &max) < 1)
     {
         RedSystemMessage(m_session, "Command must be at least in format: .character learnskill <skillid>.");
         RedSystemMessage(m_session, "Optional: .character learnskill <skillid> <min> <max>");
@@ -154,7 +158,17 @@ bool ChatHandler::HandleCharLearnSkillCommand(const char* args, WorldSession* m_
     if (player_target == nullptr)
         return true;
 
-    player_target->_AddSkillLine(skill, min, max);
+    if (player_target->hasSkillLine(skill))
+    {
+        if (player_target == m_session->GetPlayer())
+            RedSystemMessage(m_session, "You already know this skill line");
+        else
+            RedSystemMessage(m_session, "Player already knows this skill line");
+
+        return true;
+    }
+
+    player_target->addSkillLine(skill, min, max);
 
     if (player_target == m_session->GetPlayer())
     {
@@ -162,7 +176,7 @@ bool ChatHandler::HandleCharLearnSkillCommand(const char* args, WorldSession* m_
     }
     else
     {
-        SystemMessage(player_target->GetSession(), "%s taught you skill line %u.", m_session->GetPlayer()->getName().c_str(), skill);
+        SystemMessage(player_target->getSession(), "%s taught you skill line %u.", m_session->GetPlayer()->getName().c_str(), skill);
         BlueSystemMessage(m_session, "Skill line %u added to player: %s", skill, player_target->getName().c_str());
         sGMLog.writefromsession(m_session, "used add skill of %u %u %u on %s", skill, min, max, player_target->getName().c_str());
     }
@@ -173,10 +187,10 @@ bool ChatHandler::HandleCharLearnSkillCommand(const char* args, WorldSession* m_
 //.character advanceskill
 bool ChatHandler::HandleCharAdvanceSkillCommand(const char* args, WorldSession* m_session)
 {
-    uint32 skill;
-    uint32 amount;
+    uint16_t skill;
+    uint16_t amount;
 
-    if (sscanf(args, "%u %u", &skill, &amount) < 1)
+    if (sscanf(args, "%hu %hu", &skill, &amount) < 1)
     {
         RedSystemMessage(m_session, "Command must be at least in format: .character advanceskill <skillid>.");
         RedSystemMessage(m_session, "Optional: .character advanceskill <skillid> <amount>");
@@ -193,18 +207,14 @@ bool ChatHandler::HandleCharAdvanceSkillCommand(const char* args, WorldSession* 
     BlueSystemMessage(m_session, "Modifying skill line %u. Advancing %u times.", skill, amount);
     sGMLog.writefromsession(m_session, "used modify skill of %u %u on %s", skill, amount, player_target->getName().c_str());
 
-    if (!player_target->_HasSkillLine(skill))
+    if (!player_target->hasSkillLine(skill))
     {
         SystemMessage(m_session, "Does not have skill line, adding.");
-#if VERSION_STRING < Cata
-        player_target->_AddSkillLine(skill, 1, 300);
-#else
-        player_target->_AddSkillLine(skill, 1, 525);
-#endif
+        player_target->addSkillLine(skill, amount, 0);
     }
     else
     {
-        player_target->_AdvanceSkillLine(skill, amount);
+        player_target->advanceSkillLine(skill, amount);
     }
 
     return true;
@@ -219,7 +229,7 @@ bool ChatHandler::HandleCharRemoveSkillCommand(const char* args, WorldSession* m
         return true;
     }
 
-    uint32 skill = atoi(args);
+    auto skill = static_cast<uint16_t>(std::stoul(args));
     if (skill == 0)
     {
         RedSystemMessage(m_session, "%u is not a valid skill!", skill);
@@ -230,13 +240,13 @@ bool ChatHandler::HandleCharRemoveSkillCommand(const char* args, WorldSession* m
     if (player_target == nullptr)
         return true;
 
-    if (player_target->_HasSkillLine(skill))
+    if (player_target->hasSkillLine(skill))
     {
-        player_target->_RemoveSkillLine(skill);
+        player_target->removeSkillLine(skill);
 
         BlueSystemMessage(m_session, "Removing skill line %u", skill);
         sGMLog.writefromsession(m_session, "used remove skill of %u on %s", skill, player_target->getName().c_str());
-        SystemMessage(player_target->GetSession(), "%s removed skill line %u from you. ", m_session->GetPlayer()->getName().c_str(), skill);
+        SystemMessage(player_target->getSession(), "%s removed skill line %u from you. ", m_session->GetPlayer()->getName().c_str(), skill);
     }
     else
     {
@@ -253,10 +263,10 @@ bool ChatHandler::HandleCharRemoveAurasCommand(const char* /*args*/, WorldSessio
         return true;
 
     BlueSystemMessage(m_session, "Removing all auras...");
-    for (uint32 i = MAX_REMOVABLE_AURAS_START; i < MAX_REMOVABLE_AURAS_END; ++i)
+    for (uint16_t i = AuraSlots::REMOVABLE_SLOT_START; i < AuraSlots::REMOVABLE_SLOT_END; ++i)
     {
-        if (player_target->m_auras[i] != 0)
-            player_target->m_auras[i]->removeAura();
+        if (auto* const aur = player_target->getAuraWithAuraSlot(i))
+            aur->removeAura();
     }
 
     if (player_target != m_session->GetPlayer())
@@ -272,12 +282,12 @@ bool ChatHandler::HandleCharRemoveSickessCommand(const char* /*args*/, WorldSess
     if (player_target == nullptr)
         return true;
 
-    player_target->RemoveAura(15007);
+    player_target->removeAllAurasById(15007);
 
     if (player_target != m_session->GetPlayer())
     {
         BlueSystemMessage(m_session, "Removed resurrection sickness from %s", player_target->getName().c_str());
-        BlueSystemMessage(player_target->GetSession(), "%s removed your resurection sickness.", m_session->GetPlayer()->getName().c_str());
+        BlueSystemMessage(player_target->getSession(), "%s removed your resurection sickness.", m_session->GetPlayer()->getName().c_str());
         sGMLog.writefromsession(m_session, "removed resurrection sickness from player %s", player_target->getName().c_str());
     }
     else
@@ -343,7 +353,7 @@ bool ChatHandler::HandleCharLearnCommand(const char* args, WorldSession* m_sessi
             if (spell_entry == nullptr)
                 continue;
 
-            if (selected_player->HasSpell(spellarray[player_class][i]))
+            if (selected_player->hasSpell(spellarray[player_class][i]))
                 continue;
 
             selected_player->addSpell(spellarray[player_class][i]);
@@ -493,7 +503,7 @@ bool ChatHandler::HandleCharLearnCommand(const char* args, WorldSession* m_sessi
                     if (spell_entry == nullptr)
                         continue;
 
-                    if (selected_player->HasSpell(paladinspellarray[player_race][i]))
+                    if (selected_player->hasSpell(paladinspellarray[player_race][i]))
                         continue;
 
                     selected_player->addSpell(paladinspellarray[player_race][i]);
@@ -506,7 +516,7 @@ bool ChatHandler::HandleCharLearnCommand(const char* args, WorldSession* m_sessi
                     if (spell_entry == nullptr)
                         continue;
 
-                    if (selected_player->HasSpell(magespellarray[player_race][i]))
+                    if (selected_player->hasSpell(magespellarray[player_race][i]))
                         continue;
 
                     selected_player->addSpell(magespellarray[player_race][i]);
@@ -519,7 +529,7 @@ bool ChatHandler::HandleCharLearnCommand(const char* args, WorldSession* m_sessi
                     if (spell_entry == nullptr)
                         continue;
 
-                    if (selected_player->HasSpell(shamanspellarray[player_race][i]))
+                    if (selected_player->hasSpell(shamanspellarray[player_race][i]))
                         continue;
 
                     selected_player->addSpell(shamanspellarray[player_race][i]);
@@ -529,7 +539,7 @@ bool ChatHandler::HandleCharLearnCommand(const char* args, WorldSession* m_sessi
         return true;
     }
 
-    uint32 spell = atol((char*)args);
+    uint32 spell = atol(args);
     if (spell == 0)
     {
         spell = GetSpellIDFromLink(args);
@@ -542,14 +552,14 @@ bool ChatHandler::HandleCharLearnCommand(const char* args, WorldSession* m_sessi
         return true;
     }
 
-    if (!selected_player->GetSession()->HasGMPermissions() && (spell_entry->getEffect(0) == SPELL_EFFECT_INSTANT_KILL || spell_entry->getEffect(1) == SPELL_EFFECT_INSTANT_KILL || spell_entry->getEffect(2) == SPELL_EFFECT_INSTANT_KILL))
+    if (!selected_player->getSession()->HasGMPermissions() && (spell_entry->getEffect(0) == SPELL_EFFECT_INSTANT_KILL || spell_entry->getEffect(1) == SPELL_EFFECT_INSTANT_KILL || spell_entry->getEffect(2) == SPELL_EFFECT_INSTANT_KILL))
     {
         SystemMessage(m_session, "don't be an idiot and teach players instakill spells. this action has been logged.");
         sGMLog.writefromsession(m_session, "is an idiot and tried to tought player %s instakill spell %u", selected_player->getName().c_str(), spell);
         return true;
     }
 
-    if (selected_player->HasSpell(spell))
+    if (selected_player->hasSpell(spell))
     {
         SystemMessage(m_session, "%s already knows that spell.", selected_player->getName().c_str());
         return true;
@@ -558,7 +568,7 @@ bool ChatHandler::HandleCharLearnCommand(const char* args, WorldSession* m_sessi
     selected_player->addSpell(spell);
 
     sGMLog.writefromsession(m_session, "Taught %s spell %u", selected_player->getName().c_str(), spell);
-    BlueSystemMessage(selected_player->GetSession(), "%s taught you Spell %u", m_session->GetPlayer()->getName().c_str(), spell);
+    BlueSystemMessage(selected_player->getSession(), "%s taught you Spell %u", m_session->GetPlayer()->getName().c_str(), spell);
     GreenSystemMessage(m_session, "Taught %s Spell %u", selected_player->getName().c_str(), spell);
 
     return true;
@@ -576,7 +586,7 @@ bool ChatHandler::HandleCharAddHonorPointsCommand(const char* args, WorldSession
         return true;
 
     BlueSystemMessage(m_session, "%u honor points added to Player %s.", honor_amount, player_target->getName().c_str());
-    GreenSystemMessage(player_target->GetSession(), "%s added %u honor points to your character.", m_session->GetPlayer()->getName().c_str(), honor_amount);
+    GreenSystemMessage(player_target->getSession(), "%s added %u honor points to your character.", m_session->GetPlayer()->getName().c_str(), honor_amount);
     sGMLog.writefromsession(m_session, "added %u honor points to character %s", honor_amount, player_target->getName().c_str());
 
     HonorHandler::AddHonorPointsToPlayer(player_target, honor_amount);
@@ -594,14 +604,14 @@ bool ChatHandler::HandleCharAddHonorKillCommand(const char* args, WorldSession* 
         return true;
 
     BlueSystemMessage(m_session, "%u honor kill points added to Player %s.", kill_amount, player_target->getName().c_str());
-    GreenSystemMessage(player_target->GetSession(), "%s added %u honor kill points to your character.", m_session->GetPlayer()->getName().c_str(), kill_amount);
+    GreenSystemMessage(player_target->getSession(), "%s added %u honor kill points to your character.", m_session->GetPlayer()->getName().c_str(), kill_amount);
     sGMLog.writefromsession(m_session, "added %u honor kill points to character %s", kill_amount, player_target->getName().c_str());
 
-    player_target->m_killsToday += kill_amount;
-    player_target->m_killsLifetime += kill_amount;
+    player_target->incrementKills(kill_amount);
+
 #if VERSION_STRING != Classic
-    player_target->setFieldKills(uint32_t(player_target->m_killsToday | (player_target->m_killsYesterday << 16)));
-    player_target->setLifetimeHonorableKills(player_target->m_killsLifetime);
+    player_target->setFieldKills(uint32_t(player_target->getKillsToday() | (player_target->getKillsYesterday() << 16)));
+    player_target->setLifetimeHonorableKills(player_target->getKillsLifetime());
 #endif
 
     return true;
@@ -615,7 +625,14 @@ bool ChatHandler::HandleCharAddItemCommand(const char* args, WorldSession* m_ses
     int32 randomprop = 0;
     int32 numadded = 0;
 
-    if (sscanf(args, "%u %u %d", &itemid, &count, &randomprop) < 1)
+    // check for item link
+    uint16_t ofs = GetItemIDFromLink(args, &itemid);
+
+    if (itemid)
+    {
+        sscanf(args + ofs, "%u %d", &count, &randomprop); // these may be empty
+    }
+    else if (sscanf(args, "%u %u %d", &itemid, &count, &randomprop) < 1)
     {
         RedSystemMessage(m_session, "Command must be at least in format: .character add item <itemID>.");
         RedSystemMessage(m_session, "Optional: .character add item <itemID> <amount> <randomprop>");
@@ -643,20 +660,18 @@ bool ChatHandler::HandleCharAddItemCommand(const char* args, WorldSession* m_ses
                 sGMLog.writefromsession(m_session, "used add item command, item id %u [%s], quantity %u (only %i added due to full inventory), to %s", item_proto->ItemId, item_proto->Name.c_str(), count, numadded, player_target->getName().c_str());
             }
 
-            SystemMessage(m_session, "Added item %s (id: %u), quantity %u, to %s's inventory.", GetItemLinkByProto(item_proto, m_session->language).c_str(), item_proto->ItemId, numadded, player_target->getName().c_str());
-            SystemMessage(player_target->GetSession(), "%s added item %s, quantity %u, to your inventory.", m_session->GetPlayer()->getName().c_str(), GetItemLinkByProto(item_proto, player_target->GetSession()->language).c_str(), numadded);
+            SystemMessage(m_session, "Added item %s (id: %u), quantity %u, to %s's inventory.", sMySQLStore.getItemLinkByProto(item_proto, m_session->language).c_str(), item_proto->ItemId, numadded, player_target->getName().c_str());
+            SystemMessage(player_target->getSession(), "%s added item %s, quantity %u, to your inventory.", m_session->GetPlayer()->getName().c_str(), sMySQLStore.getItemLinkByProto(item_proto, player_target->getSession()->language).c_str(), numadded);
         }
         else
         {
-            SystemMessage(player_target->GetSession(), "Failed to add item.");
+            SystemMessage(player_target->getSession(), "Failed to add item.");
         }
         return true;
     }
-    else
-    {
-        RedSystemMessage(m_session, "Item %u is not a valid item!", itemid);
-        return true;
-    }
+
+    RedSystemMessage(m_session, "Item %u is not a valid item!", itemid);
+    return true;
 }
 
 //.character add itemset
@@ -693,38 +708,31 @@ bool ChatHandler::HandleCharAddItemSetCommand(const char* args, WorldSession* m_
             continue;
 
         if (it->ItemSet != setid)
-        {
             continue;
-        }
-        else
+
+        auto item = sObjectMgr.CreateItem(it->ItemId, m_session->GetPlayer());
+        if (item == nullptr)
+            continue;
+
+        if (it->Bonding == ITEM_BIND_ON_PICKUP)
         {
-            auto item = sObjectMgr.CreateItem(it->ItemId, m_session->GetPlayer());
-            if (item == nullptr)
-                continue;
-
-            if (it->Bonding == ITEM_BIND_ON_PICKUP)
-            {
-                if (it->Flags & ITEM_FLAG_ACCOUNTBOUND)
-                    item->addFlags(ITEM_FLAG_ACCOUNTBOUND);
-                else
-                    item->addFlags(ITEM_FLAG_SOULBOUND);
-            }
-
-            if (!player->getItemInterface()->AddItemToFreeSlot(item))
-            {
-                m_session->SendNotification("No free slots left!");
-                item->DeleteMe();
-                return true;
-            }
+            if (it->Flags & ITEM_FLAG_ACCOUNTBOUND)
+                item->addFlags(ITEM_FLAG_ACCOUNTBOUND);
             else
-            {
-                SystemMessage(m_session, "Added item: %s [%u]", it->Name.c_str(), it->ItemId);
-                SlotResult* le = player->getItemInterface()->LastSearchResult();
-                player->sendItemPushResultPacket(false, true, false, le->ContainerSlot, le->Slot, 1, item->getEntry(), item->getPropertySeed(), item->getRandomPropertiesId(), item->getStackCount());
-                ++itemset_items_count;
-            }
-
+                item->addFlags(ITEM_FLAG_SOULBOUND);
         }
+
+        if (!player->getItemInterface()->AddItemToFreeSlot(item))
+        {
+            m_session->SendNotification("No free slots left!");
+            item->deleteMe();
+            return true;
+        }
+
+        SystemMessage(m_session, "Added item: %s [%u]", it->Name.c_str(), it->ItemId);
+        SlotResult* le = player->getItemInterface()->LastSearchResult();
+        player->sendItemPushResultPacket(false, true, false, le->ContainerSlot, le->Slot, 1, item->getEntry(), item->getPropertySeed(), item->getRandomPropertiesId(), item->getStackCount());
+        ++itemset_items_count;
     }
 
     if (itemset_items_count > 0)
@@ -764,7 +772,7 @@ bool ChatHandler::HandleCharAddCopperCommand(const char* args, WorldSession* m_s
     if (newgold == 0)
     {
         BlueSystemMessage(m_session, "Taking all gold from %s's backpack...", player_target->getName().c_str());
-        GreenSystemMessage(player_target->GetSession(), "%s took all gold from your backpack.", m_session->GetPlayer()->getName().c_str());
+        GreenSystemMessage(player_target->getSession(), "%s took all gold from your backpack.", m_session->GetPlayer()->getName().c_str());
     }
     else
     {
@@ -780,13 +788,13 @@ bool ChatHandler::HandleCharAddCopperCommand(const char* args, WorldSession* m_s
             }
 
             BlueSystemMessage(m_session, "Adding %u gold, %u silver, %u copper to %s's backpack...", gold, silver, copper, player_target->getName().c_str());
-            GreenSystemMessage(player_target->GetSession(), "%s added %u gold, %u silver, %u copper to your backpack.", m_session->GetPlayer()->getName().c_str(), gold, silver, copper);
+            GreenSystemMessage(player_target->getSession(), "%s added %u gold, %u silver, %u copper to your backpack.", m_session->GetPlayer()->getName().c_str(), gold, silver, copper);
             sGMLog.writefromsession(m_session, "added %u gold, %u silver, %u copper to %s's backpack.", gold, silver, copper , player_target->getName().c_str());
         }
         else
         {
             BlueSystemMessage(m_session, "Taking %u gold, %u silver, %u copper from %s's backpack...", gold, silver, copper, player_target->getName().c_str());
-            GreenSystemMessage(player_target->GetSession(), "%s took %u gold, %u silver, %u copper from your backpack.", m_session->GetPlayer()->getName().c_str(), gold, silver, copper);
+            GreenSystemMessage(player_target->getSession(), "%s took %u gold, %u silver, %u copper from your backpack.", m_session->GetPlayer()->getName().c_str(), gold, silver, copper);
             sGMLog.writefromsession(m_session, "took %u gold, %u silver, %u copper from %s's backpack.", gold, silver, copper, player_target->getName().c_str());
         }
     }
@@ -824,7 +832,7 @@ bool ChatHandler::HandleCharAddSilverCommand(const char* args, WorldSession* m_s
     if (newgold == 0)
     {
         BlueSystemMessage(m_session, "Taking all gold from %s's backpack...", player_target->getName().c_str());
-        GreenSystemMessage(player_target->GetSession(), "%s took all gold from your backpack.", m_session->GetPlayer()->getName().c_str());
+        GreenSystemMessage(player_target->getSession(), "%s took all gold from your backpack.", m_session->GetPlayer()->getName().c_str());
     }
     else
     {
@@ -840,13 +848,13 @@ bool ChatHandler::HandleCharAddSilverCommand(const char* args, WorldSession* m_s
             }
 
             BlueSystemMessage(m_session, "Adding %u gold, %u silver to %s's backpack...", gold, silver, player_target->getName().c_str());
-            GreenSystemMessage(player_target->GetSession(), "%s added %u gold, %u silver to your backpack.", m_session->GetPlayer()->getName().c_str(), gold, silver);
+            GreenSystemMessage(player_target->getSession(), "%s added %u gold, %u silver to your backpack.", m_session->GetPlayer()->getName().c_str(), gold, silver);
             sGMLog.writefromsession(m_session, "added %u gold, %u silver to %s's backpack.", gold, silver, player_target->getName().c_str());
         }
         else
         {
             BlueSystemMessage(m_session, "Taking %u gold, %u silver from %s's backpack...", gold, silver, player_target->getName().c_str());
-            GreenSystemMessage(player_target->GetSession(), "%s took %u gold, %u silver from your backpack.", m_session->GetPlayer()->getName().c_str(), gold, silver);
+            GreenSystemMessage(player_target->getSession(), "%s took %u gold, %u silver from your backpack.", m_session->GetPlayer()->getName().c_str(), gold, silver);
             sGMLog.writefromsession(m_session, "took %u gold, %u silver from %s's backpack.", gold, silver, player_target->getName().c_str());
         }
     }
@@ -883,7 +891,7 @@ bool ChatHandler::HandleCharAddGoldCommand(const char* args, WorldSession* m_ses
     if (newgold == 0)
     {
         BlueSystemMessage(m_session, "Taking all gold from %s's backpack...", player_target->getName().c_str());
-        GreenSystemMessage(player_target->GetSession(), "%s took all gold from your backpack.", m_session->GetPlayer()->getName().c_str());
+        GreenSystemMessage(player_target->getSession(), "%s took all gold from your backpack.", m_session->GetPlayer()->getName().c_str());
     }
     else
     {
@@ -899,13 +907,13 @@ bool ChatHandler::HandleCharAddGoldCommand(const char* args, WorldSession* m_ses
             }
 
             BlueSystemMessage(m_session, "Adding %u gold to %s's backpack...", gold, player_target->getName().c_str());
-            GreenSystemMessage(player_target->GetSession(), "%s added %u gold to your backpack.", m_session->GetPlayer()->getName().c_str(), gold);
+            GreenSystemMessage(player_target->getSession(), "%s added %u gold to your backpack.", m_session->GetPlayer()->getName().c_str(), gold);
             sGMLog.writefromsession(m_session, "added %u gold to %s's backpack.", gold, player_target->getName().c_str());
         }
         else
         {
             BlueSystemMessage(m_session, "Taking %u gold from %s's backpack...", gold, player_target->getName().c_str());
-            GreenSystemMessage(player_target->GetSession(), "%s took %u gold from your backpack.", m_session->GetPlayer()->getName().c_str(), gold);
+            GreenSystemMessage(player_target->getSession(), "%s took %u gold from your backpack.", m_session->GetPlayer()->getName().c_str(), gold);
             sGMLog.writefromsession(m_session, "took %u gold from %s's backpack.", gold, player_target->getName().c_str());
         }
     }
@@ -915,6 +923,7 @@ bool ChatHandler::HandleCharAddGoldCommand(const char* args, WorldSession* m_ses
     return true;
 }
 
+#if VERSION_STRING >= TBC // support classic
 //.character resetskills
 bool ChatHandler::HandleCharResetSkillsCommand(const char* /*args*/, WorldSession* m_session)
 {
@@ -922,31 +931,17 @@ bool ChatHandler::HandleCharResetSkillsCommand(const char* /*args*/, WorldSessio
     if (selected_player == nullptr)
         return true;
 
-    selected_player->_RemoveAllSkills();
+    selected_player->removeAllSkills();
+    selected_player->learnInitialSkills();
 
-    PlayerCreateInfo const* player_info = sMySQLStore.getPlayerCreateInfo(selected_player->getRace(), selected_player->getClass());
-    if (player_info == nullptr)
-        return true;
-
-    for (std::list<CreateInfo_SkillStruct>::const_iterator ss = player_info->skills.begin(); ss != player_info->skills.end(); ++ss)
-    {
-        auto skill_line = sSkillLineStore.LookupEntry(ss->skillid);
-        if (skill_line == nullptr)
-            continue;
-
-        if (skill_line->type != SKILL_TYPE_LANGUAGE && ss->skillid && ss->currentval && ss->maxval)
-            selected_player->_AddSkillLine(ss->skillid, ss->currentval, ss->maxval);
-    }
-
-    selected_player->UpdateStats();
-    selected_player->UpdateChances();
-    selected_player->_UpdateMaxSkillCounts();
-    selected_player->_AddLanguages(false);
+    selected_player->updateStats();
+    selected_player->updateChances();
+    selected_player->updateSkillMaximumValues();
 
     if (selected_player != m_session->GetPlayer())
     {
         SystemMessage(m_session, "Reset skills of %s.", selected_player->getName().c_str());
-        BlueSystemMessage(selected_player->GetSession(), "%s reset all your skills.", m_session->GetPlayer()->getName().c_str());
+        BlueSystemMessage(selected_player->getSession(), "%s reset all your skills.", m_session->GetPlayer()->getName().c_str());
         sGMLog.writefromsession(m_session, "reset skills of %s", selected_player->getName().c_str());
     }
     else
@@ -956,6 +951,7 @@ bool ChatHandler::HandleCharResetSkillsCommand(const char* /*args*/, WorldSessio
 
     return true;
 }
+#endif
 
 //.character removeitem
 bool ChatHandler::HandleCharRemoveItemCommand(const char* args, WorldSession* m_session)
@@ -963,7 +959,7 @@ bool ChatHandler::HandleCharRemoveItemCommand(const char* args, WorldSession* m_
     uint32 item_id;
     int32 count, ocount;
 
-    int argc = sscanf(args, "%u %u", (unsigned int*)&item_id, (unsigned int*)&count);
+    int argc = sscanf(args, "%u %u", &item_id, (unsigned int*)&count);
     if (argc == 1)
         count = 1;
     else if (argc != 2 || !count)
@@ -995,12 +991,12 @@ bool ChatHandler::HandleCharRemoveItemCommand(const char* args, WorldSession* m_
         if (selected_player != m_session->GetPlayer())
         {
             sGMLog.writefromsession(m_session, "used remove item %s (id: %u) count %u from %s", item_properties->Name.c_str(), item_id, ocount, selected_player->getName().c_str());
-            BlueSystemMessage(m_session, "Removing %u copies of item %s (id: %u) from %s's inventory.", ocount, GetItemLinkByProto(item_properties, m_session->language).c_str(), item_id, selected_player->getName().c_str());
-            BlueSystemMessage(selected_player->GetSession(), "%s removed %u copies of item %s from your inventory.", m_session->GetPlayer()->getName().c_str(), ocount, GetItemLinkByProto(item_properties, selected_player->GetSession()->language).c_str());
+            BlueSystemMessage(m_session, "Removing %u copies of item %s (id: %u) from %s's inventory.", ocount, sMySQLStore.getItemLinkByProto(item_properties, m_session->language).c_str(), item_id, selected_player->getName().c_str());
+            BlueSystemMessage(selected_player->getSession(), "%s removed %u copies of item %s from your inventory.", m_session->GetPlayer()->getName().c_str(), ocount, sMySQLStore.getItemLinkByProto(item_properties, selected_player->getSession()->language).c_str());
         }
         else
         {
-            BlueSystemMessage(m_session, "Removing %u copies of item %s (id: %u) from your inventory.", ocount, GetItemLinkByProto(item_properties, m_session->language).c_str(), item_id);
+            BlueSystemMessage(m_session, "Removing %u copies of item %s (id: %u) from your inventory.", ocount, sMySQLStore.getItemLinkByProto(item_properties, m_session->language).c_str(), item_id);
         }
     }
     else
@@ -1023,7 +1019,7 @@ bool ChatHandler::HandleCharResetTalentsCommand(const char* /*args*/, WorldSessi
     if (selected_player != m_session->GetPlayer())
     {
         SystemMessage(m_session, "Reset talents of %s.", selected_player->getName().c_str());
-        BlueSystemMessage(selected_player->GetSession(), "%s reset all your talents.", m_session->GetPlayer()->getName().c_str());
+        BlueSystemMessage(selected_player->getSession(), "%s reset all your talents.", m_session->GetPlayer()->getName().c_str());
         sGMLog.writefromsession(m_session, "reset talents of %s", selected_player->getName().c_str());
     }
     else
@@ -1037,7 +1033,7 @@ bool ChatHandler::HandleCharResetTalentsCommand(const char* /*args*/, WorldSessi
 //.character advanceallskills
 bool ChatHandler::HandleAdvanceAllSkillsCommand(const char* args, WorldSession* m_session)
 {
-    uint32 amt = args ? atol(args) : 0;
+    auto amt = static_cast<uint16_t>(std::stoul(args));
     if (!amt)
     {
         RedSystemMessage(m_session, "An amount to increment is required.");
@@ -1048,11 +1044,11 @@ bool ChatHandler::HandleAdvanceAllSkillsCommand(const char* args, WorldSession* 
     if (selected_player == nullptr)
         return true;
 
-    selected_player->_AdvanceAllSkills(amt);
+    selected_player->advanceAllSkills(amt);
 
     if (selected_player != m_session->GetPlayer())
     {
-        GreenSystemMessage(selected_player->GetSession(), "%s advanced all your skill lines by %u points.", m_session->GetPlayer()->getName().c_str(),  amt);
+        GreenSystemMessage(selected_player->getSession(), "%s advanced all your skill lines by %u points.", m_session->GetPlayer()->getName().c_str(),  amt);
         sGMLog.writefromsession(m_session, "advanced all skills by %u on %s", amt, selected_player->getName().c_str());
     }
     else
@@ -1067,17 +1063,17 @@ bool ChatHandler::HandleAdvanceAllSkillsCommand(const char* args, WorldSession* 
 bool ChatHandler::HandleCharIncreaseWeaponSkill(const char* args, WorldSession* m_session)
 {
     char* pMin = strtok((char*)args, " ");
-    uint32 cnt = 0;
+    uint16_t cnt = 0;
     if (!pMin)
         cnt = 1;
     else
-        cnt = atol(pMin);
+        cnt = static_cast<uint16_t>(std::stoul(pMin));
 
     Player* selected_player = GetSelectedPlayer(m_session, true, true);
     if (selected_player == nullptr)
         return true;
 
-    uint32 SubClassSkill = 0;
+    uint16_t SubClassSkill = 0;
 
     Item* item = selected_player->getItemInterface()->GetInventoryItem(EQUIPMENT_SLOT_MAINHAND);
     ItemProperties const* proto = nullptr;
@@ -1137,9 +1133,11 @@ bool ChatHandler::HandleCharIncreaseWeaponSkill(const char* args, WorldSession* 
             case 15: // daggers
                 SubClassSkill = SKILL_DAGGERS;
                 break;
+#if VERSION_STRING <= Cata
             case 16: // thrown
                 SubClassSkill = SKILL_THROWN;
                 break;
+#endif
             case 18: // crossbows
                 SubClassSkill = SKILL_CROSSBOWS;
                 break;
@@ -1162,11 +1160,11 @@ bool ChatHandler::HandleCharIncreaseWeaponSkill(const char* args, WorldSession* 
         return false;
     }
 
-    uint32 skill = SubClassSkill;
+    auto skill = SubClassSkill;
 
     if (selected_player != m_session->GetPlayer())
     {
-        BlueSystemMessage(selected_player->GetSession(), "%s modified your skill line %d. Advancing %d times.", m_session->GetPlayer()->getName().c_str(), skill, cnt);
+        BlueSystemMessage(selected_player->getSession(), "%s modified your skill line %d. Advancing %d times.", m_session->GetPlayer()->getName().c_str(), skill, cnt);
         BlueSystemMessage(m_session, "Modifying skill line %d. Advancing %d times for %s.", skill, cnt, selected_player->getName().c_str());
         sGMLog.writefromsession(m_session, "increased weapon skill (%u) of %s by %u", skill, selected_player->getName().c_str(), cnt);
     }
@@ -1175,14 +1173,14 @@ bool ChatHandler::HandleCharIncreaseWeaponSkill(const char* args, WorldSession* 
         BlueSystemMessage(m_session, "Modifying skill line %d. Advancing %d times.", skill, cnt);
     }
 
-    if (!selected_player->_HasSkillLine(skill))
+    if (!selected_player->hasSkillLine(skill))
     {
         SystemMessage(m_session, "Does not have skill line %u, adding.", skill);
-        selected_player->_AddSkillLine(skill, 1, 450);
+        selected_player->addSkillLine(skill, cnt, 0);
     }
     else
     {
-        selected_player->_AdvanceSkillLine(skill, cnt);
+        selected_player->advanceSkillLine(skill, cnt);
     }
 
     return true;
@@ -1195,11 +1193,11 @@ bool ChatHandler::HandleCharResetReputationCommand(const char* /*args*/, WorldSe
     if (selected_player == nullptr)
         return true;
 
-    selected_player->_InitialReputation();
+    selected_player->initialiseReputation();
 
     if (selected_player != m_session->GetPlayer())
     {
-        SystemMessage(selected_player->GetSession(), "%s resets your reputation. Relog for changes to take effect.", m_session->GetPlayer()->getName().c_str());
+        SystemMessage(selected_player->getSession(), "%s resets your reputation. Relog for changes to take effect.", m_session->GetPlayer()->getName().c_str());
         sGMLog.writefromsession(m_session, "used reset reputation for %s", selected_player->getName().c_str());
         SystemMessage(m_session, "Reputation reset for %s", selected_player->getName().c_str());
     }
@@ -1218,12 +1216,12 @@ bool ChatHandler::HandleCharResetSpellsCommand(const char* /*args*/, WorldSessio
     if (selected_player == nullptr)
         return true;
 
-    selected_player->Reset_Spells();
+    selected_player->resetSpells();
 
     if (selected_player != m_session->GetPlayer())
     {
         SystemMessage(m_session, "Reset spells of %s to level 1.", selected_player->getName().c_str());
-        BlueSystemMessage(selected_player->GetSession(), "%s reset all your spells to starting values.", m_session->GetPlayer()->getName().c_str());
+        BlueSystemMessage(selected_player->getSession(), "%s reset all your spells to starting values.", m_session->GetPlayer()->getName().c_str());
         sGMLog.writefromsession(m_session, "reset spells of %s", selected_player->getName().c_str());
     }
     else
@@ -1244,7 +1242,7 @@ bool ChatHandler::HandleCharSetAllExploredCommand(const char* /*args*/, WorldSes
         return true;
 
     SystemMessage(m_session, "%s has explored all zones now.", player_target->getName().c_str());
-    GreenSystemMessage(player_target->GetSession(), "%s sets all areas as explored for you.", m_session->GetPlayer()->getName().c_str());
+    GreenSystemMessage(player_target->getSession(), "%s sets all areas as explored for you.", m_session->GetPlayer()->getName().c_str());
     sGMLog.writefromsession(m_session, "sets all areas as explored for player %s", player_target->getName().c_str());
 
     for (uint8 i = 0; i < WOWPLAYER_EXPLORED_ZONES_COUNT; ++i)
@@ -1253,7 +1251,7 @@ bool ChatHandler::HandleCharSetAllExploredCommand(const char* /*args*/, WorldSes
     }
 
 #if VERSION_STRING > TBC
-    player_target->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EXPLORE_AREA); // update
+    player_target->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EXPLORE_AREA); // update
 #endif
     return true;
 }
@@ -1273,7 +1271,7 @@ bool ChatHandler::HandleCharSetGenderCommand(const char* args, WorldSession* m_s
     }
     else
     {
-        gender = (uint8)atoi((char*)args);
+        gender = (uint8)atoi(args);
         if (gender > 1)
             gender = 1;
     }
@@ -1283,11 +1281,9 @@ bool ChatHandler::HandleCharSetGenderCommand(const char* args, WorldSession* m_s
         SystemMessage(m_session, "%s's gender is already set to %s(%u).", player_target->getName().c_str(), gender ? "Female" : "Male", gender);
         return true;
     }
-    else
-    {
-        player_target->setGender(gender);
-        SystemMessage(m_session, "Set %s's gender to %s(%u).", player_target->getName().c_str(), gender ? "Female" : "Male", gender);
-    }
+
+    player_target->setGender(gender);
+    SystemMessage(m_session, "Set %s's gender to %s(%u).", player_target->getName().c_str(), gender ? "Female" : "Male", gender);
 
 #if VERSION_STRING > Classic
     if (player_target->getGender() == 0)
@@ -1302,7 +1298,7 @@ bool ChatHandler::HandleCharSetGenderCommand(const char* args, WorldSession* m_s
     }
 #endif
 
-    player_target->EventModelChange();
+    player_target->eventModelChange();
 
     return true;
 }
@@ -1338,7 +1334,7 @@ bool ChatHandler::HandleCharSetItemsRepairedCommand(const char* /*args*/, WorldS
                 {
                     player_item->setDurabilityToMax();
                     player_item->m_isDirty = true;
-                    player_target->ApplyItemMods(player_item, static_cast<uint16>(i), true);
+                    player_target->applyItemMods(player_item, static_cast<uint16>(i), true);
                 }
                 else
                 {
@@ -1352,7 +1348,7 @@ bool ChatHandler::HandleCharSetItemsRepairedCommand(const char* /*args*/, WorldS
     if (player_target != m_session->GetPlayer())
     {
         BlueSystemMessage(m_session, "All items has been repaired for Player %s", player_target->getName().c_str());
-        GreenSystemMessage(player_target->GetSession(), "%s repaired all your items.", m_session->GetPlayer()->getName().c_str());
+        GreenSystemMessage(player_target->getSession(), "%s repaired all your items.", m_session->GetPlayer()->getName().c_str());
         sGMLog.writefromsession(m_session, "repaired all items for player %s.", player_target->getName().c_str());
     }
     else
@@ -1387,7 +1383,7 @@ bool ChatHandler::HandleCharSetLevelCommand(const char* args, WorldSession* m_se
     if (player_target != m_session->GetPlayer())
     {
         BlueSystemMessage(m_session, "Setting the level of %s to %u.", player_target->getName().c_str(), new_level);
-        GreenSystemMessage(player_target->GetSession(), "%s set your level to %u.", m_session->GetPlayer()->getName().c_str(), new_level);
+        GreenSystemMessage(player_target->getSession(), "%s set your level to %u.", m_session->GetPlayer()->getName().c_str(), new_level);
         sGMLog.writefromsession(m_session, "set level on %s, level %u", player_target->getName().c_str(), new_level);
     }
     else
@@ -1409,7 +1405,7 @@ bool ChatHandler::HandleCharSetNameCommand(const char* args, WorldSession* m_ses
     char current_name[100];
     char new_name_cmd[100];
 
-    if (sscanf(args, "%s %s", &current_name, &new_name_cmd) != 2)
+    if (sscanf(args, "%s %s", current_name, new_name_cmd) != 2)
         return false;
 
     static const char* bannedCharacters = "\t\v\b\f\a\n\r\\\"\'\? <>[](){}_=+-|/!@#$%^&*~`.,0123456789\0";
@@ -1445,36 +1441,35 @@ bool ChatHandler::HandleCharSetNameCommand(const char* args, WorldSession* m_ses
     }
 
     std::string new_name = new_name_cmd;
-    Util::CapitalizeString(new_name);
+    AscEmu::Util::Strings::capitalize(new_name);
 
-    PlayerInfo* pi = sObjectMgr.GetPlayerInfoByName(current_name);
+    CachedCharacterInfo* pi = sObjectMgr.GetPlayerInfoByName(current_name);
     if (pi == nullptr)
     {
         RedSystemMessage(m_session, "Player not found with this name.");
         return true;
     }
 
-    if (sObjectMgr.GetPlayerInfoByName(new_name.c_str()) != nullptr)
+    if (sObjectMgr.GetPlayerInfoByName(new_name) != nullptr)
     {
         RedSystemMessage(m_session, "New name %s is already in use.", new_name.c_str());
         return true;
     }
 
-    sObjectMgr.RenamePlayerInfo(pi, pi->name, new_name.c_str());
+    sObjectMgr.RenamePlayerInfo(pi, pi->name, new_name);
 
-    free(pi->name);
-    pi->name = strdup(new_name.c_str());
+    pi->name = new_name;
 
     Player* plr = sObjectMgr.GetPlayer(pi->guid);
     if (plr != nullptr)
     {
         plr->setName(new_name);
-        BlueSystemMessage(plr->GetSession(), "%s changed your name to '%s'.", m_session->GetPlayer()->getName().c_str(), new_name.c_str());
-        plr->SaveToDB(false);
+        BlueSystemMessage(plr->getSession(), "%s changed your name to '%s'.", m_session->GetPlayer()->getName().c_str(), new_name.c_str());
+        plr->saveToDB(false);
     }
     else
     {
-        CharacterDatabase.Execute("UPDATE characters SET name = '%s' WHERE guid = %u", CharacterDatabase.EscapeString(new_name).c_str(), (uint32)pi->guid);
+        CharacterDatabase.Execute("UPDATE characters SET name = '%s' WHERE guid = %u", CharacterDatabase.EscapeString(new_name).c_str(), pi->guid);
     }
 
     GreenSystemMessage(m_session, "Changed name of '%s' to '%s'.", current_name, new_name.c_str());
@@ -1497,12 +1492,12 @@ bool ChatHandler::HandleCharSetPhaseCommand(const char* args, WorldSession* m_se
     if (player_target == nullptr)
         return true;
 
-    player_target->Phase(PHASE_SET, phase);
+    player_target->setPhase(PHASE_SET, phase);
 
     if (player_target != m_session->GetPlayer())
     {
         BlueSystemMessage(m_session, "Setting the phase of %s to %u.", player_target->getName().c_str(), phase);
-        GreenSystemMessage(player_target->GetSession(), "%s set your phase to %u.", m_session->GetPlayer()->getName().c_str(), phase);
+        GreenSystemMessage(player_target->getSession(), "%s set your phase to %u.", m_session->GetPlayer()->getName().c_str(), phase);
         sGMLog.writefromsession(m_session, "set phase on %s, phase %u", player_target->getName().c_str(), phase);
     }
     else
@@ -1530,7 +1525,7 @@ bool ChatHandler::HandleCharSetSpeedCommand(const char* args, WorldSession* m_se
     if (player_target != m_session->GetPlayer())
     {
         BlueSystemMessage(m_session, "Setting the speed of %s to %3.2f.", player_target->getName().c_str(), speed);
-        GreenSystemMessage(player_target->GetSession(), "%s set your speed to %3.2f.", m_session->GetPlayer()->getName().c_str(), speed);
+        GreenSystemMessage(player_target->getSession(), "%s set your speed to %3.2f.", m_session->GetPlayer()->getName().c_str(), speed);
         sGMLog.writefromsession(m_session, "modified speed of %s to %3.2f.", player_target->getName().c_str(), speed);
     }
     else
@@ -1552,7 +1547,7 @@ bool ChatHandler::HandleCharSetStandingCommand(const char* args, WorldSession* m
     uint32 faction;
     int32 standing;
 
-    if (sscanf(args, "%u %d", (unsigned int*)&faction, (unsigned int*)&standing) != 2)
+    if (sscanf(args, "%u %d", &faction, (unsigned int*)&standing) != 2)
     {
         RedSystemMessage(m_session, "No faction or standing value entered.");
         RedSystemMessage(m_session, "Use: .character set standstate <factionid> <standing>");
@@ -1563,12 +1558,12 @@ bool ChatHandler::HandleCharSetStandingCommand(const char* args, WorldSession* m
     if (player_target == nullptr)
         return true;
 
-    player_target->SetStanding(faction, standing);
+    player_target->setFactionStanding(faction, standing);
 
     if (player_target != m_session->GetPlayer())
     {
         BlueSystemMessage(m_session, "Setting standing of %u to %d on %s.", faction, standing, player_target->getName().c_str());
-        GreenSystemMessage(player_target->GetSession(), "%s set your standing of faction %u to %d.", m_session->GetPlayer()->getName().c_str(), faction, standing);
+        GreenSystemMessage(player_target->getSession(), "%s set your standing of faction %u to %d.", m_session->GetPlayer()->getName().c_str(), faction, standing);
         sGMLog.writefromsession(m_session, "set standing of faction %u to %u for %s", faction, standing, player_target->getName().c_str());
     }
     else
@@ -1619,11 +1614,11 @@ bool ChatHandler::HandleCharSetTalentpointsCommand(const char* args, WorldSessio
     {
 #ifdef FT_DUAL_SPEC
         BlueSystemMessage(m_session, "Setting talentpoints primary: %u, secondary: %u for player %s.", primary_amount, secondary_amount, player_target->getName().c_str());
-        GreenSystemMessage(player_target->GetSession(), "%s set your talenpoints to primary: %u, secondary: %u.", m_session->GetPlayer()->getName().c_str(), primary_amount, secondary_amount);
+        GreenSystemMessage(player_target->getSession(), "%s set your talenpoints to primary: %u, secondary: %u.", m_session->GetPlayer()->getName().c_str(), primary_amount, secondary_amount);
         sGMLog.writefromsession(m_session, "set talenpoints primary: %u, secondary: %u for player %s", primary_amount, secondary_amount, player_target->getName().c_str());
 #else
         BlueSystemMessage(m_session, "Setting talent points %u for player %s.", primary_amount, player_target->getName().c_str());
-        GreenSystemMessage(player_target->GetSession(), "%s set your talent points to %u.", m_session->GetPlayer()->getName().c_str(), primary_amount);
+        GreenSystemMessage(player_target->getSession(), "%s set your talent points to %u.", m_session->GetPlayer()->getName().c_str(), primary_amount);
         sGMLog.writefromsession(m_session, "set talent points %u for player %s", primary_amount, player_target->getName().c_str());
 #endif
     }
@@ -1663,11 +1658,11 @@ bool ChatHandler::HandleCharSetTitleCommand(const char* args, WorldSession* m_se
     }
     else if (title > 0)
     {
-        player_target->SetKnownTitle(static_cast<RankTitles>(title), true);
+        player_target->setKnownPvPTitle(static_cast<RankTitles>(title), true);
     }
     else
     {
-        player_target->SetKnownTitle(static_cast<RankTitles>(-title), false);
+        player_target->setKnownPvPTitle(static_cast<RankTitles>(-title), false);
     }
 
 #if VERSION_STRING > Classic
@@ -1698,28 +1693,28 @@ bool ChatHandler::HandleCharSetForceRenameCommand(const char* args, WorldSession
         return false;
 
     std::string tmp = std::string(args);
-    PlayerInfo* pi = sObjectMgr.GetPlayerInfoByName(tmp.c_str());
+    CachedCharacterInfo* pi = sObjectMgr.GetPlayerInfoByName(tmp);
     if (pi == nullptr)
     {
         RedSystemMessage(m_session, "Player with that name not found.");
         return true;
     }
 
-    Player* plr = sObjectMgr.GetPlayer((uint32)pi->guid);
+    Player* plr = sObjectMgr.GetPlayer(pi->guid);
     if (plr == nullptr)
     {
-        CharacterDatabase.Execute("UPDATE characters SET login_flags = %u WHERE guid = %u", (uint32)LOGIN_FORCED_RENAME, (uint32)pi->guid);
+        CharacterDatabase.Execute("UPDATE characters SET login_flags = %u WHERE guid = %u", (uint32)LOGIN_FORCED_RENAME, pi->guid);
     }
     else
     {
-        plr->login_flags = LOGIN_FORCED_RENAME;
-        plr->SaveToDB(false);
-        BlueSystemMessage(plr->GetSession(), "%s forced your character to be renamed next logon.", m_session->GetPlayer()->getName().c_str());
+        plr->setLoginFlag(LOGIN_FORCED_RENAME);
+        plr->saveToDB(false);
+        BlueSystemMessage(plr->getSession(), "%s forced your character to be renamed next logon.", m_session->GetPlayer()->getName().c_str());
     }
 
-    CharacterDatabase.Execute("INSERT INTO banned_names VALUES('%s')", CharacterDatabase.EscapeString(std::string(pi->name)).c_str());
+    CharacterDatabase.Execute("INSERT INTO banned_names VALUES('%s')", CharacterDatabase.EscapeString(pi->name).c_str());
     GreenSystemMessage(m_session, "Forcing %s to rename his character next logon.", args);
-    sGMLog.writefromsession(m_session, "forced %s to rename his charater (%u)", pi->name, pi->guid);
+    sGMLog.writefromsession(m_session, "forced %s to rename his charater (%u)", pi->name.c_str(), pi->guid);
     return true;
 }
 
@@ -1731,27 +1726,27 @@ bool ChatHandler::HandleCharSetCustomizeCommand(const char* args, WorldSession* 
         return false;
 
     std::string tmp = std::string(args);
-    PlayerInfo* pi = sObjectMgr.GetPlayerInfoByName(tmp.c_str());
+    CachedCharacterInfo* pi = sObjectMgr.GetPlayerInfoByName(tmp);
     if (pi == nullptr)
     {
         RedSystemMessage(m_session, "Player with that name not found.");
         return true;
     }
 
-    Player* plr = sObjectMgr.GetPlayer((uint32)pi->guid);
+    Player* plr = sObjectMgr.GetPlayer(pi->guid);
     if (plr == nullptr)
     {
-        CharacterDatabase.Execute("UPDATE characters SET login_flags = %u WHERE guid = %u", (uint32)LOGIN_CUSTOMIZE_LOOKS, (uint32)pi->guid);
+        CharacterDatabase.Execute("UPDATE characters SET login_flags = %u WHERE guid = %u", (uint32)LOGIN_CUSTOMIZE_LOOKS, pi->guid);
     }
     else
     {
-        plr->login_flags = LOGIN_CUSTOMIZE_LOOKS;
-        plr->SaveToDB(false);
-        BlueSystemMessage(plr->GetSession(), "%s flagged your character for customization at next login.", m_session->GetPlayer()->getName().c_str());
+        plr->setLoginFlag(LOGIN_CUSTOMIZE_LOOKS);
+        plr->saveToDB(false);
+        BlueSystemMessage(plr->getSession(), "%s flagged your character for customization at next login.", m_session->GetPlayer()->getName().c_str());
     }
 
     GreenSystemMessage(m_session, "%s flagged to customize his character next logon.", args);
-    sGMLog.writefromsession(m_session, "flagged %s for customization for charater (%u)", pi->name, pi->guid);
+    sGMLog.writefromsession(m_session, "flagged %s for customization for charater (%u)", pi->name.c_str(), pi->guid);
     return true;
 }
 
@@ -1763,27 +1758,27 @@ bool ChatHandler::HandleCharSetFactionChangeCommand(const char* args, WorldSessi
         return false;
 
     std::string tmp = std::string(args);
-    PlayerInfo* pi = sObjectMgr.GetPlayerInfoByName(tmp.c_str());
+    CachedCharacterInfo* pi = sObjectMgr.GetPlayerInfoByName(tmp);
     if (pi == nullptr)
     {
         RedSystemMessage(m_session, "Player with that name not found.");
         return true;
     }
 
-    Player* plr = sObjectMgr.GetPlayer((uint32)pi->guid);
+    Player* plr = sObjectMgr.GetPlayer(pi->guid);
     if (plr == nullptr)
     {
-        CharacterDatabase.Execute("UPDATE characters SET login_flags = %u WHERE guid = %u", (uint32)LOGIN_CUSTOMIZE_FACTION, (uint32)pi->guid);
+        CharacterDatabase.Execute("UPDATE characters SET login_flags = %u WHERE guid = %u", (uint32)LOGIN_CUSTOMIZE_FACTION, pi->guid);
     }
     else
     {
-        plr->login_flags = LOGIN_CUSTOMIZE_FACTION;
-        plr->SaveToDB(false);
-        BlueSystemMessage(plr->GetSession(), "%s flagged your character for a faction change at next login.", m_session->GetPlayer()->getName().c_str());
+        plr->setLoginFlag(LOGIN_CUSTOMIZE_FACTION);
+        plr->saveToDB(false);
+        BlueSystemMessage(plr->getSession(), "%s flagged your character for a faction change at next login.", m_session->GetPlayer()->getName().c_str());
     }
 
     GreenSystemMessage(m_session, "%s flagged for a faction change next logon.", args);
-    sGMLog.writefromsession(m_session, "flagged %s for a faction change for charater (%u)", pi->name, pi->guid);
+    sGMLog.writefromsession(m_session, "flagged %s for a faction change for charater (%u)", pi->name.c_str(), pi->guid);
     return true;
 }
 
@@ -1795,27 +1790,27 @@ bool ChatHandler::HandleCharSetRaceChangeCommand(const char* args, WorldSession*
         return false;
 
     std::string tmp = std::string(args);
-    PlayerInfo* pi = sObjectMgr.GetPlayerInfoByName(tmp.c_str());
+    CachedCharacterInfo* pi = sObjectMgr.GetPlayerInfoByName(tmp);
     if (pi == nullptr)
     {
         RedSystemMessage(m_session, "Player with that name not found.");
         return true;
     }
 
-    Player* plr = sObjectMgr.GetPlayer((uint32)pi->guid);
+    Player* plr = sObjectMgr.GetPlayer(pi->guid);
     if (plr == nullptr)
     {
-        CharacterDatabase.Execute("UPDATE characters SET login_flags = %u WHERE guid = %u", (uint32)LOGIN_CUSTOMIZE_RACE, (uint32)pi->guid);
+        CharacterDatabase.Execute("UPDATE characters SET login_flags = %u WHERE guid = %u", (uint32)LOGIN_CUSTOMIZE_RACE, pi->guid);
     }
     else
     {
-        plr->login_flags = LOGIN_CUSTOMIZE_RACE;
-        plr->SaveToDB(false);
-        BlueSystemMessage(plr->GetSession(), "%s flagged your character for a race change at next login.", m_session->GetPlayer()->getName().c_str());
+        plr->setLoginFlag(LOGIN_CUSTOMIZE_RACE);
+        plr->saveToDB(false);
+        BlueSystemMessage(plr->getSession(), "%s flagged your character for a race change at next login.", m_session->GetPlayer()->getName().c_str());
     }
 
     GreenSystemMessage(m_session, "%s flagged for a race change next logon.", args);
-    sGMLog.writefromsession(m_session, "flagged %s for a race change for charater (%u)", pi->name, pi->guid);
+    sGMLog.writefromsession(m_session, "flagged %s for a race change for charater (%u)", pi->name.c_str(), pi->guid);
     return true;
 }
 
@@ -1828,15 +1823,15 @@ bool ChatHandler::HandleCharListSkillsCommand(const char* /*args*/, WorldSession
     if (player_target == nullptr)
         return true;
 
-    uint32 nobonus = 0;
-    int32 bonus = 0;
-    uint32 max = 0;
+    uint16_t nobonus = 0;
+    int16_t bonus = 0;
+    uint16_t max = 0;
 
     BlueSystemMessage(m_session, "===== %s has skills =====", player_target->getName().c_str());
 
-    for (uint32 SkillId = 0; SkillId <= SkillNameManager->maxskill; SkillId++)
+    for (uint16_t SkillId = 0; SkillId <= SkillNameManager->maxskill; SkillId++)
     {
-        if (player_target->_HasSkillLine(SkillId))
+        if (player_target->hasSkillLine(SkillId))
         {
             char* SkillName = SkillNameManager->SkillNames[SkillId];
             if (!SkillName)
@@ -1844,9 +1839,9 @@ bool ChatHandler::HandleCharListSkillsCommand(const char* /*args*/, WorldSession
                 RedSystemMessage(m_session, "Invalid skill: %u", SkillId);
                 continue;
             }
-            nobonus = player_target->_GetSkillLineCurrent(SkillId, false);
-            bonus = player_target->_GetSkillLineCurrent(SkillId, true) - nobonus;
-            max = player_target->_GetSkillLineMax(SkillId);
+            nobonus = player_target->getSkillLineCurrent(SkillId, false);
+            bonus = player_target->getSkillLineCurrent(SkillId, true) - nobonus;
+            max = player_target->getSkillLineMax(SkillId);
             BlueSystemMessage(m_session, " %s: Value: %u, MaxValue: %u. (+ %d bonus)", SkillName, nobonus, max, bonus);
         }
     }
@@ -1861,8 +1856,8 @@ bool ChatHandler::HandleCharListStandingCommand(const char* args, WorldSession* 
     if (player_target == nullptr)
         return true;
 
-    int32 standing = player_target->GetStanding(faction);
-    int32 bstanding = player_target->GetBaseStanding(faction);
+    int32 standing = player_target->getFactionStanding(faction);
+    int32 bstanding = player_target->getBaseFactionStanding(faction);
 
     SystemMessage(m_session, "==== %s standing ====", player_target->getName().c_str());
     SystemMessage(m_session, "Reputation for faction %u:", faction);
@@ -1874,8 +1869,6 @@ bool ChatHandler::HandleCharListStandingCommand(const char* args, WorldSession* 
 //.character list items
 bool ChatHandler::HandleCharListItemsCommand(const char* /*args*/, WorldSession* m_session)
 {
-    std::string q;
-
     auto player_target = GetSelectedPlayer(m_session, true, true);
     if (player_target == nullptr)
         return true;
@@ -1904,9 +1897,9 @@ bool ChatHandler::HandleCharListKillsCommand(const char* /*args*/, WorldSession*
         return true;
 
     SystemMessage(m_session, "==== %s kills ====", player_target->getName().c_str());
-    SystemMessage(m_session, "All Kills: %u", player_target->m_killsLifetime);
-    SystemMessage(m_session, "Kills today: %u", player_target->m_killsToday);
-    SystemMessage(m_session, "Kills yesterday: %u", player_target->m_killsYesterday);
+    SystemMessage(m_session, "All Kills: %u", player_target->getKillsLifetime());
+    SystemMessage(m_session, "Kills today: %u", player_target->getKillsToday());
+    SystemMessage(m_session, "Kills yesterday: %u", player_target->getKillsYesterday());
 
     return true;
 }
@@ -1921,41 +1914,42 @@ bool ChatHandler::HandleCharListInstanceCommand(const char* /*args*/, WorldSessi
     uint32 count = 0;
     std::stringstream ss;
     ss << "Show persistent instances of " << MSG_COLOR_CYAN << player_target->getName().c_str() << "|r\n";
-    player_target->getPlayerInfo()->savedInstanceIdsLock.Acquire();
-    for (uint32 difficulty = 0; difficulty < InstanceDifficulty::MAX_DIFFICULTY; difficulty++)
+
+    for (uint32_t mapId = 0; mapId < MAX_NUM_MAPS; mapId++)
     {
-        for (PlayerInstanceMap::iterator itr = player_target->getPlayerInfo()->savedInstanceIds[difficulty].begin(); itr != player_target->getPlayerInfo()->savedInstanceIds[difficulty].end(); ++itr)
+        const auto save = player_target->getInstanceSave(mapId, false);
+
+        if (save)
         {
             count++;
-            ss << " - " << MSG_COLOR_CYAN << (*itr).second << "|r";
-            MySQLStructure::MapInfo const* mapInfo = sMySQLStore.getWorldMapInfo((*itr).first);
-            if (mapInfo != NULL)
-                ss << " (" << MSG_COLOR_CYAN << mapInfo->name << "|r)";
-            Instance* pInstance = sInstanceMgr.GetInstanceByIds((*itr).first, (*itr).second);
-            if (pInstance == NULL)
-                ss << " - " << MSG_COLOR_RED << "Expired!|r";
-            else
+            MySQLStructure::MapInfo const* mapInfo = sMySQLStore.getWorldMapInfo(mapId);
+            if (mapInfo)
             {
-                ss << " [" << GetMapTypeString(static_cast<uint8>(pInstance->m_mapInfo->type)) << "]";
-                if (pInstance->m_mapInfo->type == INSTANCE_MULTIMODE)
+                ss << " - " << MSG_COLOR_CYAN << mapInfo->mapid << "|r";
+                ss << " (" << MSG_COLOR_CYAN << mapInfo->name << "|r)";
+
+                ss << " [" << GetMapTypeString(static_cast<uint8>(mapInfo->type)) << "]";
+                if (mapInfo->isMultimodeDungeon())
                 {
-                    ss << " [" << GetDifficultyString(static_cast<uint8>(pInstance->m_difficulty)) << "]";
+                    ss << " [" << GetDifficultyString(save->getDifficulty()) << "]";
                 }
                 ss << " - ";
-                if (pInstance->m_mapMgr == NULL)
+
+                InstanceMap* instance = sMapMgr.findInstanceMap(save->getInstanceId());
+                if (instance == nullptr)
                     ss << MSG_COLOR_LIGHTRED << "Shut Down|r";
                 else
                 {
-                    if (!pInstance->m_mapMgr->HasPlayers())
+                    if (!instance->hasPlayers())
                         ss << MSG_COLOR_LIGHTRED << "Idle|r";
                     else
                         ss << MSG_COLOR_GREEN << "In use|r";
                 }
+
             }
-            ss << "\n";
         }
+        ss << "\n";
     }
-    player_target->getPlayerInfo()->savedInstanceIdsLock.Release();
 
     if (count == 0)
         ss << "Player is not assigned to any persistent instances.\n";

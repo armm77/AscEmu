@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -12,7 +12,6 @@ This file is released under the MIT license. See README-MIT for more information
 #elif VERSION_STRING == TBC
 #include "GameTBC/Storage/DBCStructures.h"
 #elif VERSION_STRING == WotLK
-#include "GameWotLK/Storage/DBCStructures.h"
 #elif VERSION_STRING == Cata
 #include "GameCata/Storage/DBCStructures.h"
 #elif VERSION_STRING == Mop
@@ -41,7 +40,7 @@ enum SpellAttributes
     ATTRIBUTES_ABILITY                              = 0x00000010,
     ATTRIBUTES_TRADESPELL                           = 0x00000020,   // Tradeskill recipies
     ATTRIBUTES_PASSIVE                              = 0x00000040,
-    ATTRIBUTES_NO_VISUAL_AURA                       = 0x00000080,   // not visible in spellbook or aura bar
+    ATTRIBUTES_NO_VISUAL_AURA                       = 0x00000080,   // Not visible in spellbook or aura bar. Client handles this by itself.
     ATTRIBUTES_NO_CAST                              = 0x00000100,   //seems to be afflicts pet
     ATTRIBUTES_TARGET_MAINHAND                      = 0x00000200,   // automatically select item from mainhand
     ATTRIBUTES_ON_NEXT_SWING_2                      = 0x00000400,   //completely the same as ATTRIBUTE_ON_NEXT_ATTACK for class spells. So difference somewhere in mob abilities.
@@ -152,7 +151,7 @@ enum SpellAttributesExC
     ATTRIBUTESEXC_IGNORE_RESURRECTION_TIMER         = 0x00000010,   // ignor resurrection
     ATTRIBUTESEXC_UNK7                              = 0x00000020,
     ATTRIBUTESEXC_UNK8                              = 0x00000040,
-    ATTRIBUTESEXC_UNK9                              = 0x00000080,
+    ATTRIBUTESEXC_APPLY_OWN_STACK_FOR_EACH_CASTER   = 0x00000080,   // Applies separate aura stack for each caster
     ATTRIBUTESEXC_TARGET_ONLY_PLAYERS               = 0x00000100,   // Requires player target
     ATTRIBUTESEXC_UNK11                             = 0x00000200,
     ATTRIBUTESEXC_REQUIRES_MAIN_HAND_WEAPON         = 0x00000400,   // Requires main hand weapon
@@ -246,8 +245,8 @@ enum SpellAttributesExE
     ATTRIBUTESEXE_UNK26                             = 0x01000000,
     ATTRIBUTESEXE_UNK27                             = 0x02000000,
     ATTRIBUTESEXE_SKIP_LINE_OF_SIGHT_CHECK          = 0x04000000,   // Used for spells which explode around target
-    ATTRIBUTESEXE_HIDE_AURA_ON_SELF_CAST            = 0x08000000,
-    ATTRIBUTESEXE_HIDE_AURA_ON_NON_SELF_CAST        = 0x10000000,
+    ATTRIBUTESEXE_HIDE_AURA_ON_SELF_CAST            = 0x08000000,   // Client handles this by itself
+    ATTRIBUTESEXE_HIDE_AURA_ON_NON_SELF_CAST        = 0x10000000,   // Client handles this by itself
     ATTRIBUTESEXE_UNK31                             = 0x20000000,
     ATTRIBUTESEXE_UNK32                             = 0x40000000,
     ATTRIBUTESEXE_UNK33                             = 0x80000000

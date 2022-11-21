@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,15 +19,17 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class DashelStonefist : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(DashelStonefist)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new DashelStonefist(c); }
     explicit DashelStonefist(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnLoad() override
     {
-        getCreature()->SetFaction(12);
+        getCreature()->setFaction(12);
         getCreature()->setStandState(STANDSTATE_STAND);
     }
 
@@ -48,15 +50,15 @@ class DashelStonefist : public CreatureAIScript
 
     void AIUpdate() override
     {
-        getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Okay, okay! Enough fighting. No one else needs to get hurt.");
-        getCreature()->RemoveNegativeAuras();
-        getCreature()->SetFaction(12);
-        getCreature()->SetHealthPct(100);
-        getCreature()->GetAIInterface()->WipeTargetList();
-        getCreature()->GetAIInterface()->WipeHateList();
-        getCreature()->GetAIInterface()->HandleEvent(EVENT_LEAVECOMBAT, getCreature(), 0);
+        getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Okay, okay! Enough fighting. No one else needs to get hurt.");
+        getCreature()->removeAllNegativeAuras();
+        getCreature()->setFaction(12);
+        getCreature()->setHealthPct(100);
+        getCreature()->getThreatManager().clearAllThreat();
+        getCreature()->getThreatManager().removeMeFromThreatLists();
+        getCreature()->getAIInterface()->handleEvent(EVENT_LEAVECOMBAT, getCreature(), 0);
         _setMeleeDisabled(true);
-        getCreature()->GetAIInterface()->SetAllowedToEnterCombat(false);
+        getCreature()->getAIInterface()->setAllowedToEnterCombat(false);
         getCreature()->removeUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
         RemoveAIUpdateEvent();
     }
@@ -65,35 +67,34 @@ class DashelStonefist : public CreatureAIScript
 class TheMissingDiplomat : public QuestScript
 {
 public:
-
     void OnQuestStart(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
         float SSX = mTarget->GetPositionX();
         float SSY = mTarget->GetPositionY();
         float SSZ = mTarget->GetPositionZ();
 
-        Creature* Dashel = mTarget->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(SSX, SSY, SSZ, 4961);
+        Creature* Dashel = mTarget->getWorldMap()->getInterface()->getCreatureNearestCoords(SSX, SSY, SSZ, 4961);
 
-        if (Dashel == NULL)
+        if (Dashel == nullptr)
             return;
 
-        Dashel->SetFaction(72);
-        Dashel->GetAIInterface()->setMeleeDisabled(false);
-        Dashel->GetAIInterface()->SetAllowedToEnterCombat(true);
+        Dashel->setFaction(72);
+        Dashel->getAIInterface()->setMeleeDisabled(false);
+        Dashel->getAIInterface()->setAllowedToEnterCombat(true);
 
         uint32_t chance = Util::getRandomUInt(100);
         if (chance < 15)
         {
             std::string say = "Now you're gonna get it good, ";
-            say += (static_cast<Player*>(mTarget))->getName();
+            say += mTarget->getName();
             say += "!";
-            Dashel->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, say.c_str());
+            Dashel->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, say.c_str());
         }
-        Creature* ct1 = mTarget->GetMapMgr()->CreateAndSpawnCreature(4969, -8686.803711f, 445.267792f, 99.789223f, 5.461184f);
+        Creature* ct1 = mTarget->getWorldMap()->createAndSpawnCreature(4969, LocationVector(-8686.803711f, 445.267792f, 99.789223f, 5.461184f));
         if (ct1 != nullptr)
             ct1->Despawn(300000, 0);
 
-        Creature* ct2 = mTarget->GetMapMgr()->CreateAndSpawnCreature(4969, -8675.571289f, 444.162262f, 99.644737f, 3.834103f);
+        Creature* ct2 = mTarget->getWorldMap()->createAndSpawnCreature(4969, LocationVector(-8675.571289f, 444.162262f, 99.644737f, 3.834103f));
         if (ct2 != nullptr)
             ct2->Despawn(300000, 0);
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -18,11 +18,11 @@
  */
 
 #include "RuinsOfLordaeron.h"
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Objects/GameObject.h"
 #include "Server/Master.h"
 
-RuinsOfLordaeron::RuinsOfLordaeron(MapMgr* mgr, uint32_t id, uint32_t lgroup, uint32_t t, uint32_t players_per_side) :
+RuinsOfLordaeron::RuinsOfLordaeron(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t, uint32_t players_per_side) :
     Arena(mgr, id, lgroup, t, players_per_side)
 {}
 
@@ -33,14 +33,14 @@ void RuinsOfLordaeron::OnCreate()
 {
     GameObject* obj = nullptr;
 
-    obj = SpawnGameObject(185917, 572, 1278.647705f, 1730.556641f, 31.605574f, 1.684245f, 32, 1375, 1.0f);
+    obj = spawnGameObject(185917, LocationVector(1278.647705f, 1730.556641f, 31.605574f, 1.684245f), 32, 1375, 1.0f);
     obj->setState(GO_STATE_CLOSED);
-    obj->SetRotationQuat(0.f, 0.f, 0.746058f, 0.665881f);
+    obj->setLocalRotation(0.f, 0.f, 0.746058f, 0.665881f);
     m_gates.insert(obj);
 
-    obj = SpawnGameObject(185918, 572, 1293.560791f, 1601.937988f, 31.605574f, -1.457349f, 32, 1375, 1.0f);
+    obj = spawnGameObject(185918, LocationVector(1293.560791f, 1601.937988f, 31.605574f, -1.457349f), 32, 1375, 1.0f);
     obj->setState(GO_STATE_CLOSED);
-    obj->SetRotationQuat(0.f, 0.f, -0.665881f, 0.746058f);
+    obj->setLocalRotation(0.f, 0.f, -0.665881f, 0.746058f);
     m_gates.insert(obj);
 
     Arena::OnCreate();
@@ -48,16 +48,16 @@ void RuinsOfLordaeron::OnCreate()
 
 void RuinsOfLordaeron::HookOnShadowSight()
 {
-    m_buffs[0] = SpawnGameObject(184664, 572, 1328.729268f, 1632.738403f, 34.838585f, 2.611449f, 32, 1375, 1.0f);
+    m_buffs[0] = spawnGameObject(184664, LocationVector(1328.729268f, 1632.738403f, 34.838585f, 2.611449f), 32, 1375, 1.0f);
     m_buffs[0]->setState(GO_STATE_CLOSED);
-    m_buffs[0]->SetRotationQuat(0.f, 0.f, 0.904455f, -0.426569f);
+    m_buffs[0]->setLocalRotation(0.f, 0.f, 0.904455f, -0.426569f);
     m_buffs[0]->setGoType(GAMEOBJECT_TYPE_TRAP);
     m_buffs[0]->setAnimationProgress(100);
     m_buffs[0]->PushToWorld(m_mapMgr);
 
-    m_buffs[1] = SpawnGameObject(184664, 572, 1243.306763f, 1699.334351f, 34.837566f, 5.713773f, 32, 1375, 1.0f);
+    m_buffs[1] = spawnGameObject(184664, LocationVector(1243.306763f, 1699.334351f, 34.837566f, 5.713773f), 32, 1375, 1.0f);
     m_buffs[1]->setState(GO_STATE_CLOSED);
-    m_buffs[1]->SetRotationQuat(0.f, 0.f, 0.90445f, -0.426569f);
+    m_buffs[1]->setLocalRotation(0.f, 0.f, 0.90445f, -0.426569f);
     m_buffs[1]->setGoType(GAMEOBJECT_TYPE_TRAP);
     m_buffs[1]->setAnimationProgress(100);
     m_buffs[1]->PushToWorld(m_mapMgr);
@@ -90,6 +90,6 @@ bool RuinsOfLordaeron::HookHandleRepop(Player* plr)
 {
     LocationVector dest(0, 0, 0, 0);
     dest.ChangeCoords({ 1286.112061f, 1668.334961f, 39.289127f });
-    plr->SafeTeleport(m_mapMgr->GetMapId(), m_mapMgr->GetInstanceID(), dest);
+    plr->safeTeleport(m_mapMgr->getBaseMap()->getMapId(), m_mapMgr->getInstanceId(), dest);
     return true;
 }

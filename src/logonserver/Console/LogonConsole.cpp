@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,9 +17,16 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "LogonStdAfx.h"
 #include "LogonConsole.h"
 #include "Server/Logon.h"
+#include <Logging/Logger.hpp>
+#include <Server/Master.hpp>
+#include <iostream>
+#include <Server/AccountMgr.h>
+#include <Server/IpBanMgr.h>
+#include <Network/Network.h>
+#include <LogonConf.h>
+#include <Util/Strings.cpp>
 
 LogonConsole& LogonConsole::getInstance()
 {
@@ -131,7 +138,7 @@ bool LogonConsoleThread::runThread()
         sLogonConsole.ProcessCmd(cmd);
     }
 
-    sLogonConsole._thread = NULL;
+    sLogonConsole._thread = nullptr;
     return true;
 }
 ///////////////////////////////////////////////////////////////////////////////
@@ -213,35 +220,33 @@ void LogonConsole::ProcessQuit(int /*delay*/)
 
 ///////////////////////////////////////////////////////////////////////////////
 // Console commands - help | ?
-///////////////////////////////////////////////////////////////////////////////
 void LogonConsole::TranslateHelp(char* /*str*/)
 {
     ProcessHelp(NULL);
 }
-void LogonConsole::ProcessHelp(char* command)
+
+void LogonConsole::ProcessHelp(char* /*command*/)
 {
-    if (command == NULL)
-    {
-        printf("Console:--------help--------\n");
-        printf("    Help, ?: Prints this help text.\n");
-        printf("    Account create: Creates a new account\n");
-        printf("    Account delete: Deletes an account\n");
-        printf("    Account set password: Sets a new password for an account\n");
-        printf("    Account change password: Change the current password for an account\n");
-        printf("    Info:  shows some information about the server.\n");
-        printf("    Netstatus: Shows network status.\n");
-        printf("    Rehash: Rehashing config file.\n");
-        printf("    Reload: Reloads accounts.\n");
-        printf("    Shutdown, exit: Closes the logonserver.\n");
-    }
+    std::cout << "Console::Help" << std::endl;
+    std::cout << "=============" << std::endl;
+    std::cout << "Help, ?                   : Prints this help text." << std::endl;
+    std::cout << "Account create            : Creates a new account." << std::endl;
+    std::cout << "Account delete            : Deletes an account." << std::endl;
+    std::cout << "Account set password      : Sets a new password for an account." << std::endl;
+    std::cout << "Account change password   : Change the current password for an account." << std::endl;
+    std::cout << "Info                      : Shows some information about the server." << std::endl;
+    std::cout << "Netstatus                 : Shows network status." << std::endl;
+    std::cout << "Rehash                    : Rehashing config file." << std::endl;
+    std::cout << "Reload                    : Reloads accounts." << std::endl;
+    std::cout << "Shutdown, Exit            : Closes the logonserver." << std::endl;
 }
 
 void LogonConsole::Info(char* /*str*/)
 {
     std::cout << "LogonServer information" << std::endl;
-    std::cout << "-----------------------" << std::endl;
-    std::cout << "CPU Usage: " << sLogon.getCPUUsage() << " %" << std::endl;
-    std::cout << "RAM Usage: " << sLogon.getRAMUsage() << " MB" << std::endl;
+    std::cout << "=======================" << std::endl;
+    std::cout << "CPU Usage : " << sLogon.getCPUUsage() << "%" << std::endl;
+    std::cout << "RAM Usage : " << sLogon.getRAMUsage() << "MB" << std::endl;
 }
 
 void LogonConsole::AccountCreate(char* str)
@@ -398,7 +403,6 @@ void LogonConsole::AccountChangePassword(char* str)
             // std::cout << "Can't update the password. Abort." << std::endl;
             return;
         }
-
     }
 
     sAccountMgr.reloadAccounts(true);
@@ -410,13 +414,13 @@ void LogonConsole::checkAccountName(std::string name, uint8 type)
 {
     std::string aname(name);
 
-    Util::StringToUpperCase(aname);
+    AscEmu::Util::Strings::toUpperCase(aname);
 
     switch (type)
     {
         case ACC_NAME_DO_EXIST:
         {
-            if (sAccountMgr.getAccountByName(aname) == NULL)
+            if (sAccountMgr.getAccountByName(aname) == nullptr)
             {
                 std::cout << "There's no account with name " << name << std::endl;
             }
@@ -424,7 +428,7 @@ void LogonConsole::checkAccountName(std::string name, uint8 type)
         } break;
         case ACC_NAME_NOT_EXIST:
         {
-            if (sAccountMgr.getAccountByName(aname) != NULL)
+            if (sAccountMgr.getAccountByName(aname) != nullptr)
             {
                 std::cout << "There's already an account with name " << name << std::endl;
             }

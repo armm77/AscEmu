@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -15,11 +15,12 @@ namespace AscEmu::Logging
     class SERVER_DECL Logger
     {
         FILE* normalLogFile = nullptr;
-        FILE* errorLogFile = nullptr;;
+        FILE* errorLogFile = nullptr;
         MessageType minimumMessageType = MessageType::MINOR;
+        uint32_t aelog_debug_flags = 0;
 
 #ifdef _WIN32
-        HANDLE handle_stdout;
+        HANDLE handle_stdout = nullptr;
 #endif
 
     public:
@@ -36,9 +37,13 @@ namespace AscEmu::Logging
 
         void setMinimumMessageType(MessageType messsageType);
 
+        void setDebugFlags(DebugFlags debug_flags);
+
         void trace(const char* message, ...);
 
         void debug(const char* message, ...);
+
+        void debugFlag(DebugFlags log_flags, const char* message, ...);
 
         void info(const char* message, ...);
 
@@ -71,8 +76,9 @@ namespace AscEmu::Logging
 #endif
 
         void setSeverityConsoleColor(Severity severity);
+        Severity getSeverityConsoleColorByDebugFlag(DebugFlags log_flags);
     };
 
-    std::string getFormattedFileName(std::string path_prefix, std::string file_prefix, bool use_date_time);
+    std::string getFormattedFileName(const std::string& path_prefix, const std::string& file_prefix, bool use_date_time);
 }
 #define sLogger AscEmu::Logging::Logger::getInstance()

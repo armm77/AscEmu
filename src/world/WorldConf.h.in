@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -47,6 +47,10 @@ This file is released under the MIT license. See README-MIT for more information
     #define BUILD_VERSION 15595
 #elif VERSION_STRING == Mop
     #define BUILD_VERSION 18414
+#endif
+
+#if VERSION_STRING >= Classic
+    #define GM_TICKET_MY_MASTER_COMPATIBLE
 #endif
 
 #if VERSION_STRING >= TBC

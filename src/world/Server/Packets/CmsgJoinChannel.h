@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -24,10 +24,10 @@ namespace AscEmu::Packets
 
         CmsgJoinChannel(uint16_t unk, uint32_t dbcId, std::string channelName = "", std::string password = "") :
             ManagedPacket(CMSG_JOIN_CHANNEL, 4),
-            unk(unk),
-            dbcId(dbcId),
             channelName(channelName),
-            password(password)
+            password(password),
+            dbcId(dbcId),
+            unk(unk)
         {
         }
 

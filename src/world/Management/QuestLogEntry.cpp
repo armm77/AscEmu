@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Log.hpp"
 #include "QuestLogEntry.hpp"
 #include "Server/WorldSession.h"
@@ -13,7 +13,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "QuestMgr.h"
 
 
-QuestLogEntry::QuestLogEntry(QuestProperties const* questProperties, Player* player, uint8_t slot) : m_questProperties(questProperties), m_player(player), m_slot(slot)
+QuestLogEntry::QuestLogEntry(QuestProperties const* questProperties, Player* player, uint8_t slot) : m_slot(slot), m_questProperties(questProperties), m_player(player)
 {
     if (m_questProperties->time > 0)
         m_expirytime = static_cast<uint32_t>(UNIXTIME + m_questProperties->time / 1000);
@@ -33,8 +33,8 @@ void QuestLogEntry::initPlayerData()
         {
             m_isCastQuest = true;
 
-            if (!m_player->HasQuestSpell(m_questProperties->required_spell[i]))
-                m_player->quest_spells.insert(m_questProperties->required_spell[i]);
+            if (!m_player->hasQuestSpell(m_questProperties->required_spell[i]))
+                m_player->addQuestSpell(m_questProperties->required_spell[i]);
         }
         else if (m_questProperties->required_emote[i] != 0)
         {
@@ -43,15 +43,16 @@ void QuestLogEntry::initPlayerData()
 
         if (m_questProperties->required_mob_or_go[i] != 0)
         {
-            if (!m_player->HasQuestMob(m_questProperties->required_mob_or_go[i]))
-                m_player->quest_mobs.insert(m_questProperties->required_mob_or_go[i]);
+            if (!m_player->hasQuestMob(m_questProperties->required_mob_or_go[i]))
+                m_player->addQuestMob(m_questProperties->required_mob_or_go[i]);
         }
     }
 
     m_player->setQuestLogInSlot(this, m_slot);
 
-    if (!m_player->GetSession()->m_loggingInPlayer)
-        CALL_QUESTSCRIPT_EVENT(this, OnQuestStart)(m_player, this);
+    if (!m_player->getSession()->m_loggingInPlayer)
+        if (const auto questScript = getQuestScript())
+            questScript->OnQuestStart(m_player, this);
 }
 
 void QuestLogEntry::loadFromDB(Field* fields)
@@ -64,7 +65,8 @@ void QuestLogEntry::loadFromDB(Field* fields)
     for (uint8_t i = 0; i < 4; ++i)
     {
         m_explored_areas[i] = fields[4 + i].GetUInt32();
-        CALL_QUESTSCRIPT_EVENT(this, OnExploreArea)(m_explored_areas[i], m_player, this);
+        if (const auto questScript = getQuestScript())
+            questScript->OnExploreArea(m_explored_areas[i], m_player, this);
     }
 
     for (uint8_t i = 0; i < 4; ++i)
@@ -72,9 +74,15 @@ void QuestLogEntry::loadFromDB(Field* fields)
         m_mobcount[i] = fields[8 + i].GetUInt32();
 
         if (getQuestProperties()->required_mobtype[i] == QUEST_MOB_TYPE_CREATURE)
-            CALL_QUESTSCRIPT_EVENT(this, OnCreatureKill)(getQuestProperties()->required_mob_or_go[i], m_player, this);
+        {
+            if (const auto questScript = getQuestScript())
+                questScript->OnCreatureKill(getQuestProperties()->required_mob_or_go[i], m_player, this);
+        }
         else
-            CALL_QUESTSCRIPT_EVENT(this, OnGameObjectActivate)(getQuestProperties()->required_mob_or_go[i], m_player, this);
+        {
+            if (const auto questScript = getQuestScript())
+                questScript->OnGameObjectActivate(getQuestProperties()->required_mob_or_go[i], m_player, this);
+        }
     }
 
     m_state = fields[12].GetUInt32();
@@ -266,8 +274,7 @@ void QuestLogEntry::finishAndRemove()
     m_player->setQuestLogExpireTimeBySlot(m_slot, 0);
 
     m_player->setQuestLogInSlot(nullptr, m_slot);
-    m_player->PushToRemovedQuests(m_questProperties->id);
-    m_player->UpdateNearbyGameObjects();
+    m_player->addQuestToRemove(m_questProperties->id);
 
     delete this;
 }
@@ -383,7 +390,7 @@ void QuestLogEntry::updatePlayerFields()
     if (m_questProperties->time != 0 && m_state != QUEST_FAILED)
     {
         m_player->setQuestLogExpireTimeBySlot(m_slot, m_expirytime);
-        sEventMgr.AddEvent(m_player, &Player::EventTimedQuestExpire, m_questProperties->id, EVENT_TIMED_QUEST_EXPIRE, 
+        sEventMgr.AddEvent(m_player, &Player::eventTimedQuestExpire, m_questProperties->id, EVENT_TIMED_QUEST_EXPIRE, 
             (m_expirytime - UNIXTIME) * 1000, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
     }
     else
@@ -396,14 +403,15 @@ void QuestLogEntry::sendQuestComplete()
 {
     WorldPacket data(SMSG_QUESTUPDATE_COMPLETE, 4);
     data << m_questProperties->id;
-    m_player->GetSession()->SendPacket(&data);
+    m_player->getSession()->SendPacket(&data);
 
-    m_player->UpdateNearbyGameObjects();
+    m_player->updateNearbyQuestGameObjects();
 
-    CALL_QUESTSCRIPT_EVENT(this, OnQuestComplete)(m_player, this);
+    if (const auto questScript = getQuestScript())
+        questScript->OnQuestComplete(m_player, this);
 }
 
-void QuestLogEntry::SendUpdateAddKill(uint8_t index)
+void QuestLogEntry::sendUpdateAddKill(uint8_t index)
 {
     if (index >= 4)
     {
@@ -413,4 +421,11 @@ void QuestLogEntry::SendUpdateAddKill(uint8_t index)
 
     sQuestMgr.SendQuestUpdateAddKill(m_player, m_questProperties->id, m_questProperties->required_mob_or_go[index], 
         m_mobcount[index], m_questProperties->required_mob_or_go_count[index], 0);
+}
+
+QuestScript* QuestLogEntry::getQuestScript() const
+{
+    if (getQuestProperties()->pQuestScript)
+        return getQuestProperties()->pQuestScript;
+    return nullptr;
 }

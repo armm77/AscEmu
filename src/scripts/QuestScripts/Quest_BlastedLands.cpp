@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -23,24 +23,23 @@
 class HeroesofOld : public QuestScript
 {
 public:
-
     void OnQuestStart(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
-        Creature* spawncheckcr = mTarget->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(mTarget->GetPositionX(), mTarget->GetPositionY(), mTarget->GetPositionZ(), 7750);
+        Creature* spawncheckcr = mTarget->getWorldMap()->getInterface()->getCreatureNearestCoords(mTarget->GetPositionX(), mTarget->GetPositionY(), mTarget->GetPositionZ(), 7750);
 
         if (!spawncheckcr)
         {
-            Creature* general = mTarget->GetMapMgr()->CreateAndSpawnCreature(7750, -10619, -2997, 28.8f, 4);
+            Creature* general = mTarget->getWorldMap()->createAndSpawnCreature(7750, LocationVector(-10619, -2997, 28.8f, 4));
             general->Despawn(3 * 60 * 1000, 0);
         }
 
-        GameObject* spawncheckgobj = mTarget->GetMapMgr()->GetInterface()->GetGameObjectNearestCoords(mTarget->GetPositionX(), mTarget->GetPositionY(), mTarget->GetPositionZ(), 141980);
+        GameObject* spawncheckgobj = mTarget->getWorldMap()->getInterface()->getGameObjectNearestCoords(mTarget->GetPositionX(), mTarget->GetPositionY(), mTarget->GetPositionZ(), 141980);
 
         if (!spawncheckgobj)
         {
-            GameObject* generalsbox = mTarget->GetMapMgr()->CreateAndSpawnGameObject(141980, -10622, -2994, 28.6f, 4, 4);
+            GameObject* generalsbox = mTarget->getWorldMap()->createAndSpawnGameObject(141980, LocationVector(-10622, -2994, 28.6f, 4), 4);
             if (generalsbox != nullptr)
-                generalsbox->Despawn(3 * 60 * 1000, 0);
+                generalsbox->despawn(3 * 60 * 1000, 0);
         }
     }
 };
@@ -49,7 +48,6 @@ public:
 class HeroesofOld1 : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (!plr)
@@ -60,7 +58,7 @@ public:
             return;
 
         GossipMenu menu(pObject->getGuid(), 1);
-        if (plr->hasQuestInQuestLog(2702) || plr->HasFinishedQuest(2702))
+        if (plr->hasQuestInQuestLog(2702) || plr->hasQuestFinished(2702))
             menu.addItem(GOSSIP_ICON_CHAT, 453, 1);     // I need to speak with Corporal.
 
         menu.sendGossipPacket(plr);
@@ -79,24 +77,23 @@ public:
         {
             case 1:
             {
-                Creature* spawncheckcr = plr->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(plr->GetPositionX(), plr->GetPositionY(), plr->GetPositionZ(), 7750);
+                Creature* spawncheckcr = plr->getWorldMap()->getInterface()->getCreatureNearestCoords(plr->GetPositionX(), plr->GetPositionY(), plr->GetPositionZ(), 7750);
                 if (!spawncheckcr)
                 {
-                    general = plr->GetMapMgr()->CreateAndSpawnCreature(7750, -10619, -2997, 28.8f, 4);
+                    general = plr->getWorldMap()->createAndSpawnCreature(7750, LocationVector(-10619, -2997, 28.8f, 4));
                     general->Despawn(3 * 60 * 1000, 0);
                 }
 
-                GameObject* spawncheckgobj = plr->GetMapMgr()->GetInterface()->GetGameObjectNearestCoords(plr->GetPositionX(), plr->GetPositionY(), plr->GetPositionZ(), 141980);
+                GameObject* spawncheckgobj = plr->getWorldMap()->getInterface()->getGameObjectNearestCoords(plr->GetPositionX(), plr->GetPositionY(), plr->GetPositionZ(), 141980);
                 if (!spawncheckgobj)
                 {
-                    GameObject* generalsbox = plr->GetMapMgr()->CreateAndSpawnGameObject(141980, -10622, -2994, 28.6f, 4, 4);
+                    GameObject* generalsbox = plr->getWorldMap()->createAndSpawnGameObject(141980, LocationVector(-10622, -2994, 28.6f, 4), 4);
                     if (generalsbox != nullptr)
-                        generalsbox->Despawn(3 * 60 * 1000, 0);
+                        generalsbox->despawn(3 * 60 * 1000, 0);
                 }
             }
         }
     }
-
 };
 
 void SetupBlastedLands(ScriptMgr* mgr)

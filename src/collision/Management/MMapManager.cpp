@@ -1,10 +1,10 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU General Public License as published by //-V1042
  * the Free Software Foundation, either version 3 of the License, or
  * any later version.
  *
@@ -19,10 +19,10 @@
 
 #include "MMapManager.h"
 #include "MapDefines.h"
-#include "StdAfx.h"
+
 #include "Errors.h"
+#include "Logging/Logger.hpp"
 #include "Server/World.h"
-#include "Server/World.Legacy.h"
 
 namespace MMAP
 {

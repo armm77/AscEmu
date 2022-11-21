@@ -1,10 +1,12 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
+#include "Management/Gossip/GossipScript.hpp"
 #include "Objects/GameObject.h"
+#include "Server/Script/ScriptMgr.h"
 
 enum UnorderedEntrys
 {
@@ -16,10 +18,9 @@ enum UnorderedEntrys
 class DedicationOfHonorGossip : public GossipScript
 {
 public:
-
     void onHello(Object* object, Player* player) override
     {
-        GossipMenu::sendQuickMenu(object->getGuid(), GT_DEDICATION_OF_HONOR, player, 1, GOSSIP_ICON_CHAT, player->GetSession()->LocalizedGossipOption(GI_SEE_FALL_LICH_KING));
+        GossipMenu::sendQuickMenu(object->getGuid(), GT_DEDICATION_OF_HONOR, player, 1, GOSSIP_ICON_CHAT, player->getSession()->LocalizedGossipOption(GI_SEE_FALL_LICH_KING));
     }
 
     void onSelectOption(Object* /*object*/, Player* player, uint32_t /*id*/, const char* /*enteredCode*/, uint32_t /*gossipId*/) override
@@ -32,11 +33,10 @@ public:
 class DedicationOfHonorAI : public GameObjectAIScript
 {
 public:
-
     explicit DedicationOfHonorAI(GameObject* go) : GameObjectAIScript(go) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new DedicationOfHonorAI(GO); };
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         DedicationOfHonorGossip gossip;
         gossip.onHello(_gameobject, player);

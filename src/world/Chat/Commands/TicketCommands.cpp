@@ -1,13 +1,13 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/MainServerDefines.h"
 #include "Chat/ChatHandler.hpp"
 #include "Server/WorldSession.h"
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 #include "Server/Packets/SmsgGmTicketDeleteTicket.h"
 #include "Server/Packets/SmsgGmTicketStatusUpdate.h"
 
@@ -152,12 +152,12 @@ bool ChatHandler::HandleTicketCloseCommand(const char* args, WorldSession* m_ses
 
     if (ticketOwner != nullptr)
     {
-        ticketOwner->GetSession()->SystemMessage("Your Ticket was closed by %s Comment: %s", player->getName().c_str(), comment);
+        ticketOwner->getSession()->SystemMessage("Your Ticket was closed by %s Comment: %s", player->getName().c_str(), comment);
 
         // Notify player about removing ticket
-        ticketOwner->GetSession()->SendPacket(SmsgGmTicketDeleteTicket(9).serialise().get());
+        ticketOwner->getSession()->SendPacket(SmsgGmTicketDeleteTicket(9).serialise().get());
         // Response - Send GM Survey
-        ticketOwner->GetSession()->SendPacket(SmsgGmTicketStatusUpdate(3).serialise().get());
+        ticketOwner->getSession()->SendPacket(SmsgGmTicketStatusUpdate(3).serialise().get());
     }
     else
     {

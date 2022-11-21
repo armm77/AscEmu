@@ -1,20 +1,26 @@
-# Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 
 # set up our project name
 project(zlib C)
 set(sources
-   adler32.c
-   compress.c
-   crc32.c
-   deflate.c
-   infback.c
-   inffast.c
-   inflate.c
-   inftrees.c
-   trees.c
-   uncompr.c
-   zutil.c
-   )
+    adler32.c
+    compress.c
+    crc32.c
+    deflate.c
+    infback.c
+    inffast.c
+    gzclose.c
+    gzlib.c
+    gzread.c
+    gzwrite.c
+    inflate.c
+    infback.c
+    inftrees.c
+    inffast.c
+    trees.c
+    uncompr.c
+    zutil.c
+)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 add_library(${PROJECT_NAME} STATIC ${sources} )

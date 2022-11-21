@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,14 +18,14 @@
  *
  */
 
-#include "StdAfx.h"
+
 #include "Management/EquipmentSetMgr.h"
 #include "Server/MainServerDefines.h"
 #include "Database/Field.hpp"
-#include "Log.hpp"
 #include "Database/Database.h"
 #include "WoWGuid.h"
 #include "WorldPacket.h"
+#include "Logging/Logger.hpp"
 
 namespace Arcemu
 {
@@ -54,7 +54,7 @@ namespace Arcemu
     {
         std::pair< EquipmentSetStorage::iterator, bool > retval;
 
-        retval = EquipmentSets.insert(std::pair< uint32, EquipmentSet* >(setGUID, set));
+        retval = EquipmentSets.emplace(std::pair< uint32, EquipmentSet* >(setGUID, set));
 
         return retval.second;
     }
@@ -85,8 +85,6 @@ namespace Arcemu
             return false;
 
         uint32 setcount = 0;
-        EquipmentSet* set = NULL;
-        Field* fields = NULL;
 
         do
         {
@@ -96,12 +94,9 @@ namespace Arcemu
                 return true;
             }
 
-            fields = result->Fetch();
+            Field* fields = result->Fetch();
 
-            set = new EquipmentSet();
-            if (set == NULL)
-                return false;
-
+            EquipmentSet* set = new EquipmentSet();
             set->SetGUID = fields[1].GetUInt32();
             set->SetID = fields[2].GetUInt32();
             set->SetName = fields[3].GetString();
@@ -110,8 +105,7 @@ namespace Arcemu
             for (uint32 i = 0; i < set->ItemGUID.size(); ++i)
                 set->ItemGUID[i] = fields[5 + i].GetUInt32();
 
-            EquipmentSets.insert(std::pair< uint32, EquipmentSet* >(set->SetGUID, set));
-            set = NULL;
+            EquipmentSets.emplace(std::pair< uint32, EquipmentSet* >(set->SetGUID, set));
             setcount++;
 
         }
@@ -161,11 +155,6 @@ namespace Arcemu
 
     void EquipmentSetMgr::FillEquipmentSetListPacket(WorldPacket& data)
     {
-#if VERSION_STRING >= Cata
-        uint32 count = 0;
-        size_t count_pos = data.wpos();
-        data << uint32(count);
-#endif
         data << uint32(EquipmentSets.size());
 
         for (EquipmentSetStorage::iterator itr = EquipmentSets.begin(); itr != EquipmentSets.end(); ++itr)
@@ -181,12 +170,6 @@ namespace Arcemu
             {
                 data << WoWGuid(uint64(WoWGuid::createItemGuid(set->ItemGUID[i])));
             }
-#if VERSION_STRING >= Cata
-            ++count;
-#endif
         }
-#if VERSION_STRING >= Cata
-        data.put<uint32>(count_pos, count);
-#endif
     }
 }

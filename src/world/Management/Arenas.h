@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -21,11 +21,11 @@
 #ifndef ARENAS_H
 #define ARENAS_H
 
-#include "Management/Battleground/Battleground.h"
+#include "Management/Battleground/Battleground.hpp"
 
 class ArenaTeam;
 
-class SERVER_DECL Arena : public CBattleground
+class SERVER_DECL Arena : public Battleground
 {
     protected:
 
@@ -40,7 +40,7 @@ class SERVER_DECL Arena : public CBattleground
     public:
 
         bool rated_match;
-        Arena(MapMgr* mgr, uint32 id, uint32 lgroup, uint32 t, uint32 players_per_side);
+        Arena(WorldMap* mgr, uint32 id, uint32 lgroup, uint32 t, uint32 players_per_side);
         virtual ~Arena();
 
         bool HandleFinishBattlegroundRewardCalculation(PlayerTeam winningTeam) override;
@@ -61,10 +61,10 @@ class SERVER_DECL Arena : public CBattleground
         void OnStart() override;
         bool CanPlayerJoin(Player* plr, uint32 type) override
         {
-            if (m_started)
+            if (m_hasStarted)
                 return false;
 
-            return CBattleground::CanPlayerJoin(plr, type);
+            return Battleground::CanPlayerJoin(plr, type);
         }
 
         bool CreateCorpse(Player* /*plr*/) override { return false; }
@@ -79,7 +79,7 @@ class SERVER_DECL Arena : public CBattleground
         {
             size_t c0 = m_players[0].size() + m_pendPlayers[0].size();
             size_t c1 = m_players[1].size() + m_pendPlayers[1].size();
-            if (m_started)
+            if (m_hasStarted)
                 return -1;
 
             // Check if there is free room, if yes, return team with less members

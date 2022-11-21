@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,19 +20,24 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class Deathstalker_Erland : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Deathstalker_Erland)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Deathstalker_Erland(c); }
     explicit Deathstalker_Erland(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnReachWP(uint32_t iWaypointId, bool /*bForwards*/) override
+    void OnReachWP(uint32_t type, uint32_t iWaypointId) override
     {
+        if (type != WAYPOINT_MOTION_TYPE)
+            return;
+
         if (iWaypointId == 9)
         {
-            getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Thanks, you helped me to overcome this obstacle");
+            getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Thanks, you helped me to overcome this obstacle");
             getCreature()->Despawn(5000, 1000);
-            getCreature()->DeleteWaypoints();
+            getCreature()->stopMoving();
             if (getCreature()->m_escorter == nullptr)
                 return;
 
@@ -47,7 +52,8 @@ class Deathstalker_Erland : public CreatureAIScript
 
 class Nightlash : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Nightlash)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Nightlash(c); }
     explicit Nightlash(Creature* pCreature) : CreatureAIScript(pCreature) {}
     void OnDied(Unit* mKiller) override
     {
@@ -55,10 +61,10 @@ class Nightlash : public CreatureAIScript
         {
             Player* mPlayer = static_cast<Player*>(mKiller);
 
-            if (!getCreature()->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(1069.889404f, 1544.777558f, 28.331335f, 1983) && (Util::getRandomUInt(5) > 2) && mPlayer->hasQuestInQuestLog(437)) //random number I picked between 2-8
+            if (!getCreature()->getWorldMap()->getInterface()->getCreatureNearestCoords(1069.889404f, 1544.777558f, 28.331335f, 1983) && (Util::getRandomUInt(5) > 2) && mPlayer->hasQuestInQuestLog(437)) //random number I picked between 2-8
             {
-                getCreature()->GetMapMgr()->GetInterface()->SpawnCreature(1983, 1069.889404f, 1544.777558f, 28.331335f, 3.99f, true, false, 0, 0)->Despawn(600000, 0);
-                getCreature()->SendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "Nightlash avenge us!!");//not sure this is 100% blizzlike, but looks nice
+                getCreature()->getWorldMap()->getInterface()->spawnCreature(1983, LocationVector(1069.889404f, 1544.777558f, 28.331335f, 3.99f), true, false, 0, 0)->Despawn(600000, 0);
+                getCreature()->sendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "Nightlash avenge us!!");//not sure this is 100% blizzlike, but looks nice
             }
         }
     }

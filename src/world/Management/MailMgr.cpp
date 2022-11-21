@@ -1,6 +1,6 @@
 /**
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -16,9 +16,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "StdAfx.h"
+
 #include "Server/MainServerDefines.h"
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 #include "Server/Packets/SmsgReceivedMail.h"
 
 MailSystem& MailSystem::getInstance()
@@ -41,7 +41,7 @@ MailError MailSystem::DeliverMessage(uint64 recipent, MailMessage* message)
     {
         plr->m_mailBox.AddMessage(message);
         if ((uint32)UNIXTIME >= message->delivery_time)
-            plr->SendPacket(AscEmu::Packets::SmsgReceivedMail().serialise().get());
+            plr->sendPacket(AscEmu::Packets::SmsgReceivedMail().serialise().get());
     }
 
     SaveMessageToSQL(message);

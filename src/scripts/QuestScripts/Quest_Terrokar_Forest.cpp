@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,24 +20,27 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class ThreatFromAboveQAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ThreatFromAboveQAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ThreatFromAboveQAI(c); }
     explicit ThreatFromAboveQAI(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnDied(Unit* mKiller)
+    void OnDied(Unit* mKiller) override
     {
         if (mKiller->isPlayer())
         {
-            static_cast<Player*>(mKiller)->AddQuestKill(11096, 0, 0);
+            static_cast<Player*>(mKiller)->addQuestKill(11096, 0, 0);
         }
     }
 };
 
 class TheInfestedProtectorsQAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(TheInfestedProtectorsQAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new TheInfestedProtectorsQAI(c); }
     explicit TheInfestedProtectorsQAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         min = 0;
@@ -45,7 +48,7 @@ class TheInfestedProtectorsQAI : public CreatureAIScript
         finall = 0;
     }
 
-    void OnDied(Unit* mKiller)
+    void OnDied(Unit* mKiller) override
     {
         if (mKiller->isPlayer())
         {
@@ -73,8 +76,8 @@ class TheInfestedProtectorsQAI : public CreatureAIScript
 
                     for (uint8_t i = 0; i < finall; i++)
                     {
-                        Creature * NewCreature = getCreature()->GetMapMgr()->GetInterface()->SpawnCreature(22419, SSX + Util::getRandomFloat(3.0f), SSY + Util::getRandomFloat(3.0f), SSZ, SSO + Util::getRandomFloat(1.0f), true, false, 0, 0);
-                        if (NewCreature != NULL)
+                        Creature * NewCreature = getCreature()->getWorldMap()->getInterface()->spawnCreature(22419, LocationVector(SSX + Util::getRandomFloat(3.0f), SSY + Util::getRandomFloat(3.0f), SSZ, SSO + Util::getRandomFloat(1.0f)), true, false, 0, 0);
+                        if (NewCreature != nullptr)
                             NewCreature->Despawn(120000, 0);
                     }
                 }
@@ -83,7 +86,6 @@ class TheInfestedProtectorsQAI : public CreatureAIScript
     }
 
 private:
-
     uint32_t min;
     uint32_t max;
     uint32_t finall;
@@ -91,16 +93,17 @@ private:
 
 class TakenInTheNight : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(TakenInTheNight)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new TakenInTheNight(c); }
     explicit TakenInTheNight(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnLoad()
+    void OnLoad() override
     {
-        getCreature()->GetAIInterface()->m_canMove = false;
-        getCreature()->GetAIInterface()->setCombatDisabled(true);
+        getCreature()->setControlled(true, UNIT_STATE_ROOTED);
+        getCreature()->getAIInterface()->setCombatDisabled(true);
     }
 
-    void OnDied(Unit* mKiller)
+    void OnDied(Unit* mKiller) override
     {
         if (!mKiller->isPlayer())
             return;
@@ -133,7 +136,7 @@ class TakenInTheNight : public CreatureAIScript
                 break;
         }
 
-        Creature* creat = plr->GetMapMgr()->CreateAndSpawnCreature(spawn, getCreature()->GetPositionX(), getCreature()->GetPositionY(), getCreature()->GetPositionZ(), 0);
+        Creature* creat = plr->getWorldMap()->createAndSpawnCreature(spawn, getCreature()->GetPosition());
         if (creat == nullptr)
             return;
 
@@ -142,33 +145,33 @@ class TakenInTheNight : public CreatureAIScript
         if (spawn != 22459)
             return;
 
-        creat->GetAIInterface()->m_canMove = false;
-        creat->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Finally! I'm free!");
+        creat->setControlled(true, UNIT_STATE_ROOTED);
+        creat->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Finally! I'm free!");
 
-        plr->AddQuestKill(10873, 0, 0);
+        plr->addQuestKill(10873, 0, 0);
     }
 };
 
 class AnImproperBurial : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(AnImproperBurial)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new AnImproperBurial(c); }
     explicit AnImproperBurial(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnLoad()
+    void OnLoad() override
     {
         getCreature()->setStandState(STANDSTATE_DEAD);
         getCreature()->setDeathState(CORPSE);
-        getCreature()->GetAIInterface()->m_canMove = false;
+        getCreature()->setControlled(true, UNIT_STATE_ROOTED);
     }
 };
 
 class TheMomentofTruth : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        GossipMenu menu(pObject->getGuid(), 1, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), 1, plr->getSession()->language);
         if (plr->hasQuestInQuestLog(10201) && plr->getItemInterface()->GetItemCount(28500, 0))
             menu.addItem(GOSSIP_ICON_CHAT, 497, 1);     // Try this
 
@@ -179,7 +182,7 @@ public:
     {
         plr->getItemInterface()->RemoveItemAmt(2799, 1);
 
-        plr->AddQuestKill(10201, 0, 0);
+        plr->addQuestKill(10201, 0, 0);
     }
 };
 

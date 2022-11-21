@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -23,14 +23,13 @@
 #include "WorldConf.h"
 #include "LUAEngine.h"
 #include "git_version.h"
+#include "Chat/CommandTableStorage.hpp"
 #include "Management/TaxiMgr.h"
-#include "Management/Channel.h"
-#include "Management/ChannelMgr.h"
+#include "Chat/Channel.hpp"
+#include "Chat/ChannelMgr.hpp"
 #include "Storage/MySQLDataStore.hpp"
 #include "Server/MainServerDefines.h"
-#if VERSION_STRING >= Cata
 #include "Management/Guild/Guild.hpp"
-#endif
 
 #define ENGINE_NAME "ALE" // You should check in your scripts that GetLuaEngine() == "ALE"
 
@@ -60,18 +59,18 @@ namespace luaGlobalFunctions
                 if (p == nullptr)
                     return 0;
 
-                MapMgr* mapMgr = sInstanceMgr.GetMapMgr(map);
+                WorldMap* mapMgr = sMapMgr.findWorldMap(map);
                 if (!mapMgr)
                     return 0;
 
                 //int32_t instanceid = static_cast<int32_t>(luaL_optinteger(L, 13, mapMgr->GetInstanceID()));
-                Creature* pCreature = mapMgr->CreateCreature(entry);
+                Creature* pCreature = mapMgr->createCreature(entry);
                 pCreature->Load(p, x, y, z, o);
-                pCreature->SetFaction(faction);
+                pCreature->setFaction(faction);
                 pCreature->setVirtualItemSlotId(MELEE, equip1);
                 pCreature->setVirtualItemSlotId(OFFHAND, equip2);
                 pCreature->setVirtualItemSlotId(RANGED, equip3);
-                pCreature->Phase(PHASE_SET, 1);
+                pCreature->setPhase(PHASE_SET, 1);
                 pCreature->m_noRespawn = true;
                 pCreature->AddToWorld(mapMgr);
                 if (duration > 0)
@@ -86,21 +85,21 @@ namespace luaGlobalFunctions
                 if (gameobject_info == nullptr)
                     return 0;
 
-                MapMgr* mapMgr = sInstanceMgr.GetMapMgr(map);
+                WorldMap* mapMgr = sMapMgr.findWorldMap(map);
                 if (!mapMgr)
                     return 0;
 
-                GameObject* go = mapMgr->CreateGameObject(entry);
-                go->CreateFromProto(entry, map, x, y, z, o);
+                GameObject* go = mapMgr->createGameObject(entry);
+                go->create(entry, mapMgr, 0, LocationVector(x, y, z, o), QuaternionData(), GO_STATE_CLOSED);
                 go->Phase(PHASE_SET, 1);
                 go->setScale(((float)faction) / 100.0f);
 
                 go->AddToWorld(mapMgr);
 
                 if (duration)
-                    sEventMgr.AddEvent(go, &GameObject::ExpireAndDelete, EVENT_GAMEOBJECT_UPDATE, duration, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+                    go->despawn(duration, 0);
                 if (save)
-                    go->SaveToDB();
+                    go->saveToDB();
                 PUSH_GO(L, go);
             }
             else
@@ -214,7 +213,7 @@ namespace luaGlobalFunctions
         const char* TableName = luaL_checkstring(L, 1);
         if (!stricmp(TableName, "spell_disable"))
         {
-            sObjectMgr.ReloadDisabledSpells();
+            sSpellMgr.reloadSpellDisabled();
         }
         else if (!stricmp(TableName, "vendors"))
         {
@@ -239,9 +238,9 @@ namespace luaGlobalFunctions
         LuaUnitBinding * m_binding;
         for (uint32_t i = 0; i < NUM_MAPS; ++i)
         {
-        if (!sInstanceMgr.GetMapMgr(i))
+        if (!sInstanceMgr.getWorldMap(i))
         continue;
-        mgr = sInstanceMgr.GetMapMgr(i);
+        mgr = sInstanceMgr.getWorldMap(i);
         for(uint32_t guid=1; guid < mgr->m_CreatureArraySize; guid++)
         {
         Creature *pCreature = mgr->GetCreature(GET_LOWGUID_PART(guid));
@@ -323,7 +322,7 @@ namespace luaGlobalFunctions
     AreaTable * at = dbcArea.LookupEntry(zoneid);
     if(!zoneid || !msg || !at)
     return 1;
-    MapMgr* mapmgr = sInstanceMgr.GetMapMgr(at->mapId);
+    MapMgr* mapmgr = sInstanceMgr.getWorldMap(at->mapId);
     if (mapmgr)
     mapmgr->SendPvPCaptureMessage(ZONE_MASK_ALL, zoneid, msg);
     return 1;
@@ -334,14 +333,14 @@ namespace luaGlobalFunctions
         uint32_t count = 0;
         lua_newtable(L);
         uint32_t mapid = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-        MapMgr* mgr = sInstanceMgr.GetMapMgr(mapid);
+        WorldMap* mgr = sMapMgr.findWorldMap(mapid);
         if (!mgr)
             return 0;
 
-        for (PlayerStorageMap::iterator itr = mgr->m_PlayerStorage.begin(); itr != mgr->m_PlayerStorage.end(); ++itr)
+        for (const auto& itr : mgr->getPlayers())
         {
             count++;
-            Player* ret = (*itr).second;
+            Player* ret = itr.second;
             lua_pushinteger(L, count);
             PUSH_UNIT(L, (static_cast<Unit*>(ret)));
             lua_rawset(L, -3);
@@ -417,7 +416,10 @@ namespace luaGlobalFunctions
         }
         LuaSpellEntry l = GetLuaSpellEntryByName(var);
         if (!l.name)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
         switch (l.typeId)  //0: int, 1: char*, 2: bool, 3: float
         {
             case 0:
@@ -453,7 +455,10 @@ namespace luaGlobalFunctions
         }
         LuaSpellEntry l = GetLuaSpellEntryByName(var);
         if (!l.name)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
         switch (l.typeId)  //0: int, 1: char*, 2: bool, 3: float
         {
             case 0:
@@ -533,53 +538,53 @@ namespace luaGlobalFunctions
     }
     int RemoveTimedEvents(lua_State* /*L*/)
     {
-        sLuaEventMgr.RemoveEvents();
+        LuaGlobal::instance()->luaEngine()->LuaEventMgr.RemoveEvents();
         return 0;
     }
     int RemoveTimedEventsWithName(lua_State* L)
     {
         const char* name = luaL_checkstring(L, 1);
-        sLuaEventMgr.RemoveEventsByName(name);
+        LuaGlobal::instance()->luaEngine()->LuaEventMgr.RemoveEventsByName(name);
         return 0;
     }
     int RemoveTimedEvent(lua_State* L)
     {
         int ref = static_cast<int>(luaL_checkinteger(L, 1));
-        sLuaEventMgr.RemoveEventByRef(ref);
+        LuaGlobal::instance()->luaEngine()->LuaEventMgr.RemoveEventByRef(ref);
         return 0;
     }
     int RemoveTimedEventsInTable(lua_State* L)
     {
         const char* table = luaL_checkstring(L, 1);
-        sLuaEventMgr.RemoveEventsInTable(table);
+        LuaGlobal::instance()->luaEngine()->LuaEventMgr.RemoveEventsInTable(table);
         return 0;
     }
     int HasTimedEvents(lua_State* L)
     {
-        lua_pushboolean(L, sLuaEventMgr.event_HasEvents() ? 1 : 0);
+        lua_pushboolean(L, LuaGlobal::instance()->luaEngine()->LuaEventMgr.event_HasEvents() ? 1 : 0);
         return 1;
     }
     int HasTimedEvent(lua_State* L)
     {
         int ref = static_cast<int>(luaL_checkinteger(L, 1));
-        lua_pushboolean(L, sLuaEventMgr.HasEvent(ref) ? 1 : 0);
+        lua_pushboolean(L, LuaGlobal::instance()->luaEngine()->LuaEventMgr.HasEvent(ref) ? 1 : 0);
         return 1;
     }
     int HasTimedEventWithName(lua_State* L)
     {
         const char* name = luaL_checkstring(L, 1);
-        lua_pushboolean(L, sLuaEventMgr.HasEventWithName(name) ? 1 : 0);
+        lua_pushboolean(L, LuaGlobal::instance()->luaEngine()->LuaEventMgr.HasEventWithName(name) ? 1 : 0);
         return 1;
     }
     int HasTimedEventInTable(lua_State* L)
     {
         const char* table = luaL_checkstring(L, 1);
-        lua_pushboolean(L, sLuaEventMgr.HasEventInTable(table) ? 1 : 0);
+        lua_pushboolean(L, LuaGlobal::instance()->luaEngine()->LuaEventMgr.HasEventInTable(table) ? 1 : 0);
         return 1;
     }
     int GetPlatform(lua_State* L)
     {
-        lua_pushliteral(L, PLATFORM_TEXT);
+        lua_pushliteral(L, AE_PLATFORM);
         return 1;
     }
     int NumberToGUID(lua_State* L)
@@ -623,7 +628,7 @@ namespace luaGlobalFunctions
         if (!channel || !pack)
             return 0;
 
-        channel->SendToAll(pack);
+        channel->sendToAll(pack);
 
         return 1;
     }
@@ -640,19 +645,22 @@ namespace luaGlobalFunctions
         else
             guid = CHECK_GUID(L, 3);
 
-        Instance* pInstance = sInstanceMgr.GetInstanceByIds(map, iid);
+        WorldMap* pInstance = sMapMgr.findWorldMap(map, iid);
         if (pInstance == NULL || (!guid && !spawnId))
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
 
         Creature* pCreature = NULL;
         if (guid)
         {
             WoWGuid wowGuid;
             wowGuid.Init(guid);
-            pCreature = pInstance->m_mapMgr->GetCreature(wowGuid.getGuidLowPart());
+            pCreature = pInstance->getCreature(wowGuid.getGuidLowPart());
         }
         else
-            pCreature = pInstance->m_mapMgr->GetSqlIdCreature(spawnId);
+            pCreature = pInstance->getSqlIdCreature(spawnId);
 
         PUSH_UNIT(L, pCreature);
         return 1;
@@ -663,11 +671,14 @@ namespace luaGlobalFunctions
         uint32_t map = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         uint32_t iid = static_cast<uint32_t>(luaL_checkinteger(L, 2));
 
-        Instance* pInstance = sInstanceMgr.GetInstanceByIds(map, iid);
+        WorldMap* pInstance = sMapMgr.findWorldMap(map, iid);
         if (pInstance == NULL)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
 
-        lua_pushnumber(L, pInstance->m_mapMgr->GetPlayerCount());
+        lua_pushnumber(L, pInstance->getPlayerCount());
         return 1;
     }
 
@@ -676,21 +687,21 @@ namespace luaGlobalFunctions
         uint32_t map = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         uint32_t iid = static_cast<uint32_t>(luaL_checkinteger(L, 2));
 
-        Instance* pInstance = sInstanceMgr.GetInstanceByIds(map, iid);
+        WorldMap* pInstance = sMapMgr.findWorldMap(map, iid);
         if (pInstance == NULL)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
 
         Player* ret = NULL;
         uint32_t count = 0;
         lua_newtable(L);
-        MapMgr* mgr = pInstance->m_mapMgr;
-        if (!mgr)
-            RET_NIL();
 
-        for (PlayerStorageMap::iterator itr = mgr->m_PlayerStorage.begin(); itr != mgr->m_PlayerStorage.end(); ++itr)
+        for (const auto& itr : pInstance->getPlayers())
         {
             count++;
-            ret = (*itr).second;
+            ret = itr.second;
             lua_pushinteger(L, count);
             PUSH_UNIT(L, (static_cast<Unit*>(ret)));
             lua_rawset(L, -3);

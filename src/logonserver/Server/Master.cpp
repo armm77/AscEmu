@@ -1,15 +1,23 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "LogonStdAfx.h"
 #include <Threading/AEThreadPool.h>
 #include "Util.hpp"
 #include "Database/DatabaseUpdater.hpp"
 #include "Logon.h"
 #include "IpBanMgr.h"
-#include "RealmsMgr.h"
+#include "Realm/RealmManager.hpp"
+#include "Auth/AuthSocket.h"
+#include "Server/LogonServerDefines.hpp"
+#include "Server/Master.hpp"
+#include <Logging/Logger.hpp>
+#include "Auth/AutoPatcher.h"
+#include <Network/Network.h>
+#include "Console/LogonConsole.h"
+#include "LogonConf.h"
+#include <Util/Strings.hpp>
 
 using std::chrono::milliseconds;
 
@@ -80,7 +88,7 @@ void MasterLogon::Run(int /*argc*/, char** /*argv*/)
 
     PatchMgr::getInstance().initialize();
 
-    sRealmsMgr.initialize(300); // time in seconds
+    sRealmManager.initialize(300); // time in seconds
 
     // Load conf settings..
     clientMinBuild = 5875;
@@ -122,10 +130,10 @@ void MasterLogon::Run(int /*argc*/, char** /*argv*/)
 
             if (!(loop_counter % 5))
             {
-                sRealmsMgr.timeoutSockets();
+                sRealmManager.timeoutSockets();
                 sSocketGarbageCollector.Update();
                 CheckForDeadSockets();              // Flood Protection
-                UNIXTIME = time(NULL);
+                UNIXTIME = time(nullptr);
                 g_localTime = *localtime(&UNIXTIME);
             }
 
@@ -150,7 +158,7 @@ void MasterLogon::Run(int /*argc*/, char** /*argv*/)
 #endif
     sLogonConsole.Kill();
     sAccountMgr.finalize();
-    sRealmsMgr.finalize();
+    sRealmManager.finalize();
 
     // kill db
     sLogger.info("Waiting for database to close..");
@@ -203,7 +211,7 @@ void MasterLogon::CheckForDeadSockets()
 
 void MasterLogon::PrintBanner()
 {
-    sLogger.file(AscEmu::Logging::Severity::FAILURE, AscEmu::Logging::MessageType::MINOR, "<< AscEmu %s/%s-%s (%s) :: Logon Server >>", BUILD_HASH_STR, CONFIG, PLATFORM_TEXT, ARCH);
+    sLogger.file(AscEmu::Logging::Severity::FAILURE, AscEmu::Logging::MessageType::MINOR, "<< AscEmu %s/%s-%s %s :: Logon Server >>", BUILD_HASH_STR, CONFIG, AE_PLATFORM, AE_ARCHITECTURE);
     sLogger.file(AscEmu::Logging::Severity::FAILURE, AscEmu::Logging::MessageType::MINOR, "========================================================");
 }
 
@@ -328,7 +336,7 @@ bool MasterLogon::CheckDBVersion()
     }
 
     QueryResult* cqr = sLogonSQL->QueryNA("SELECT LastUpdate FROM logon_db_version;");
-    if (cqr == NULL)
+    if (cqr == nullptr)
     {
         sLogger.failure("Database : logon database is missing the table `logon_db_version` OR the table doesn't contain any rows. Can't validate database version. Exiting.");
         sLogger.failure("Database : You may need to update your database");
@@ -385,8 +393,8 @@ bool MasterLogon::SetLogonConfiguration()
 {
     logonConfig.loadConfigValues();
 
-    std::vector<std::string> allowedIPs = Util::SplitStringBySeperator(logonConfig.logonServer.allowedIps, " ");
-    std::vector<std::string> allowedModIPs = Util::SplitStringBySeperator(logonConfig.logonServer.allowedModIps, " ");
+    std::vector<std::string> allowedIPs = AscEmu::Util::Strings::split(logonConfig.logonServer.allowedIps, " ");
+    std::vector<std::string> allowedModIPs = AscEmu::Util::Strings::split(logonConfig.logonServer.allowedModIps, " ");
 
     m_allowedIpLock.Acquire();
     m_allowedIps.clear();
@@ -446,7 +454,7 @@ bool MasterLogon::SetLogonConfiguration()
         m_allowedModIps.push_back(tmp);
     }
 
-    sRealmsMgr.checkServers();
+    sRealmManager.checkServers();
     m_allowedIpLock.Release();
 
     return true;

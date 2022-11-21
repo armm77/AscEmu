@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,10 +20,14 @@
 #ifndef AUTHSOCKET_H
 #define AUTHSOCKET_H
 
-#include "Server/RealmsMgr.h"
 #include "AuthStructs.h"
+#include "CommonTypes.hpp"
+#include "Network/Socket.h"
+#include "Auth/Sha1.h"
+#include "Auth/BigNumber.h"
+#include "Server/AccountMgr.h"
+#include "LogonCommServer/LogonCommServer.h"
 
-class LogonCommServerSocket;
 struct Patch;
 class PatchJob;
 

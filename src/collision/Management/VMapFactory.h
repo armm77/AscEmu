@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 #ifndef _VMAPFACTORY_H
 #define _VMAPFACTORY_H
 
-#include "IVMapManager.h"
+#include "VMapManager2.h"
 
 /**
 This is the access point to the VMapManager.
@@ -30,10 +30,10 @@ namespace VMAP
 {
     //===========================================================
 
-    class VMapFactory
+    class SERVER_DECL VMapFactory
     {
         public:
-            static IVMapManager* createOrGetVMapManager();
+            static VMapManager2* createOrGetVMapManager();
             static void clear();
     };
 

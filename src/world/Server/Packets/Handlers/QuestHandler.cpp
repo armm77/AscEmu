@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/Packets/MsgQuestPushResult.h"
 #include "Server/Packets/CmsgQuestgiverAcceptQuest.h"
 #include "Server/Packets/CmsgQuestQuery.h"
@@ -19,9 +19,11 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgPushquesttoparty.h"
 #include "Server/WorldSession.h"
 #include "Storage/MySQLDataStore.hpp"
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Management/ItemInterface.h"
+#include "Management/QuestLogEntry.hpp"
 #include "Server/Packets/SmsgGossipComplete.h"
+#include "Server/Script/ScriptMgr.h"
 
 using namespace AscEmu::Packets;
 
@@ -321,22 +323,20 @@ WorldPacket* WorldSession::buildQuestQueryResponse(QuestProperties const* qst)
 
 void WorldSession::handleQuestPushResultOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     MsgQuestPushResult srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received MSG_QUEST_PUSH_RESULT");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_QUEST_PUSH_RESULT");
 
-    if (_player->GetQuestSharer())
+    if (_player->getQuestSharerByDbId())
     {
-        const auto questSharerPlayer = sObjectMgr.GetPlayer(_player->GetQuestSharer());
+        const auto questSharerPlayer = sObjectMgr.GetPlayer(_player->getQuestSharerByDbId());
         if (questSharerPlayer)
         {
             const uint64_t guid = recvPacket.size() >= 13 ? _player->getGuid() : srlPacket.giverGuid;
-            questSharerPlayer->GetSession()->SendPacket(MsgQuestPushResult(guid, 0, srlPacket.pushResult).serialise().get());
-            _player->SetQuestSharer(0);
+            questSharerPlayer->getSession()->SendPacket(MsgQuestPushResult(guid, 0, srlPacket.pushResult).serialise().get());
+            _player->setQuestSharerDbId(0);
         }
     }
 }
@@ -347,13 +347,11 @@ void WorldSession::handleQuestgiverAcceptQuestOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    _player->AcceptQuest(srlPacket.guid, srlPacket.questId);
+    _player->acceptQuest(srlPacket.guid, srlPacket.questId);
 }
 
 void WorldSession::handleQuestQueryOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgQuestQuery srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -373,13 +371,11 @@ void WorldSession::handleQuestQueryOpcode(WorldPacket& recvPacket)
 #if VERSION_STRING > TBC
 void WorldSession::handleQuestPOIQueryOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgQuestPoiQuery srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_QUEST_POI_QUERY");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_QUEST_POI_QUERY");
 
     if (srlPacket.questCount > MAX_QUEST_LOG_SIZE)
     {
@@ -399,8 +395,6 @@ void WorldSession::handleQuestPOIQueryOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleQuestgiverCancelOpcode(WorldPacket& /*recvPacket*/)
 {
-    CHECK_INWORLD_RETURN
-
     SendPacket(SmsgGossipComplete().serialise().get());
 
     sLogger.debug("Sent SMSG_GOSSIP_COMPLETE");
@@ -410,13 +404,11 @@ void WorldSession::handleQuestgiverCancelOpcode(WorldPacket& /*recvPacket*/)
 
 void WorldSession::handleQuestgiverHelloOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgQuestgiverHello srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    if (const auto questGiver = _player->GetMapMgr()->GetCreature(srlPacket.questGiverGuid.getGuidLowPart()))
+    if (const auto questGiver = _player->getWorldMap()->getCreature(srlPacket.questGiverGuid.getGuidLowPart()))
     {
         if (!questGiver->isQuestGiver())
         {
@@ -434,8 +426,6 @@ void WorldSession::handleQuestgiverHelloOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleQuestgiverStatusQueryOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgQuestgiverStatusQuery srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -447,7 +437,7 @@ void WorldSession::handleQuestgiverStatusQueryOpcode(WorldPacket& recvPacket)
 
     if (srlPacket.questGiverGuid.isUnit())
     {
-        Creature* quest_giver = _player->GetMapMgr()->GetCreature(srlPacket.questGiverGuid.getGuidLowPart());
+        Creature* quest_giver = _player->getWorldMap()->getCreature(srlPacket.questGiverGuid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -469,7 +459,7 @@ void WorldSession::handleQuestgiverStatusQueryOpcode(WorldPacket& recvPacket)
     }
     else if (srlPacket.questGiverGuid.isGameObject())
     {
-        GameObject* quest_giver = _player->GetMapMgr()->GetGameObject(srlPacket.questGiverGuid.getGuidLowPart());
+        GameObject* quest_giver = _player->getWorldMap()->getGameObject(srlPacket.questGiverGuid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -482,7 +472,11 @@ void WorldSession::handleQuestgiverStatusQueryOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    const uint32_t questStatus = sQuestMgr.CalcStatus(qst_giver, _player);
+#if VERSION_STRING < Cata
+    const auto questStatus = static_cast<uint8_t>(sQuestMgr.CalcStatus(qst_giver, _player));
+#else
+    const auto questStatus = sQuestMgr.CalcStatus(qst_giver, _player);
+#endif
     SendPacket(SmsgQuestgiverStatus(srlPacket.questGiverGuid.getRawGuid(), questStatus).serialise().get());
 }
 
@@ -507,7 +501,7 @@ void WorldSession::handleQuestGiverQueryQuestOpcode(WorldPacket& recvPacket)
 
     if (srlPacket.guid.isUnit())
     {
-        Creature* quest_giver = _player->GetMapMgr()->GetCreature(srlPacket.guid.getGuidLowPart());
+        Creature* quest_giver = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -520,7 +514,7 @@ void WorldSession::handleQuestGiverQueryQuestOpcode(WorldPacket& recvPacket)
     }
     else if (srlPacket.guid.isGameObject())
     {
-        GameObject* quest_giver = _player->GetMapMgr()->GetGameObject(srlPacket.guid.getGuidLowPart());
+        GameObject* quest_giver = _player->getWorldMap()->getGameObject(srlPacket.guid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -576,7 +570,7 @@ void WorldSession::handleQuestGiverQueryQuestOpcode(WorldPacket& recvPacket)
         sLogger.debug("Sent SMSG_QUESTGIVER_QUEST_DETAILS.");
 
         if (qst->HasFlag(QUEST_FLAGS_AUTO_ACCEPT))
-            _player->AcceptQuest(qst_giver->getGuid(), qst->id);
+            _player->acceptQuest(qst_giver->getGuid(), qst->id);
     }
     else if (status == QuestStatus::NotFinished || status == QuestStatus::Finished)
     {
@@ -588,8 +582,6 @@ void WorldSession::handleQuestGiverQueryQuestOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleQuestlogRemoveQuestOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgQuestlogRemoveQuest srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -604,7 +596,10 @@ void WorldSession::handleQuestlogRemoveQuestOpcode(WorldPacket& recvPacket)
         return;
     }
     QuestProperties const* qPtr = qEntry->getQuestProperties();
-    CALL_QUESTSCRIPT_EVENT(qEntry, OnQuestCancel)(_player);
+
+    if (const auto questScript = qEntry->getQuestScript())
+        questScript->OnQuestCancel(_player);
+
     qEntry->finishAndRemove();
 
     for (uint8_t i = 0; i < 4; ++i)
@@ -631,15 +626,13 @@ void WorldSession::handleQuestlogRemoveQuestOpcode(WorldPacket& recvPacket)
         }
     }
 
-    _player->UpdateNearbyGameObjects();
+    _player->updateNearbyQuestGameObjects();
 
     sHookInterface.OnQuestCancelled(_player, qPtr);
 }
 
 void WorldSession::handleQuestgiverRequestRewardOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgQuestgiverRequestReward srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -651,7 +644,7 @@ void WorldSession::handleQuestgiverRequestRewardOpcode(WorldPacket& recvPacket)
 
     if (srlPacket.questgiverGuid.isUnit())
     {
-        Creature* quest_giver = _player->GetMapMgr()->GetCreature(srlPacket.questgiverGuid.getGuidLowPart());
+        Creature* quest_giver = _player->getWorldMap()->getCreature(srlPacket.questgiverGuid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -674,7 +667,7 @@ void WorldSession::handleQuestgiverRequestRewardOpcode(WorldPacket& recvPacket)
     }
     else if (srlPacket.questgiverGuid.isGameObject())
     {
-        GameObject* quest_giver = _player->GetMapMgr()->GetGameObject(srlPacket.questgiverGuid.getGuidLowPart());
+        GameObject* quest_giver = _player->getWorldMap()->getGameObject(srlPacket.questgiverGuid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -718,8 +711,6 @@ void WorldSession::handleQuestgiverRequestRewardOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleQuestgiverCompleteQuestOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgQuestgiverCompleteQuest srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -731,7 +722,7 @@ void WorldSession::handleQuestgiverCompleteQuestOpcode(WorldPacket& recvPacket)
 
     if (srlPacket.questgiverGuid.isUnit())
     {
-        Creature* quest_giver = _player->GetMapMgr()->GetCreature(srlPacket.questgiverGuid.getGuidLowPart());
+        Creature* quest_giver = _player->getWorldMap()->getCreature(srlPacket.questgiverGuid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -751,7 +742,7 @@ void WorldSession::handleQuestgiverCompleteQuestOpcode(WorldPacket& recvPacket)
     }
     else if (srlPacket.questgiverGuid.isGameObject())
     {
-        GameObject* quest_giver = _player->GetMapMgr()->GetGameObject(srlPacket.questgiverGuid.getGuidLowPart());
+        GameObject* quest_giver = _player->getWorldMap()->getGameObject(srlPacket.questgiverGuid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -804,8 +795,6 @@ void WorldSession::handleQuestgiverCompleteQuestOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleQuestgiverChooseRewardOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgQuestgiverChooseReward srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -819,7 +808,7 @@ void WorldSession::handleQuestgiverChooseRewardOpcode(WorldPacket& recvPacket)
 
     if (srlPacket.questgiverGuid.isUnit())
     {
-        Creature* quest_giver = _player->GetMapMgr()->GetCreature(srlPacket.questgiverGuid.getGuidLowPart());
+        Creature* quest_giver = _player->getWorldMap()->getCreature(srlPacket.questgiverGuid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -833,7 +822,7 @@ void WorldSession::handleQuestgiverChooseRewardOpcode(WorldPacket& recvPacket)
     }
     else if (srlPacket.questgiverGuid.isGameObject())
     {
-        GameObject* quest_giver = _player->GetMapMgr()->GetGameObject(srlPacket.questgiverGuid.getGuidLowPart());
+        GameObject* quest_giver = _player->getWorldMap()->getGameObject(srlPacket.questgiverGuid.getGuidLowPart());
         if (quest_giver)
             qst_giver = quest_giver;
         else
@@ -888,8 +877,6 @@ void WorldSession::handleQuestgiverChooseRewardOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handlePushQuestToPartyOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgPushquesttoparty srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -909,10 +896,10 @@ void WorldSession::handlePushQuestToPartyOpcode(WorldPacket& recvPacket)
                 _player->getGroup()->Lock();
                 for (GroupMembersSet::iterator itr = sgr->GetGroupMembersBegin(); itr != sgr->GetGroupMembersEnd(); ++itr)
                 {
-                    Player* pPlayer = (*itr)->m_loggedInPlayer;
+                    Player* pPlayer = sObjectMgr.GetPlayer((*itr)->guid);
                     if (pPlayer && pPlayer->getGuid() != pguid)
                     {
-                        _player->GetSession()->SendPacket(MsgQuestPushResult(pPlayer->getGuid(), 0, QUEST_SHARE_MSG_SHARING_QUEST).serialise().get());
+                        _player->getSession()->SendPacket(MsgQuestPushResult(pPlayer->getGuid(), 0, QUEST_SHARE_MSG_SHARING_QUEST).serialise().get());
 
                         uint8_t response = QUEST_SHARE_MSG_SHARING_QUEST;
                         uint32_t status = sQuestMgr.PlayerMeetsReqs(pPlayer, pQuest, false);
@@ -921,7 +908,7 @@ void WorldSession::handlePushQuestToPartyOpcode(WorldPacket& recvPacket)
                         {
                             response = QUEST_SHARE_MSG_HAVE_QUEST;
                         }
-                        else if (pPlayer->HasFinishedQuest(srlPacket.questId))
+                        else if (pPlayer->hasQuestFinished(srlPacket.questId))
                         {
                             response = QUEST_SHARE_MSG_FINISH_QUEST;
                         }
@@ -933,12 +920,12 @@ void WorldSession::handlePushQuestToPartyOpcode(WorldPacket& recvPacket)
                         {
                             response = QUEST_SHARE_MSG_LOG_FULL;
                         }
-                        else if (pPlayer->DuelingWith)
+                        else if (pPlayer->m_duelPlayer)
                         {
                             response = QUEST_SHARE_MSG_BUSY;
                         }
                         
-                        if (response == QUEST_SHARE_MSG_SHARING_QUEST && !pPlayer->IsVisible(_player->getGuid()))
+                        if (response == QUEST_SHARE_MSG_SHARING_QUEST && !pPlayer->isVisibleObject(_player->getGuid()))
                         {
                             response = QUEST_SHARE_MSG_BUSY;
                         }
@@ -950,9 +937,9 @@ void WorldSession::handlePushQuestToPartyOpcode(WorldPacket& recvPacket)
                         }
 
                         WorldPacket data;
-                        sQuestMgr.BuildQuestDetails(&data, pQuest, _player, 1, pPlayer->GetSession()->language, pPlayer);
-                        pPlayer->SetQuestSharer(pguid);
-                        pPlayer->GetSession()->SendPacket(&data);
+                        sQuestMgr.BuildQuestDetails(&data, pQuest, _player, 1, pPlayer->getSession()->language, pPlayer);
+                        pPlayer->setQuestSharerDbId(pguid);
+                        pPlayer->getSession()->SendPacket(&data);
                     }
                 }
                 _player->getGroup()->Unlock();

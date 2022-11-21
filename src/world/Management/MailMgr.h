@@ -1,6 +1,6 @@
 /**
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -18,6 +18,8 @@
 
 #ifndef MAILMGR_H
 #define MAILMGR_H
+
+#include "Server/EventableObject.h"
 
 #define MAIL_MAX_ITEM_SLOT 12
 #define MAIL_DEFAULT_EXPIRATION_TIME 30
@@ -181,7 +183,7 @@ class SERVER_DECL MailSystem : public EventableObject
         {
             return (config_flags & flag) ? true : false;
         }
-        uint32 config_flags;
+        uint32 config_flags = 0;
 
 };
 

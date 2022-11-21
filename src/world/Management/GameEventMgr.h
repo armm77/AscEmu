@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -119,10 +119,11 @@ struct EventCreatureSpawnsQueryResult
 
 struct EventGameObjectSpawnsQueryResult
 {
-    uint32 event_entry;
-    uint32 id;
-    uint32 entry;
-    uint32 map_id;
+    uint32_t event_entry;
+    uint32_t id;
+    uint32_t entry;
+    uint32_t map_id;
+    uint32_t phase;
     float position_x;
     float position_y;
     float position_z;
@@ -131,13 +132,8 @@ struct EventGameObjectSpawnsQueryResult
     float orientation2;
     float orientation3;
     float orientation4;
-    uint32 state;
-    uint32 flags;
-    uint32 faction;
-    float scale;
-    uint32 stateNpcLink;
-    uint32 phase;
-    uint32 overrides;
+    uint32_t spawnTimesecs;
+    uint32_t state;
 };
 
 typedef std::map<uint32, GameEvent*> GameEvents;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,22 +17,25 @@
  */
 
 #include "Setup.h"
-#include "Units/Summons/Summon.h"
-#include "Management/Item.h"
+#include "Objects/Units/Creatures/Summons/Summon.h"
+#include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
-#include "Map/MapMgr.h"
-#include "Objects/Faction.h"
-#include "Units/Creatures/Pet.h"
+#include "Map/Management/MapMgr.hpp"
+#include "Management/Faction.h"
+#include "Objects/Units/Creatures/Pet.h"
 #include "Spell/Spell.h"
 #include "Server/Script/ScriptMgr.h"
-#include <Spell/Definitions/PowerType.h>
+#include <Spell/Definitions/PowerType.hpp>
+
+#include "Server/Script/CreatureAIScript.h"
 
 class ArmyOfTheDeadGhoulAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ArmyOfTheDeadGhoulAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ArmyOfTheDeadGhoulAI(c); }
     explicit ArmyOfTheDeadGhoulAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        getCreature()->GetAIInterface()->m_canMove = false;
+        getCreature()->setControlled(true, UNIT_STATE_ROOTED);
     }
 
     void OnLoad() override
@@ -55,16 +58,15 @@ class ArmyOfTheDeadGhoulAI : public CreatureAIScript
     {
         getCreature()->castSpell(getCreature()->getGuid(), 20480, false);
         RemoveAIUpdateEvent();
-        getCreature()->GetAIInterface()->m_canMove = true;
+        getCreature()->setControlled(false, UNIT_STATE_ROOTED);
     }
 };
 
 class ShadowFiendAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ShadowFiendAI)
-    explicit ShadowFiendAI(Creature* pCreature) : CreatureAIScript(pCreature)
-    {
-    }
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ShadowFiendAI(c); }
+    explicit ShadowFiendAI(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnLoad() override
     {
@@ -72,21 +74,21 @@ class ShadowFiendAI : public CreatureAIScript
         {
             if (auto pet = dynamic_cast<Pet*>(getCreature()))
             {
-                auto playerOwner = pet->getPlayerOwner();
+                auto playerOwner = pet->getUnitOwner();
 
                 const auto ownerBonus = static_cast<float>(playerOwner->GetDamageDoneMod(SCHOOL_SHADOW) * 0.375f); // 37.5%
                 pet->BaseAttackType = SCHOOL_SHADOW; // Melee hits are supposed to do damage with the shadow school
                 pet->setBaseAttackTime(MELEE, 1500); // Shadowfiend is supposed to do 10 attacks, sometimes it can be 11
                 pet->setMinDamage(pet->getMinDamage() + ownerBonus);
                 pet->setMaxDamage(pet->getMaxDamage() + ownerBonus);
-                pet->BaseDamage[0] += ownerBonus;
-                pet->BaseDamage[1] += ownerBonus;
+                pet->m_baseDamage[0] += ownerBonus;
+                pet->m_baseDamage[1] += ownerBonus;
 
-                const auto unitTarget = pet->GetMapMgr()->GetUnit(playerOwner->getTargetGuid());
+                const auto unitTarget = pet->getWorldMap()->getUnit(playerOwner->getTargetGuid());
                 if (unitTarget != nullptr && isAttackable(playerOwner, unitTarget))
                 {
-                    pet->GetAIInterface()->AttackReaction(unitTarget, 1);
-                    pet->GetAIInterface()->setNextTarget(unitTarget);
+                    pet->getAIInterface()->onHostileAction(unitTarget);
+                    pet->getAIInterface()->setCurrentTarget(unitTarget);
                 }
             }
         }
@@ -95,10 +97,9 @@ class ShadowFiendAI : public CreatureAIScript
 
 class MirrorImageAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(MirrorImageAI)
-    explicit MirrorImageAI(Creature* pCreature) : CreatureAIScript(pCreature)
-    {
-    }
+public:
+    static CreatureAIScript* Create(Creature* c) { return new MirrorImageAI(c); }
+    explicit MirrorImageAI(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnLoad() override
     {
@@ -119,8 +120,6 @@ class MirrorImageAI : public CreatureAIScript
                     getCreature()->setMaxPower(POWER_TYPE_MANA, unitOwner->getMaxPower(POWER_TYPE_MANA));
                     getCreature()->setPower(POWER_TYPE_MANA, unitOwner->getPower(POWER_TYPE_MANA));
 
-                    DBC::Structures::SpellRangeEntry const* range = nullptr;
-
                     AI_Spell sp1{};
                     sp1.entryId = 59638;
                     sp1.spell = sSpellMgr.getSpellInfo(sp1.entryId);
@@ -135,11 +134,10 @@ class MirrorImageAI : public CreatureAIScript
                     sp1.Misc2 = 0;
                     sp1.procCount = 0;
                     sp1.procChance = 100;
-                    range = sSpellRangeStore.LookupEntry(sp1.spell->getRangeIndex());
-                    sp1.minrange = GetMinRange(range);
-                    sp1.maxrange = GetMaxRange(range);
+                    sp1.minrange = sp1.spell->getMinRange();
+                    sp1.maxrange = sp1.spell->getMaxRange();
 
-                    getCreature()->GetAIInterface()->addSpellToList(&sp1);
+                    getCreature()->getAIInterface()->addSpellToList(&sp1);
 
                     AI_Spell sp2{};
                     sp2.entryId = 59637;
@@ -155,21 +153,20 @@ class MirrorImageAI : public CreatureAIScript
                     sp2.Misc2 = 0;
                     sp2.procCount = 0;
                     sp2.procChance = 100;
-                    range = sSpellRangeStore.LookupEntry(sp2.spell->getRangeIndex());
-                    sp2.minrange = GetMinRange(range);
-                    sp2.maxrange = GetMaxRange(range);
+                    sp2.minrange = sp2.spell->getMinRange();
+                    sp2.maxrange = sp2.spell->getMaxRange();
 
-                    getCreature()->GetAIInterface()->addSpellToList(&sp2);
+                    getCreature()->getAIInterface()->addSpellToList(&sp2);
                 }
             }
         }
     }
 };
 
-
 class DancingRuneWeaponAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(DancingRuneWeaponAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new DancingRuneWeaponAI(c); }
     explicit DancingRuneWeaponAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         dpsCycle = 0;
@@ -232,7 +229,7 @@ class DancingRuneWeaponAI : public CreatureAIScript
 
     void AIUpdate() override
     {
-        const auto currentTarget = getCreature()->GetAIInterface()->getNextTarget();
+        const auto currentTarget = getCreature()->getThreatManager().getCurrentVictim();
         if (!getCreature()->isCastingSpell() && currentTarget)
         {
             switch (dpsCycle)
@@ -303,7 +300,6 @@ class DancingRuneWeaponAI : public CreatureAIScript
         }
     }
 private:
-
     int dpsCycle;
     int dpsSpell;
     int procSpell[5];
@@ -311,19 +307,18 @@ private:
 
 class FrostBroodVanquisherAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(FrostBroodVanquisherAI)
-    explicit FrostBroodVanquisherAI(Creature* pCreature) : CreatureAIScript(pCreature)
-    {
-    }
+public:
+    static CreatureAIScript* Create(Creature* c) { return new FrostBroodVanquisherAI(c); }
+    explicit FrostBroodVanquisherAI(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnLoad() override
     {
-        getCreature()->setAnimationFlags(UNIT_BYTE1_FLAG_HOVER);
+        getCreature()->setAnimationTier(AnimationTier::Hover);
     }
 
-    void OnLastPassengerLeft(Unit *passenger) override
+    void OnRemovePassenger(Unit* _passenger) override
     {
-        if (getCreature()->getSummonedByGuid() == passenger->getGuid())
+        if (getCreature()->getSummonedByGuid() == _passenger->getGuid())
             getCreature()->Despawn(1 * 1000, 0);
     }
 };

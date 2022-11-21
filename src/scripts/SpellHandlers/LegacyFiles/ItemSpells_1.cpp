@@ -17,13 +17,14 @@
 
 #include "Setup.h"
 #include "Management/QuestLogEntry.hpp"
-#include "Management/Skill.h"
+#include "Management/Skill.hpp"
 #include "Management/ItemInterface.h"
-#include "../EventScripts/Setup.h"
-#include "Objects/Faction.h"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Management/Faction.h"
 #include "Spell/SpellAuras.h"
+#include "Spell/SpellMgr.hpp"
 
- /*
+/*
      How to add a new item spell to the dummy spell handler:
 
      1) Add a new function to handle the spell at the end of this file but before the
@@ -48,8 +49,8 @@ bool GnomishTransporter(uint8_t /*effectIndex*/, Spell* pSpell)
     if (!pSpell->getPlayerCaster())
         return true;
 
-    pSpell->getPlayerCaster()->EventAttackStop();
-    pSpell->getPlayerCaster()->SafeTeleport(1, 0, LocationVector(-7169.41f, -3838.63f, 8.72f));
+    pSpell->getPlayerCaster()->eventAttackStop();
+    pSpell->getPlayerCaster()->safeTeleport(1, 0, LocationVector(-7169.41f, -3838.63f, 8.72f));
     return true;
 }
 
@@ -80,7 +81,7 @@ bool HallowsEndCandy(uint8_t /*effectIndex*/, Spell* pSpell)
     if (!pSpell->getPlayerCaster())
         return true;
 
-    int newspell = 24924 + Util::getRandomUInt(3);
+    const uint32_t newspell = 24924 + Util::getRandomUInt(3);
 
     SpellInfo const* spInfo = sSpellMgr.getSpellInfo(newspell);
     if (!spInfo) return true;
@@ -94,7 +95,7 @@ bool DeviateFish(uint8_t /*effectIndex*/, Spell* pSpell)
     if (!pSpell->getPlayerCaster())
         return true;
 
-    int newspell = 8064 + Util::getRandomUInt(4);
+    const uint32_t newspell = 8064 + Util::getRandomUInt(4);
 
     SpellInfo const* spInfo = sSpellMgr.getSpellInfo(newspell);
     if (!spInfo) return true;
@@ -108,10 +109,9 @@ bool CookedDeviateFish(uint8_t /*effectIndex*/, Spell* pSpell)
     if (!pSpell->getPlayerCaster())
         return true;
 
-    int chance = 0;
-    int newspell = 0;
+    uint32_t newspell;
 
-    chance = Util::getRandomUInt(1);
+    uint32_t chance = Util::getRandomUInt(1);
 
     switch (chance)
     {
@@ -120,6 +120,9 @@ bool CookedDeviateFish(uint8_t /*effectIndex*/, Spell* pSpell)
             break;
         case 1:
             newspell = 8221; // Yaaarrrr (60 min) (turns you into a pirate)
+            break;
+        default:
+            newspell = 0;
             break;
     }
 
@@ -139,7 +142,7 @@ bool HolidayCheer(uint8_t effectIndex, Spell* pSpell)
         return true;
 
     Unit* target;
-    float dist = pSpell->GetRadius(effectIndex);
+    float dist = pSpell->getEffectRadius(effectIndex);
 
     for (const auto& itr : pSpell->getCaster()->getInRangeObjectsSet())
     {
@@ -166,7 +169,7 @@ bool NetOMatic(uint8_t /*effectIndex*/, Spell* pSpell)
     if (!spInfo)
         return true;
 
-    int chance = Util::getRandomUInt(99) + 1;
+    uint32_t chance = Util::getRandomUInt(99) + 1;
 
     if (chance < 51) // nets target: 50%
         pSpell->getPlayerCaster()->castSpell(target, spInfo, true);
@@ -200,22 +203,22 @@ bool ForemansBlackjack(uint8_t /*effectIndex*/, Spell* pSpell)
 
     // check to see that we have the correct creature
     Creature* c_target = static_cast<Creature*>(target);
-    if (c_target->getEntry() != 10556 || !c_target->HasAura(17743))
+    if (c_target->getEntry() != 10556 || !c_target->hasAurasWithId(17743))
         return true;
 
     // Start moving again
-    if (target->GetAIInterface())
-        target->GetAIInterface()->StopMovement(0);
+    if (target->getAIInterface())
+        target->stopMoving();
 
     // Remove Zzz aura
-    c_target->RemoveAllAuras();
+    c_target->removeAllAuras();
 
     pSpell->getPlayerCaster()->sendPlayObjectSoundPacket(c_target->getGuid(), 6197);
 
     // send chat message
     char msg[100];
     sprintf(msg, "Ow! Ok, I'll get back to work, %s", pSpell->getPlayerCaster()->getName().c_str());
-    target->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg);
+    target->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg);
 
     c_target->emote(EMOTE_STATE_WORK_CHOPWOOD);
 
@@ -236,7 +239,7 @@ bool NetherWraithBeacon(uint8_t /*effectIndex*/, Spell* pSpell)
     float SSZ = pSpell->getPlayerCaster()->GetPositionZ();
     float SSO = pSpell->getPlayerCaster()->GetOrientation();
 
-    pSpell->getPlayerCaster()->GetMapMgr()->GetInterface()->SpawnCreature(22408, SSX, SSY, SSZ, SSO, true, false, 0, 0);
+    pSpell->getPlayerCaster()->getWorldMap()->getInterface()->spawnCreature(22408, LocationVector(SSX, SSY, SSZ, SSO), true, false, 0, 0);
     return true;
 }
 
@@ -245,7 +248,7 @@ bool NighInvulnBelt(uint8_t /*effectIndex*/, Spell* pSpell)
     if (!pSpell->getPlayerCaster())
         return true;
 
-    int chance = Util::getRandomUInt(99) + 1;
+    uint32_t chance = Util::getRandomUInt(99) + 1;
 
     if (chance > 10)    // Buff - Nigh-Invulnerability - 30456
         pSpell->getPlayerCaster()->castSpell(pSpell->getPlayerCaster(), sSpellMgr.getSpellInfo(30456), true);
@@ -304,15 +307,15 @@ bool WinterWondervolt(uint8_t /*effectIndex*/, Spell* pSpell)
 bool ScryingCrystal(uint8_t /*effectIndex*/, Spell* pSpell)
 {
     Player* player = pSpell->getPlayerCaster();
-    LocationVector pos = player->GetPosition();
-    if (player->GetMapMgr()->GetInterface()->GetGameObjectNearestCoords(pos.x, pos.y, pos.z, 300078))
+
+    if (player->getWorldMap()->getInterface()->getGameObjectNearestCoords(player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), 300078))
     {
-        player->AddQuestKill(9824, 0, 0);
+        player->addQuestKill(9824, 0, 0);
         return false;
     }
-    else if (player->GetMapMgr()->GetInterface()->GetGameObjectNearestCoords(pos.x, pos.y, pos.z, 300142))
+    else if (player->getWorldMap()->getInterface()->getGameObjectNearestCoords(player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), 300142))
     {
-        player->AddQuestKill(9824, 1, 0);
+        player->addQuestKill(9824, 1, 0);
         return false;
     }
     return true;
@@ -331,9 +334,9 @@ bool MinionsOfGurok(uint8_t /*effectIndex*/, Spell* pSpell)
     float SSZ = target->GetPositionZ();
     float SSO = target->GetOrientation();
 
-    pSpell->getPlayerCaster()->GetMapMgr()->GetInterface()->SpawnCreature(18181, SSX + Util::getRandomUInt(8) - 4, SSY + Util::getRandomUInt(8) - 4, SSZ, SSO, true, false, 0, 0);
-    pSpell->getPlayerCaster()->GetMapMgr()->GetInterface()->SpawnCreature(18181, SSX + Util::getRandomUInt(8) - 4, SSY + Util::getRandomUInt(8) - 4, SSZ, SSO, true, false, 0, 0);
-    pSpell->getPlayerCaster()->GetMapMgr()->GetInterface()->SpawnCreature(18181, SSX + Util::getRandomUInt(8) - 4, SSY + Util::getRandomUInt(8) - 4, SSZ, SSO, true, false, 0, 0);
+    pSpell->getPlayerCaster()->getWorldMap()->getInterface()->spawnCreature(18181, LocationVector(SSX + Util::getRandomUInt(8) - 4, SSY + Util::getRandomUInt(8) - 4, SSZ, SSO), true, false, 0, 0);
+    pSpell->getPlayerCaster()->getWorldMap()->getInterface()->spawnCreature(18181, LocationVector(SSX + Util::getRandomUInt(8) - 4, SSY + Util::getRandomUInt(8) - 4, SSZ, SSO), true, false, 0, 0);
+    pSpell->getPlayerCaster()->getWorldMap()->getInterface()->spawnCreature(18181, LocationVector(SSX + Util::getRandomUInt(8) - 4, SSY + Util::getRandomUInt(8) - 4, SSZ, SSO), true, false, 0, 0);
 
     return true;
 }
@@ -364,7 +367,7 @@ bool WarpRiftGenerator(uint8_t /*effectIndex*/, Spell* pSpell)
     float SSZ = pSpell->getPlayerCaster()->GetPositionZ();
     float SSO = pSpell->getPlayerCaster()->GetOrientation();
 
-    pSpell->getPlayerCaster()->GetMapMgr()->GetInterface()->SpawnCreature(16939, SSX, SSY, SSZ, SSO, true, false, 0, 0);
+    pSpell->getPlayerCaster()->getWorldMap()->getInterface()->spawnCreature(16939, LocationVector(SSX, SSY, SSZ, SSO), true, false, 0, 0);
 
     return true;
 }
@@ -401,7 +404,7 @@ bool BigBlizzardBear(uint8_t /*effectIndex*/, Spell* pSpell)
     if (Player* plr = pSpell->GetPlayerTarget())
     {
         uint32_t newspell = 58997;
-        if (plr->_GetSkillLineCurrent(SKILL_RIDING, true) >= 150)
+        if (plr->getSkillLineCurrent(SKILL_RIDING, true) >= 150)
             plr->castSpell(plr, newspell, true);
     }
 
@@ -413,7 +416,7 @@ bool WingedSteed(uint8_t /*effectIndex*/, Spell* pSpell)
     if (Player* plr = pSpell->GetPlayerTarget())
     {
         uint32_t newspell = 54726;
-        if (plr->_GetSkillLineCurrent(SKILL_RIDING, true) == 300)
+        if (plr->getSkillLineCurrent(SKILL_RIDING, true) == 300)
             newspell = 54727;
         plr->castSpell(plr, newspell, true);
     }
@@ -427,16 +430,16 @@ bool HeadlessHorsemanMount(uint8_t /*effectIndex*/, Spell* pSpell)
     {
         uint32_t newspell = 51621;
         auto pArea = plr->GetArea();
-        if (pArea && (plr->_GetSkillLineCurrent(SKILL_RIDING, true) >= 225 && ((pArea->flags & 1024 && plr->GetMapId() != 571) ||
-            (pArea->flags & 1024 && plr->GetMapId() == 571 && plr->HasSpell(54197)))))
+        if (pArea && (plr->getSkillLineCurrent(SKILL_RIDING, true) >= 225 && ((pArea->flags & 1024 && plr->GetMapId() != 571) ||
+            (pArea->flags & 1024 && plr->GetMapId() == 571 && plr->hasSpell(54197)))))
 
         {
-            if (plr->_GetSkillLineCurrent(SKILL_RIDING, true) == 300)
+            if (plr->getSkillLineCurrent(SKILL_RIDING, true) == 300)
                 newspell = 48023;
             else
                 newspell = 51617;
         }
-        else if (plr->_GetSkillLineCurrent(SKILL_RIDING, true) >= 150)
+        else if (plr->getSkillLineCurrent(SKILL_RIDING, true) >= 150)
             newspell = 48024;
         plr->castSpell(plr, newspell, true);
     }
@@ -450,16 +453,16 @@ bool MagicBroomMount(uint8_t /*effectIndex*/, Spell* pSpell)
     {
         uint32_t newspell = 42680;
         auto pArea = plr->GetArea();
-        if (pArea && (plr->_GetSkillLineCurrent(SKILL_RIDING, true) >= 225 &&
+        if (pArea && (plr->getSkillLineCurrent(SKILL_RIDING, true) >= 225 &&
             ((pArea->flags & 1024 && plr->GetMapId() != 571) ||
-            (pArea->flags & 1024 && plr->GetMapId() == 571 && plr->HasSpell(54197)))))
+            (pArea->flags & 1024 && plr->GetMapId() == 571 && plr->hasSpell(54197)))))
         {
-            if (plr->_GetSkillLineCurrent(SKILL_RIDING, true) == 300)
+            if (plr->getSkillLineCurrent(SKILL_RIDING, true) == 300)
                 newspell = 42668;
             else
                 newspell = 42667;
         }
-        else if (plr->_GetSkillLineCurrent(SKILL_RIDING, true) >= 150)
+        else if (plr->getSkillLineCurrent(SKILL_RIDING, true) >= 150)
             newspell = 42683;
         plr->castSpell(plr, newspell, true);
     }
@@ -482,15 +485,15 @@ bool Invincible(uint8_t /*effectIndex*/, Spell* pSpell)
     {
         uint32_t newspell = 72281;
         auto pArea = plr->GetArea();
-        if (pArea && (plr->_GetSkillLineCurrent(SKILL_RIDING, true) >= 225 && ((pArea->flags & 1024 && plr->GetMapId() != 571) ||
-            (pArea->flags & 1024 && plr->GetMapId() == 571 && plr->HasSpell(54197)))))
+        if (pArea && (plr->getSkillLineCurrent(SKILL_RIDING, true) >= 225 && ((pArea->flags & 1024 && plr->GetMapId() != 571) ||
+            (pArea->flags & 1024 && plr->GetMapId() == 571 && plr->hasSpell(54197)))))
         {
-            if (plr->_GetSkillLineCurrent(SKILL_RIDING, true) == 300)
+            if (plr->getSkillLineCurrent(SKILL_RIDING, true) == 300)
                 newspell = 72284;
             else
                 newspell = 72283;
         }
-        else if (plr->_GetSkillLineCurrent(SKILL_RIDING, true) >= 150)
+        else if (plr->getSkillLineCurrent(SKILL_RIDING, true) >= 150)
             newspell = 72282;
 
         plr->castSpell(plr, newspell, true);
@@ -591,8 +594,8 @@ bool BrittleArmor(uint8_t /*effectIndex*/, Spell* s)
 
 bool RequiresNoAmmo(uint8_t effectIndex, Aura* a, bool apply)
 {
-    auto aurEff = a->getAuraEffect(effectIndex);
-    a->SpellAuraConsumeNoAmmo(&aurEff, apply);
+    auto aurEff = a->getModifiableAuraEffect(effectIndex);
+    a->SpellAuraConsumeNoAmmo(aurEff, apply);
 
     return true;
 }
@@ -613,7 +616,7 @@ bool NitroBoosts(uint8_t /*effectIndex*/, Spell* s)
     if (s->getPlayerCaster() == NULL)
         return true;
 
-    uint32_t engineeringskill = s->getPlayerCaster()->_GetSkillLineCurrent(SKILL_ENGINEERING);
+    uint32_t engineeringskill = s->getPlayerCaster()->getSkillLineCurrent(SKILL_ENGINEERING);
 
     if (engineeringskill >= 400)
         s->getPlayerCaster()->castSpell(s->getPlayerCaster(), 54861, true);
@@ -749,15 +752,15 @@ bool ChampioningTabards(uint8_t /*effectIndex*/, Aura* a, bool apply)
 {
     Player* p_caster = a->GetPlayerCaster();
 
-    if (p_caster == NULL)
+    if (!p_caster)
         return true;
 
-    uint32_t Faction = a->getSpellInfo()->getEffectMiscValue(0);
+    uint32_t Faction = static_cast<uint32_t>(a->getSpellInfo()->getEffectMiscValue(0));
 
     if (apply)
-        p_caster->SetChampioningFaction(Faction);
+        p_caster->setChampioningFaction(Faction);
     else
-        p_caster->SetChampioningFaction(0);
+        p_caster->setChampioningFaction(0);
 
     return true;
 }
@@ -778,18 +781,19 @@ bool Spinning(uint8_t /*effectIndex*/, Spell* s)
 {
     Player* p_caster = s->getPlayerCaster();
 
-    if (p_caster == NULL)
+    if (!p_caster)
         return true;
 
-    float neworientation = Util::getRandomFloat(M_PI_FLOAT * 2);
+    LocationVector location;
+    location.x = p_caster->GetPositionX();
+    location.y = p_caster->GetPositionY();
+    location.z= p_caster->GetPositionZ();
+    location.o = Util::getRandomFloat(M_PI_FLOAT * 2);
 
-    float X = p_caster->GetPositionX();
-    float Y = p_caster->GetPositionY();
-    float Z = p_caster->GetPositionZ();
     uint32_t mapid = p_caster->GetMapId();
     uint32_t instanceid = p_caster->GetInstanceID();
 
-    p_caster->SafeTeleport(mapid, instanceid, X, Y, Z, neworientation);
+    p_caster->safeTeleport(mapid, instanceid, location);
 
     return true;
 }
@@ -848,7 +852,7 @@ bool DrinkDummyAura(uint8_t /*effectIndex*/, Aura* a, bool apply)
         return true;
 
     float famount = 2.2f * (static_cast<float>(a->getSpellInfo()->getEffectBasePoints(1)) / 5.0f);
-    int32_t amount = static_cast<int32_t>(std::round(famount));
+    uint32_t amount = static_cast<uint32_t>(std::round(famount));
 
     a->EventPeriodicDrink(amount);
 
@@ -870,16 +874,18 @@ bool X53Mount(uint8_t /*effectIndex*/, Aura *a, bool apply)
         {
             if (auto area = p->GetArea())
             {
-                uint32_t skill = p->_GetSkillLineCurrent(SKILL_RIDING, true);
+                uint32_t skill = p->getSkillLineCurrent(SKILL_RIDING, true);
 
                 if (skill >= 225 && (((area->flags & 1024) && p->GetMapId() != 571) ||
-                    ((area->flags & 1024) && p->GetMapId() == 571 && p->HasSpell(54197))))
+                    ((area->flags & 1024) && p->GetMapId() == 571 && p->hasSpell(54197))))
                 {
                     if (skill == 300)
                     {
-                        if (p->HasSpellWithAuraNameAndBasePoints(SPELL_AURA_ENABLE_FLIGHT2, 310))
+#if VERSION_STRING >= TBC
+                        if (p->hasSpellWithAuraNameAndBasePoints(SPELL_AURA_ENABLE_FLIGHT2, 310))
                             newspell = 76154;
                         else
+#endif
                             newspell = 75972;
                     }
                     else
@@ -896,7 +902,7 @@ bool SchoolsOfArcaneMagicMastery(uint8_t /*effectIndex*/, Spell* s)
 {
     if (auto player = s->GetPlayerTarget())
     {
-        auto spell = player->getAreaId() == 4637 ? 59316 : 59314;
+        uint32_t spell = player->getAreaId() == 4637 ? 59316 : 59314;
         player->castSpell(player, spell, true);
     }
 

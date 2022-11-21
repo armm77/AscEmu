@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -78,7 +78,6 @@ extern "C" SCRIPT_DECL void _exp_script_register(ScriptMgr* mgr)    // Comment a
     SetupAzjolNerub(mgr);
     SetupCullingOfStratholme(mgr);
     SetupDrakTharonKeep(mgr);
-    SetupEyeOfEternity(mgr);
     SetupForgeOfSouls(mgr);
     SetupGundrak(mgr);
     SetupHallsOfLightning(mgr);
@@ -91,7 +90,22 @@ extern "C" SCRIPT_DECL void _exp_script_register(ScriptMgr* mgr)    // Comment a
     SetupTrialOfTheChampion(mgr);
     SetupUtgardeKeep(mgr);
     SetupUtgardePinnacle(mgr);
-    SetupVaultOfArchavon(mgr);
+#endif
+
+    //Cataclysm
+#if VERSION_STRING >= Cata
+    SetupBlackrockCaverns(mgr);
+    SetupEndTime(mgr);
+    SetupGrimBatol(mgr);
+    SetupHallsOfOrigination(mgr);
+    SetupHourOfTwilight(mgr);
+    SetupLostCityOfTolvir(mgr);
+    SetupTheStonecore(mgr);
+    SetupThroneOfTides(mgr);
+    SetupVortexPinnacle(mgr);
+    SetupWellOfEternity(mgr);
+    SetupZulAmanCata(mgr);
+    SetupZulGurubCata(mgr);
 #endif
 
     //Classic
@@ -121,6 +135,17 @@ extern "C" SCRIPT_DECL void _exp_script_register(ScriptMgr* mgr)    // Comment a
     SetupNaxxramas(mgr);
     SetupUlduar(mgr);
     SetupTrialOfTheCrusader(mgr);
+    SetupEyeOfEternity(mgr);
+    SetupVaultOfArchavon(mgr);
+#endif
+
+    //Cataclysm
+#if VERSION_STRING >= Cata
+    SetupBaradinHold(mgr);
+    SetupBastionOfTwilight(mgr);
+    SetupBlackwingDescent(mgr);
+    SetupDragonSoul(mgr);
+    SetupFirelands(mgr);
 #endif
 }
 

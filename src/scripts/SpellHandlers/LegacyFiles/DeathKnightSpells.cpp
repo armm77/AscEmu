@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,13 +18,13 @@
  */
 
 #include "Setup.h"
-#include "Map/MapMgr.h"
-#include "Objects/Faction.h"
+#include "Map/Management/MapMgr.hpp"
+#include "Management/Faction.h"
 #include "Spell/SpellAuras.h"
 #include "Server/Opcodes.hpp"
 #include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.h"
-#include <Spell/Definitions/DispelType.h>
+#include "Spell/Definitions/ProcFlags.hpp"
+#include <Spell/Definitions/DispelType.hpp>
 
 enum
 {
@@ -40,22 +40,22 @@ bool Pestilence(uint8_t effectIndex, Spell* pSpell)
             return true;
 
         Unit* u_caster = pSpell->getUnitCaster();
-        Unit* Main = u_caster->GetMapMgr()->GetUnit(u_caster->getTargetGuid());
+        Unit* Main = u_caster->getWorldMap()->getUnit(u_caster->getTargetGuid());
         if (Main == NULL)
             return true;
-        bool blood = Main->HasAura(BLOOD_PLAGUE);
-        bool frost = Main->HasAura(FROST_FEVER);
-        int inc = (u_caster->HasAura(59309) ? 10 : 5);
+        bool blood = Main->hasAurasWithId(BLOOD_PLAGUE);
+        bool frost = Main->hasAurasWithId(FROST_FEVER);
+        int inc = (u_caster->hasAurasWithId(59309) ? 10 : 5);
         for (const auto& itr : u_caster->getInRangeObjectsSet())
         {
             if (!itr || !itr->isCreatureOrPlayer())
                 continue;
 
             Unit* Target = static_cast<Unit*>(itr);
-            if (Main->getGuid() == Target->getGuid() && !u_caster->HasAura(63334))
+            if (Main->getGuid() == Target->getGuid() && !u_caster->hasAurasWithId(63334))
                 continue;
 
-            if (isAttackable(Target, u_caster) && u_caster->CalcDistance(itr) <= (pSpell->GetRadius(effectIndex) + inc))
+            if (isAttackable(Target, u_caster) && u_caster->CalcDistance(itr) <= (pSpell->getEffectRadius(effectIndex) + inc))
             {
                 if (blood)
                     u_caster->castSpell(Target, BLOOD_PLAGUE, true);
@@ -76,7 +76,7 @@ bool DeathStrike(uint8_t /*effectIndex*/, Spell* pSpell)
     Unit* Target = pSpell->GetUnitTarget();
 
     // Get count of diseases on target which were casted by caster
-    uint32_t count = Target->GetAuraCountWithDispelType(DISPEL_DISEASE, pSpell->getPlayerCaster()->getGuid());
+    uint32_t count = Target->getAuraCountWithDispelType(DISPEL_DISEASE, pSpell->getPlayerCaster()->getGuid());
 
     // Not a logical error, Death Strike should heal only when diseases are presented on its target
     if (count)
@@ -150,7 +150,7 @@ bool RaiseDead(uint8_t /*effectIndex*/, Spell* s)
     SpellInfo const* sp = nullptr;
 
     // Master of Ghouls
-    if (s->getPlayerCaster()->HasAura(52143) == false)
+    if (s->getPlayerCaster()->hasAurasWithId(52143) == false)
     {
         // Minion version, 1 min duration
         sp = sSpellMgr.getSpellInfo(46585);
@@ -234,15 +234,15 @@ bool DeathGrip(uint8_t effectIndex, Spell* s)
         data << posZ;
 
         if (unitTarget->isCreature())
-            unitTarget->GetAIInterface()->StopMovement(2000);
+            unitTarget->pauseMovement(2000);
 
-        unitTarget->SendMessageToSet(&data, true);
+        unitTarget->sendMessageToSet(&data, true);
         unitTarget->SetPosition(posX, posY, posZ, alpha, true);
-        unitTarget->addUnitStateFlag(UNIT_STATE_ATTACKING);
+        unitTarget->addUnitStateFlag(UNIT_STATE_MELEE_ATTACKING);
         unitTarget->smsg_AttackStart(unitTarget);
         unitTarget->setAttackTimer(MELEE, time);
         unitTarget->setAttackTimer(OFFHAND, time);
-        unitTarget->GetAIInterface()->taunt(s->getUnitCaster(), true);
+        unitTarget->getThreatManager().tauntUpdate();
     }
 
     return true;
@@ -257,15 +257,17 @@ bool DeathCoil(uint8_t /*effectIndex*/, Spell* s)
 
     int32_t dmg = s->damage;
 
+    SpellForcedBasePoints forcedBasePoints;
     if (isAttackable(s->getPlayerCaster(), unitTarget, false))
     {
-        s->getPlayerCaster()->castSpell(unitTarget, 47632, dmg, true);
+        forcedBasePoints.set(EFF_INDEX_0, dmg);
+        s->getPlayerCaster()->castSpell(unitTarget, 47632, forcedBasePoints, true);
     }
     else if (unitTarget->isPlayer() && unitTarget->getRace() == RACE_UNDEAD)
     {
         float multiplier = 1.5f;
-        dmg = static_cast<int32_t>((dmg * multiplier));
-        s->getPlayerCaster()->castSpell(unitTarget, 47633, dmg, true);
+        forcedBasePoints.set(EFF_INDEX_0, static_cast<int32_t>((dmg * multiplier)));
+        s->getPlayerCaster()->castSpell(unitTarget, 47633, forcedBasePoints, true);
     }
 
     return true;
@@ -295,9 +297,10 @@ bool DeathAndDecay(uint8_t effectIndex, Aura* pAura, bool apply)
         if (caster == NULL)
             return true;
 
-        int32_t value = int32_t(pAura->getEffectDamage(effectIndex) + (int32_t)caster->GetAP() * 0.064);
+        SpellForcedBasePoints forcedBasePoints;
+        forcedBasePoints.set(EFF_INDEX_0, static_cast<uint32_t>(pAura->getEffectDamage(effectIndex) + caster->getCalculatedAttackPower() * 0.064));
 
-        caster->castSpell(pAura->getOwner(), 52212, value, true);
+        caster->castSpell(pAura->getOwner(), 52212, forcedBasePoints, true);
     }
 
     return true;

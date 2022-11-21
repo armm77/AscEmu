@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/Packets/SmsgSendMailResult.h"
 #include "Server/Packets/CmsgMailMarkAsRead.h"
 #include "Server/Packets/CmsgMailDelete.h"
@@ -17,16 +17,15 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/WorldSession.h"
 #include "Management/MailMgr.h"
 #include "Server/World.h"
-#include "Units/Players/Player.h"
+#include "Objects/Units/Players/Player.hpp"
 #include "Management/ItemInterface.h"
 #include "Storage/MySQLDataStore.hpp"
+#include "Server/Definitions.h"
 
 using namespace AscEmu::Packets;
 
 void WorldSession::handleMarkAsReadOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgMailMarkAsRead srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -46,8 +45,6 @@ void WorldSession::handleMarkAsReadOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleMailDeleteOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgMailDelete srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -66,8 +63,6 @@ void WorldSession::handleMailDeleteOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleTakeMoneyOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgMailTakeMoney srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -98,8 +93,6 @@ void WorldSession::handleTakeMoneyOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleReturnToSenderOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgMailReturnToSender srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -132,8 +125,6 @@ void WorldSession::handleReturnToSenderOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleMailCreateTextItemOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgMailCreateTextItem srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -158,32 +149,28 @@ void WorldSession::handleMailCreateTextItemOpcode(WorldPacket& recvPacket)
         return;
 
     item->setFlags(ITEM_FLAG_WRAP_GIFT);
-    item->SetText(message->body);
+    item->setText(message->body);
 
     if (_player->getItemInterface()->AddItemToFreeSlot(item))
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_MADE_PERMANENT, MAIL_OK).serialise().get());
     else
-        item->DeleteMe();
+        item->deleteMe();
 }
 
 void WorldSession::handleItemTextQueryOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgItemTextQuery srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
   
     if (const auto item = _player->getItemInterface()->GetItemByGUID(srlPacket.itemGuid))
-        SendPacket(SmsgItemTextQueryResponse(0, srlPacket.itemGuid, item->GetText()).serialise().get());
+        SendPacket(SmsgItemTextQueryResponse(0, srlPacket.itemGuid, item->getText()).serialise().get());
     else
         SendPacket(SmsgItemTextQueryResponse(1, 0, "").serialise().get());
 }
 
 void WorldSession::handleMailTimeOpcode(WorldPacket& /*recvPacket*/)
 {
-    CHECK_INWORLD_RETURN
-
     WorldPacket data(MSG_QUERY_NEXT_MAIL_TIME, 32);
     {
         uint32_t unreadMessageCount = 0;
@@ -217,8 +204,6 @@ void WorldSession::handleMailTimeOpcode(WorldPacket& /*recvPacket*/)
 
 void WorldSession::handleGetMailOpcode(WorldPacket& /*recvPacket*/)
 {
-    CHECK_INWORLD_RETURN
-
     WorldPacket data(SMSG_MAIL_LIST_RESULT, 200);
     uint32_t realCount = 0;
     uint8_t count = 0;
@@ -317,10 +302,10 @@ void WorldSession::handleGetMailOpcode(WorldPacket& /*recvPacket*/)
                 data << uint32_t(item->getRandomPropertiesId());
                 data << uint32_t(item->getPropertySeed());
                 data << uint32_t(item->getStackCount());
-                data << uint32_t(item->GetChargesLeft());
+                data << uint32_t(item->getChargesLeft());
                 data << uint32_t(item->getMaxDurability());
                 data << uint32_t(item->getDurability());
-                data << uint8_t(item->locked ? 1 : 0);
+                data << uint8_t(item->m_isLocked ? 1 : 0);
 
                 delete item;
             }
@@ -340,8 +325,6 @@ void WorldSession::handleGetMailOpcode(WorldPacket& /*recvPacket*/)
 
 void WorldSession::handleTakeItemOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgMailTakeItem srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -381,7 +364,7 @@ void WorldSession::handleTakeItemOpcode(WorldPacket& recvPacket)
     {
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_ITEM_TAKEN, MAIL_ERR_BAG_FULL, INV_ERR_INVENTORY_FULL).serialise().get());
 
-        item->DeleteMe();
+        item->deleteMe();
         return;
     }
     item->m_isDirty = true;
@@ -391,13 +374,13 @@ void WorldSession::handleTakeItemOpcode(WorldPacket& recvPacket)
         if (!_player->getItemInterface()->AddItemToFreeSlot(item))
         {
             SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_ITEM_TAKEN, MAIL_ERR_BAG_FULL, INV_ERR_INVENTORY_FULL).serialise().get());
-            item->DeleteMe();
+            item->deleteMe();
             return;
         }
     }
     else
     {
-        item->SaveToDB(slotResult.ContainerSlot, slotResult.Slot, true, nullptr);
+        item->saveToDB(slotResult.ContainerSlot, slotResult.Slot, true, nullptr);
     }
 
     // Remove taken items and update message.
@@ -425,8 +408,6 @@ void WorldSession::handleTakeItemOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgSendMail srlPacket;
     if (!srlPacket.deserialise(recvPacket))
     {
@@ -440,7 +421,7 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    const auto playerReceiverInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.receiverName.c_str());
+    const auto playerReceiverInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.receiverName);
     if (playerReceiverInfo == nullptr)
     {
         SendPacket(SmsgSendMailResult(0, MAIL_RES_MAIL_SENT, MAIL_ERR_RECIPIENT_NOT_FOUND).serialise().get());
@@ -477,7 +458,7 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (strcmp(playerReceiverInfo->name, _player->getName().c_str()) == 0 && !GetPermissionCount())
+    if (playerReceiverInfo->name == _player->getName() && !GetPermissionCount())
     {
         SendPacket(SmsgSendMailResult(0, MAIL_RES_MAIL_SENT, MAIL_ERR_CANNOT_SEND_TO_SELF).serialise().get());
         return;
@@ -514,20 +495,20 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
             if (_player->getItemInterface()->SafeRemoveAndRetreiveItemByGuid(item->getGuid(), false) != pItem)
                 continue;
 
-            pItem->RemoveFromWorld();
+            pItem->removeFromWorld();
             pItem->setOwner(nullptr);
-            pItem->SaveToDB(INVENTORY_SLOT_NOT_SET, 0, true, nullptr);
+            pItem->saveToDB(INVENTORY_SLOT_NOT_SET, 0, true, nullptr);
             msg.items.push_back(pItem->getGuidLow());
 
             if (GetPermissionCount() > 0)
-                sGMLog.writefromsession(this, "sent mail with item entry %u to %s", pItem->getEntry(), playerReceiverInfo->name);
+                sGMLog.writefromsession(this, "sent mail with item entry %u to %s", pItem->getEntry(), playerReceiverInfo->name.c_str());
 
-            pItem->DeleteMe();
+            pItem->deleteMe();
         }
     }
 
     msg.delivery_time = static_cast<uint32_t>(UNIXTIME);
-    if (srlPacket.money != 0 || srlPacket.cod != 0 || attachedItems.empty() && playerReceiverInfo->acct != _player->GetSession()->GetAccountId())
+    if (srlPacket.money != 0 || srlPacket.cod != 0 || attachedItems.empty() && playerReceiverInfo->acct != _player->getSession()->GetAccountId())
     {
         if (!sMailSystem.MailOption(MAIL_FLAG_DISABLE_HOUR_DELAY_FOR_ITEMS))
             msg.delivery_time += HOUR;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,6 +18,7 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 enum
 {
@@ -29,7 +30,8 @@ enum
 
 class ElizaAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ElizaAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ElizaAI(c); }
     explicit ElizaAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         mElizaCombatTimer = 0;
@@ -58,7 +60,7 @@ class ElizaAI : public CreatureAIScript
         }
         if (_getHealthPercent() >= 10 && _getHealthPercent() <= 98 && !_isCasting())
         {
-            mElizaGuard = getCreature()->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(getCreature()->GetPositionX(), getCreature()->GetPositionY(), getCreature()->GetPositionZ(), 1871);
+            mElizaGuard = getCreature()->getWorldMap()->getInterface()->getCreatureNearestCoords(getCreature()->GetPositionX(), getCreature()->GetPositionY(), getCreature()->GetPositionZ(), 1871);
             if (mElizaGuard == nullptr)
             {
                 _castAISpell(mSummonGuard);
@@ -74,10 +76,9 @@ class ElizaAI : public CreatureAIScript
 class SummonElizaQuest : public QuestScript
 {
 public:
-
     void OnQuestComplete(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
-        Creature* Eliza = mTarget->GetMapMgr()->CreateAndSpawnCreature(314, -10271.127f, 53.784f, 42.711f, 1.72f);
+        Creature* Eliza = mTarget->getWorldMap()->createAndSpawnCreature(314, LocationVector(-10271.127f, 53.784f, 42.711f, 1.72f));
         if (Eliza != nullptr)
             Eliza->Despawn(300000, 0);    // Should it be that much ?
     }

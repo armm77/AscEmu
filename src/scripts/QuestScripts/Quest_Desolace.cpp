@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,19 +19,24 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class Dalinda_Malem : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Dalinda_Malem)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Dalinda_Malem(c); }
     explicit Dalinda_Malem(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnReachWP(uint32_t iWaypointId, bool /*bForwards*/) override
+    void OnReachWP(uint32_t type, uint32_t iWaypointId) override
     {
+        if (type != WAYPOINT_MOTION_TYPE)
+            return;
+
         if (iWaypointId == 13)
         {
-            getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Thanks, these orcs wanted me to weld in the boiler");
+            getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Thanks, these orcs wanted me to weld in the boiler");
             getCreature()->Despawn(5000, 1000);
-            getCreature()->DeleteWaypoints();
+            getCreature()->stopMoving();
             if (getCreature()->m_escorter == nullptr)
                 return;
 

@@ -1,12 +1,13 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
+#include "Chat/ChatHandler.hpp"
 #include "Server/Packets/CmsgSwapItem.h"
 #include "Server/WorldSession.h"
-#include "Units/Players/Player.h"
+#include "Objects/Units/Players/Player.hpp"
 #include "Management/ItemInterface.h"
 #include "Server/Packets/CmsgItemrefundinfo.h"
 #include "Server/Packets/CmsgItemrefundrequest.h"
@@ -29,27 +30,26 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgDestroyItem.h"
 #include "Server/Packets/CmsgSwapInvItem.h"
 #include "Server/Packets/CmsgUseItem.h"
-#include "Management/Battleground/Battleground.h"
-#include "Spell/SpellMgr.h"
+#include "Management/Battleground/Battleground.hpp"
+#include "Spell/SpellMgr.hpp"
 #include "Storage/MySQLDataStore.hpp"
-#include "Units/Creatures/Pet.h"
-#include "Management/Container.h"
-#include "Map/MapMgr.h"
+#include "Objects/Units/Creatures/Pet.h"
+#include "Objects/Container.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Server/Packets/CmsgListInventory.h"
 #include "Server/Packets/SmsgBuyItem.h"
 #include "Server/Packets/CmsgBuyItem.h"
 #include "Server/Packets/SmsgSellItem.h"
 #include "Server/Packets/CmsgSellItem.h"
 #include "Server/Packets/CmsgItemQuerySingle.h"
-#include "Spell/Definitions/AuraInterruptFlags.h"
+#include "Spell/Definitions/AuraInterruptFlags.hpp"
 #include "Server/Packets/SmsgBuyFailed.h"
+#include "Server/Script/ScriptMgr.h"
 
 using namespace AscEmu::Packets;
 
 void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgUseItem srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -114,19 +114,19 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
 
     if (itemProto->RequiredSkill)
     {
-        if (!_player->_HasSkillLine(itemProto->RequiredSkill))
+        if (!_player->hasSkillLine(itemProto->RequiredSkill))
         {
             _player->getItemInterface()->buildInventoryChangeError(tmpItem, nullptr, INV_ERR_NO_REQUIRED_PROFICIENCY);
             return;
         }
-        else if (_player->_GetSkillLineCurrent(itemProto->RequiredSkill) < itemProto->RequiredSkillRank)
+        else if (_player->getSkillLineCurrent(itemProto->RequiredSkill) < itemProto->RequiredSkillRank)
         {
             _player->getItemInterface()->buildInventoryChangeError(tmpItem, nullptr, INV_ERR_SKILL_ISNT_HIGH_ENOUGH);
             return;
         }
     }
 
-    if (itemProto->RequiredSkillSubRank != 0 && !_player->HasSpell(itemProto->RequiredSkillSubRank))
+    if (itemProto->RequiredSkillSubRank != 0 && !_player->hasSpell(itemProto->RequiredSkillSubRank))
     {
         _player->getItemInterface()->buildInventoryChangeError(tmpItem, nullptr, INV_ERR_NO_REQUIRED_PROFICIENCY);
         return;
@@ -141,19 +141,19 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
     // Learning spells (mounts, companion pets etc)
     if (itemProto->Spells[0].Id == 483 || itemProto->Spells[0].Id == 55884)
     {
-        if (_player->HasSpell(itemProto->Spells[1].Id))
+        if (_player->hasSpell(itemProto->Spells[1].Id))
             // No error message, handled elsewhere
             return;
     }
 
-    if (itemProto->RequiredFaction && uint32_t(_player->GetStanding(itemProto->RequiredFaction)) < itemProto->RequiredFactionStanding)
+    if (itemProto->RequiredFaction && uint32_t(_player->getFactionStanding(itemProto->RequiredFaction)) < itemProto->RequiredFactionStanding)
     {
         _player->getItemInterface()->buildInventoryChangeError(tmpItem, nullptr, INV_ERR_ITEM_REPUTATION_NOT_ENOUGH);
         return;
     }
 
     // Arena cases
-    if (_player->m_bg != nullptr && isArena(_player->m_bg->GetType()))
+    if (_player->m_bg != nullptr && _player->m_bg->isArena())
     {
         // Not all consumables are usable in arena
         if (itemProto->Class == ITEM_CLASS_CONSUMABLE && !itemProto->HasFlag(ITEM_FLAG_USEABLE_IN_ARENA))
@@ -177,7 +177,7 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
     }
 
     // Combat check
-    if (_player->getcombatstatus()->IsInCombat())
+    if (_player->getCombatHandler().isInCombat())
     {
         for (uint8_t i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
         {
@@ -240,7 +240,7 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
     }
 #endif
 
-    if (tmpItem->HasOnUseSpellID(spellId))
+    if (tmpItem->hasOnUseSpellIid(spellId))
         found = true;
 
     // Item doesn't have this spell, either player is cheating or player's itemcache.wdb doesn't match with database
@@ -256,7 +256,7 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
     }
 
     // Cooldown check
-    if (!_player->Cooldown_CanCast(itemProto, spellIndex))
+    if (!_player->cooldownCanCast(itemProto, spellIndex))
     {
         _player->sendCastFailedPacket(spellId, SPELL_FAILED_NOT_READY, srlPacket.castCount, 0);
         return;
@@ -290,7 +290,7 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
     }
 
     // Stand up if player is sitting
-    if (!(spellInfo->getAuraInterruptFlags() & AURA_INTERRUPT_ON_STAND_UP) && !_player->IsMounted())
+    if (!(spellInfo->getAuraInterruptFlags() & AURA_INTERRUPT_ON_STAND_UP) && !_player->isMounted())
     {
         if (_player->getStandState() != STANDSTATE_STAND)
             _player->setStandState(STANDSTATE_STAND);
@@ -310,7 +310,7 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
         }
         else
         {
-            if (!_player->GetSummon() || _player->GetSummon()->getEntry() != static_cast<uint32_t>(itemProto->ForcedPetId))
+            if (!_player->getFirstPetFromSummons() || _player->getFirstPetFromSummons()->getEntry() != static_cast<uint32_t>(itemProto->ForcedPetId))
             {
                 _player->sendCastFailedPacket(spellInfo->getId(), SPELL_FAILED_BAD_TARGETS, srlPacket.castCount, 0);
                 return;
@@ -323,7 +323,7 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
     spell->setItemCaster(tmpItem);
 
     if (spellToLearn != 0)
-        spell->forced_basepoints[0] = spellToLearn;
+        spell->forced_basepoints.set(0, spellToLearn);
 
 #if VERSION_STRING >= WotLK
     spell->m_glyphslot = srlPacket.glyphIndex;
@@ -361,7 +361,7 @@ void WorldSession::handleUseItemOpcode(WorldPacket& recvPacket)
     spell->prepare(&targets);
 
 #ifdef FT_ACHIEVEMENTS
-    _player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_USE_ITEM, itemProto->ItemId, 0, 0);
+    _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_USE_ITEM, itemProto->ItemId, 0, 0);
 #endif
 }
 
@@ -371,7 +371,7 @@ void WorldSession::handleSwapItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_SWAP_ITEM: destInventorySlot %i destSlot %i srcInventorySlot %i srcInventorySlot %i",
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SWAP_ITEM: destInventorySlot %i destSlot %i srcInventorySlot %i srcInventorySlot %i",
         srlPacket.destInventorySlot, srlPacket.destSlot, srlPacket.srcInventorySlot, srlPacket.srcSlot);
 
     _player->getItemInterface()->SwapItems(srlPacket.destInventorySlot,
@@ -388,7 +388,7 @@ void WorldSession::sendRefundInfo(uint64_t GUID)
     if (item == nullptr)
         return;
 
-    if (item->IsEligibleForRefund())
+    if (item->isEligibleForRefund())
     {
         std::pair<time_t, uint32_t> RefundEntry = _player->getItemInterface()->LookupRefundable(GUID);
 
@@ -417,7 +417,7 @@ void WorldSession::sendRefundInfo(uint64_t GUID)
 
         packet << uint32_t(0);
 
-        uint32_t* played = _player->GetPlayedtime();
+        uint32_t* played = _player->getPlayedTime();
 
         if (played[1] > RefundEntry.first + 60 * 60 * 2)
             packet << uint32_t(0);
@@ -437,7 +437,7 @@ void WorldSession::sendRefundInfo(uint64_t guid)
     if (item == nullptr)
         return;
 
-    if (item->IsEligibleForRefund())
+    if (item->isEligibleForRefund())
     {
         std::pair<time_t, uint32_t> refundEntryPair = _player->getItemInterface()->LookupRefundable(guid);
 
@@ -464,7 +464,7 @@ void WorldSession::sendRefundInfo(uint64_t guid)
         data.flushBits();
         data.WriteByteSeq(objectGuid[7]);
 
-        uint32_t* played = _player->GetPlayedtime();
+        uint32_t* played = _player->getPlayedTime();
 
         if (played[1] > (refundEntryPair.first + 60 * 60 * 2))
             data << uint32_t(0);
@@ -498,6 +498,261 @@ void WorldSession::sendRefundInfo(uint64_t guid)
 }
 #endif
 
+// todo : Check for MOP
+#if VERSION_STRING == Cata
+void WorldSession::handleTransmogrifyItems(WorldPacket& recvData)
+{
+    sLogger.debug("Received CMSG_TRANSMOGRIFY_ITEMS");
+    Player* player = GetPlayer();
+
+    // Read data
+    uint32_t count = recvData.readBits(22);
+
+    if (count >= EQUIPMENT_SLOT_END)
+    {
+        sLogger.debug("handleTransmogrifyItems - Player (GUID: %u, name: %s) sent a wrong count (%u) when transmogrifying items.", player->getGuidLow(), player->getName().c_str(), count);
+        recvData.rfinish();
+        return;
+    }
+
+    std::vector<ObjectGuid> itemGuids(count, ObjectGuid(0));
+    std::vector<uint32_t> newEntries(count, 0);
+    std::vector<uint32_t> slots(count, 0);
+
+    for (uint8_t i = 0; i < count; ++i)
+    {
+        itemGuids[i][0] = recvData.readBit();
+        itemGuids[i][5] = recvData.readBit();
+        itemGuids[i][6] = recvData.readBit();
+        itemGuids[i][2] = recvData.readBit();
+        itemGuids[i][3] = recvData.readBit();
+        itemGuids[i][7] = recvData.readBit();
+        itemGuids[i][4] = recvData.readBit();
+        itemGuids[i][1] = recvData.readBit();
+    }
+
+    ObjectGuid npcGuid;
+    npcGuid[7] = recvData.readBit();
+    npcGuid[3] = recvData.readBit();
+    npcGuid[5] = recvData.readBit();
+    npcGuid[6] = recvData.readBit();
+    npcGuid[1] = recvData.readBit();
+    npcGuid[4] = recvData.readBit();
+    npcGuid[0] = recvData.readBit();
+    npcGuid[2] = recvData.readBit();
+
+    recvData.flushBits();
+
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        recvData >> newEntries[i];
+
+        recvData.ReadByteSeq(itemGuids[i][1]);
+        recvData.ReadByteSeq(itemGuids[i][5]);
+        recvData.ReadByteSeq(itemGuids[i][0]);
+        recvData.ReadByteSeq(itemGuids[i][4]);
+        recvData.ReadByteSeq(itemGuids[i][6]);
+        recvData.ReadByteSeq(itemGuids[i][7]);
+        recvData.ReadByteSeq(itemGuids[i][3]);
+        recvData.ReadByteSeq(itemGuids[i][2]);
+
+        recvData >> slots[i];
+    }
+
+    recvData.ReadByteSeq(npcGuid[7]);
+    recvData.ReadByteSeq(npcGuid[2]);
+    recvData.ReadByteSeq(npcGuid[5]);
+    recvData.ReadByteSeq(npcGuid[4]);
+    recvData.ReadByteSeq(npcGuid[3]);
+    recvData.ReadByteSeq(npcGuid[1]);
+    recvData.ReadByteSeq(npcGuid[6]);
+    recvData.ReadByteSeq(npcGuid[0]);
+
+    Creature* creature = player->getWorldMapCreature(npcGuid);
+    if (!creature)
+    {
+        sLogger.debug("handleTransmogrifyItems - Unit (GUID: %u) not found.", uint64_t(npcGuid));
+        return;
+    }
+
+    // Validate
+    if (!creature->isTransmog() && creature->getDistance(player) > 5.0f)
+    {
+        sLogger.debug("handleTransmogrifyItems - Unit (GUID: %u) can't interact with it or is no Transmogrifier.", uint64_t(npcGuid));
+        return;
+    }
+
+    int32_t cost = 0;
+    for (uint8_t i = 0; i < count; ++i)
+    {
+        // slot of the transmogrified item
+        if (slots[i] >= EQUIPMENT_SLOT_END)
+        {
+            sLogger.debug("handleTransmogrifyItems - Player (GUID: %u, name: %s) tried to transmogrify an item (lowguid: %u) with a wrong slot (%u) when transmogrifying items.", player->getGuidLow(), player->getName().c_str(), uint64_t(itemGuids[i]), slots[i]);
+            return;
+        }
+
+        // entry of the transmogrifier item, if it's not 0
+        if (newEntries[i])
+        {
+            ItemProperties const* proto = sMySQLStore.getItemProperties(newEntries[i]);
+            if (!proto)
+            {
+                sLogger.debug("handleTransmogrifyItems - Player (GUID: %u, name: %s) tried to transmogrify to an invalid item (entry: %u).", player->getGuidLow(), player->getName().c_str(), newEntries[i]);
+                return;
+            }
+        }
+
+        Item* itemTransmogrifier = nullptr;
+        // guid of the transmogrifier item, if it's not 0
+        if (itemGuids[i])
+        {
+            itemTransmogrifier = player->getItemInterface()->GetItemByGUID(itemGuids[i]);
+            if (!itemTransmogrifier)
+            {
+                sLogger.debug("handleTransmogrifyItems - Player (GUID: %u, name: %s) tried to transmogrify with an invalid item (lowguid: %u).", player->getGuidLow(), player->getName().c_str(), uint64_t(itemGuids[i]));
+                return;
+            }
+        }
+
+        // transmogrified item
+        Item* itemTransmogrified = player->getItemInterface()->GetInventoryItem(slots[i]);
+        if (!itemTransmogrified)
+        {
+            sLogger.debug("handleTransmogrifyItems - Player (GUID: %u, name: %s) tried to transmogrify an invalid item in a valid slot (slot: %u).", player->getGuidLow(), player->getName().c_str(), slots[i]);
+            return;
+        }
+
+        if (!newEntries[i]) // reset look
+        {
+            itemTransmogrified->removeEnchantment(TRANSMOGRIFY_ENCHANTMENT_SLOT);
+            player->setVisibleItemFields(slots[i], itemTransmogrified);
+        }
+        else
+        {
+            if (!Item::canTransmogrifyItemWithItem(itemTransmogrified, itemTransmogrifier))
+            {
+                sLogger.debug("handleTransmogrifyItems - Player (GUID: %u, name: %s) failed CanTransmogrifyItemWithItem (%u with %u).", player->getGuidLow(), player->getName().c_str(), itemTransmogrified->getEntry(), itemTransmogrifier->getEntry());
+                return;
+            }
+
+            // All okay, proceed
+            itemTransmogrified->addEnchantment(newEntries[i], TRANSMOGRIFY_ENCHANTMENT_SLOT, 0);
+            player->setVisibleItemFields(slots[i], itemTransmogrified);
+
+            itemTransmogrified->setOwnerGuid(player->getGuid());
+            itemTransmogrified->removeFromRefundableMap();
+            itemTransmogrified->removeFlags(ITEM_FLAG_BOP_TRADEABLE);   // todo implement this properly
+
+            if (itemTransmogrifier->getItemProperties()->Bonding == ITEM_BIND_ON_EQUIP || itemTransmogrifier->getItemProperties()->Bonding == ITEM_BIND_ON_USE)
+                itemTransmogrifier->addFlags(ITEM_FLAG_SOULBOUND);
+
+            cost += 10000; // todo implement this properly
+        }
+    }
+
+    // trusting the client, if it got here it has to have enough money
+    // ... unless client was modified
+    if (cost) // 0 cost if reverting look
+        player->modCoinage(-cost);
+}
+
+void WorldSession::handleReforgeItemOpcode(WorldPacket& recvData)
+{
+    uint32_t slot, reforgeEntry;
+    ObjectGuid guid;
+    uint32_t bag;
+    Player* player = GetPlayer();
+
+    recvData >> reforgeEntry >> slot >> bag;
+
+    guid[2] = recvData.readBit();
+    guid[6] = recvData.readBit();
+    guid[3] = recvData.readBit();
+    guid[4] = recvData.readBit();
+    guid[1] = recvData.readBit();
+    guid[0] = recvData.readBit();
+    guid[7] = recvData.readBit();
+    guid[5] = recvData.readBit();
+
+    recvData.ReadByteSeq(guid[2]);
+    recvData.ReadByteSeq(guid[3]);
+    recvData.ReadByteSeq(guid[6]);
+    recvData.ReadByteSeq(guid[4]);
+    recvData.ReadByteSeq(guid[1]);
+    recvData.ReadByteSeq(guid[0]);
+    recvData.ReadByteSeq(guid[7]);
+    recvData.ReadByteSeq(guid[5]);
+
+    Creature* creature = player->getWorldMapCreature(guid);
+    if (!creature)
+    {
+        sLogger.debug("handleReforgeItemOpcode - Unit (GUID: %u) not found.", uint64_t(guid));
+        sendReforgeResult(false);
+        return;
+    }
+
+    // Validate
+    if (!creature->isReforger() && creature->getDistance(player) > 5.0f)
+    {
+        sLogger.debug("handleReforgeItemOpcode - Unit (GUID: %u) can't interact with it or is no Reforger.", uint64_t(guid));
+        sendReforgeResult(false);
+        return;
+    }
+
+    Item* item = player->getItemInterface()->GetInventoryItem(bag, slot);
+
+    if (!item)
+    {
+        sLogger.debug("handleReforgeItemOpcode - Player (Guid: %u Name: %s) tried to reforge an invalid/non-existant item.", player->getGuidLow(), player->getName().c_str());
+        sendReforgeResult(false);
+        return;
+    }
+
+    if (!reforgeEntry)
+    {
+        // Reset the item
+        item->removeEnchantment(REFORGE_ENCHANTMENT_SLOT);
+        sendReforgeResult(true);
+        return;
+    }
+    
+    DBC::Structures::ItemReforgeEntry const* stats = sItemReforgeStore.LookupEntry(reforgeEntry);
+    if (!stats)
+    {
+        sLogger.debug("handleReforgeItemOpcode - Player (Guid: %u Name: %s) tried to reforge an item with invalid reforge entry (%u).", player->getGuidLow(), player->getName().c_str(), reforgeEntry);
+        sendReforgeResult(false);
+        return;
+    }
+
+    if (!item->getReforgableStat(ItemModType(stats->SourceStat)) || item->getReforgableStat(ItemModType(stats->FinalStat))) // Cheating, you cant reforge to a stat that the item already has, nor reforge from a stat that the item does not have
+    {
+        sendReforgeResult(false);
+        return;
+    }
+
+    // todo implement special prices
+    if (player->getCoinage() < uint64_t(100000)) // cheating
+    {
+        sendReforgeResult(false);
+        return;
+    }
+
+    player->modCoinage(-int64_t(100000));
+
+    item->addEnchantment(reforgeEntry, REFORGE_ENCHANTMENT_SLOT, 0);
+    sendReforgeResult(true);
+}
+
+void WorldSession::sendReforgeResult(bool success)
+{
+    WorldPacket data(SMSG_REFORGE_RESULT, 1);
+    data.writeBit(success);
+    data.flushBits();
+    SendPacket(&data);
+}
+#endif
+
 #if VERSION_STRING >= WotLK
 void WorldSession::handleItemRefundInfoOpcode(WorldPacket& recvPacket)
 {
@@ -505,19 +760,18 @@ void WorldSession::handleItemRefundInfoOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_ITEMREFUNDINFO.");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_ITEMREFUNDINFO.");
 
     this->sendRefundInfo(srlPacket.itemGuid);
 }
 
 void WorldSession::handleItemRefundRequestOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
     CmsgItemrefundrequest srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_ITEMREFUNDREQUEST.");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_ITEMREFUNDREQUEST.");
 
     uint32_t error = 1;
 
@@ -533,13 +787,13 @@ void WorldSession::handleItemRefundRequestOpcode(WorldPacket& recvPacket)
 
     if (item != nullptr)
     {
-        if (item->IsEligibleForRefund())
+        if (item->isEligibleForRefund())
         {
             const auto refundEntry = _player->getItemInterface()->LookupRefundable(srlPacket.itemGuid);
 
             if (refundEntry.first != 0 && refundEntry.second != 0)
             {
-                uint32_t* played = _player->GetPlayedtime();
+                uint32_t* played = _player->getPlayedTime();
                 if (played[1] < refundEntry.first + 60 * 60 * 2)
                     itemExtendedCostEntry = sItemExtendedCostStore.LookupEntry(refundEntry.second);
             }
@@ -632,7 +886,7 @@ void WorldSession::handleSplitOpcode(WorldPacket& recvPacket)
     const uint32_t itemMaxStack1 = inventoryItem1->getOwner()->m_cheats.hasItemStackCheat ? 0x7fffffff : inventoryItem1->getItemProperties()->MaxCount;
     const uint32_t itemMaxStack2 = inventoryItem2 ? (inventoryItem2->getOwner()->m_cheats.hasItemStackCheat
         ? 0x7fffffff : inventoryItem2->getItemProperties()->MaxCount) : 0;
-    if (inventoryItem1->wrapped_item_id || inventoryItem2 && inventoryItem2->wrapped_item_id || count > itemMaxStack1)
+    if (inventoryItem1->m_wrappedItemId || inventoryItem2 && inventoryItem2->m_wrappedItemId || count > itemMaxStack1)
     {
         _player->getItemInterface()->buildInventoryChangeError(inventoryItem1, inventoryItem2, INV_ERR_ITEM_CANT_STACK);
         return;
@@ -709,8 +963,8 @@ void WorldSession::handleSplitOpcode(WorldPacket& recvPacket)
                 if (DstSlot == ITEM_NO_SLOT_AVAILABLE)
                 {
                     _player->getItemInterface()->buildInventoryChangeError(inventoryItem1, inventoryItem2, INV_ERR_COULDNT_SPLIT_ITEMS);
-                    inventoryItem2->DeleteFromDB();
-                    inventoryItem2->DeleteMe();
+                    inventoryItem2->deleteFromDB();
+                    inventoryItem2->deleteMe();
                     inventoryItem2 = nullptr;
                 }
             }
@@ -721,8 +975,8 @@ void WorldSession::handleSplitOpcode(WorldPacket& recvPacket)
                 sLogger.failure("Error while adding item to dstslot");
                 if (inventoryItem2 != nullptr)
                 {
-                    inventoryItem2->DeleteFromDB();
-                    inventoryItem2->DeleteMe();
+                    inventoryItem2->deleteFromDB();
+                    inventoryItem2->deleteMe();
                     inventoryItem2 = nullptr;
                 };
             }
@@ -740,7 +994,7 @@ void WorldSession::handleSwapInvItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_SWAP_INV_ITEM src slot: %u dst slot: %u",
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SWAP_INV_ITEM src slot: %u dst slot: %u",
         static_cast<uint32_t>(srlPacket.srcSlot), static_cast<uint32_t>(srlPacket.destSlot));
 
     // player trying to add item to the same slot
@@ -758,7 +1012,7 @@ void WorldSession::handleSwapInvItemOpcode(WorldPacket& recvPacket)
     // We're doing an equip swap.
     if (srlPacket.srcSlot < EQUIPMENT_SLOT_END || srlPacket.destSlot < EQUIPMENT_SLOT_END)
     {
-        if (_player->CombatStatus.IsInCombat())
+        if (_player->getCombatHandler().isInCombat())
         {
             // These can't be swapped
             if (srlPacket.srcSlot < EQUIPMENT_SLOT_MAINHAND || srlPacket.destSlot < EQUIPMENT_SLOT_MAINHAND)
@@ -853,7 +1107,7 @@ void WorldSession::handleSwapInvItemOpcode(WorldPacket& recvPacket)
 #if VERSION_STRING > TBC
     if (dstItem && srlPacket.srcSlot < INVENTORY_SLOT_BAG_END)
     {
-        _player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_ITEM, dstItem->getItemProperties()->ItemId, 0, 0);
+        _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_ITEM, dstItem->getItemProperties()->ItemId, 0, 0);
         if (srlPacket.srcSlot < INVENTORY_SLOT_BAG_START) // check Superior/Epic achievement
         {
             // Achievement ID:556 description Equip an epic item in every slot with a minimum item level of 213.
@@ -862,13 +1116,13 @@ void WorldSession::handleSwapInvItemOpcode(WorldPacket& recvPacket)
             // "187" value not found in achievement or criteria entries, have to hard-code it here?
             if (dstItem->getItemProperties()->Quality == ITEM_QUALITY_RARE_BLUE && dstItem->getItemProperties()->ItemLevel >= 187 ||
                 dstItem->getItemProperties()->Quality == ITEM_QUALITY_EPIC_PURPLE && dstItem->getItemProperties()->ItemLevel >= 213)
-                _player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_EPIC_ITEM, srlPacket.srcSlot,
+                _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_EPIC_ITEM, srlPacket.srcSlot,
                     dstItem->getItemProperties()->Quality, 0);
         }
     }
     if (srlPacket.destSlot < INVENTORY_SLOT_BAG_END)
     {
-        _player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_ITEM, srcItem->getItemProperties()->ItemId, 0, 0);
+        _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_ITEM, srcItem->getItemProperties()->ItemId, 0, 0);
         if (srlPacket.destSlot < INVENTORY_SLOT_BAG_START) // check Superior/Epic achievement
         {
             // Achievement ID:556 description Equip an epic item in every slot with a minimum item level of 213.
@@ -877,7 +1131,7 @@ void WorldSession::handleSwapInvItemOpcode(WorldPacket& recvPacket)
             // "187" value not found in achievement or criteria entries, have to hard-code it here?
             if (srcItem->getItemProperties()->Quality == ITEM_QUALITY_RARE_BLUE && srcItem->getItemProperties()->ItemLevel >= 187 ||
                 srcItem->getItemProperties()->Quality == ITEM_QUALITY_EPIC_PURPLE && srcItem->getItemProperties()->ItemLevel >= 213)
-                _player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_EPIC_ITEM, srlPacket.destSlot,
+                _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_EPIC_ITEM, srlPacket.destSlot,
                     srcItem->getItemProperties()->Quality, 0);
         }
     }
@@ -892,7 +1146,7 @@ void WorldSession::handleDestroyItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_DESTROYITEM SrcInv Slot: %i Src slot: %i", srlPacket.srcInventorySlot, srlPacket.srcSlot);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_DESTROYITEM SrcInv Slot: %i Src slot: %i", srlPacket.srcInventorySlot, srlPacket.srcSlot);
 
     if (Item* srcItem = _player->getItemInterface()->GetInventoryItem(srlPacket.srcInventorySlot, srlPacket.srcSlot))
     {
@@ -964,8 +1218,8 @@ void WorldSession::handleDestroyItemOpcode(WorldPacket& recvPacket)
             }
         }
 
-        pItem->DeleteFromDB();
-        pItem->DeleteMe();
+        pItem->deleteFromDB();
+        pItem->deleteMe();
     }
 }
 
@@ -975,7 +1229,7 @@ void WorldSession::handleAutoEquipItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_AUTOEQUIP_ITEM Inventory slot: %i Source Slot: %i", srlPacket.srcInventorySlot, srlPacket.srcSlot);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUTOEQUIP_ITEM Inventory slot: %i Source Slot: %i", srlPacket.srcInventorySlot, srlPacket.srcSlot);
 
     Item* eitem = _player->getItemInterface()->GetInventoryItem(srlPacket.srcInventorySlot, srlPacket.srcSlot);
 
@@ -1047,7 +1301,7 @@ void WorldSession::handleAutoEquipItemOpcode(WorldPacket& recvPacket)
                 if (!_player->getItemInterface()->SafeAddItem(offhandweapon, result.ContainerSlot, result.Slot)
                     && !_player->getItemInterface()->AddItemToFreeSlot(offhandweapon))
                 {
-                    offhandweapon->DeleteMe();
+                    offhandweapon->deleteMe();
                     offhandweapon = nullptr;
                 }
             }
@@ -1076,7 +1330,7 @@ void WorldSession::handleAutoEquipItemOpcode(WorldPacket& recvPacket)
                 if (!_player->getItemInterface()->SafeAddItem(mainhandweapon, result.ContainerSlot, result.Slot)
                     && !_player->getItemInterface()->AddItemToFreeSlot(mainhandweapon))
                 {
-                    mainhandweapon->DeleteMe();
+                    mainhandweapon->deleteMe();
                     mainhandweapon = nullptr;
                 }
             }
@@ -1119,7 +1373,7 @@ void WorldSession::handleAutoEquipItemOpcode(WorldPacket& recvPacket)
             if (!result)
             {
                 sLogger.failure("Error while adding item to SrcSlot");
-                oitem->DeleteMe();
+                oitem->deleteMe();
                 oitem = nullptr;
             }
         }
@@ -1129,7 +1383,7 @@ void WorldSession::handleAutoEquipItemOpcode(WorldPacket& recvPacket)
             if (!result)
             {
                 sLogger.failure("Error while adding item to Slot");
-                eitem->DeleteMe();
+                eitem->deleteMe();
                 eitem = nullptr;
                 return;
             }
@@ -1142,7 +1396,7 @@ void WorldSession::handleAutoEquipItemOpcode(WorldPacket& recvPacket)
         if (eitem->getItemProperties()->Bonding == ITEM_BIND_ON_EQUIP)
             eitem->addFlags(ITEM_FLAG_SOULBOUND);
 #if VERSION_STRING > TBC
-        _player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_ITEM,
+        _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_ITEM,
             eitem->getItemProperties()->ItemId, 0, 0);
         // Achievement ID:556 description Equip an epic item in every slot with a minimum item level of 213.
         // "213" value not found in achievement or criteria entries, have to hard-code it here? :(
@@ -1150,12 +1404,12 @@ void WorldSession::handleAutoEquipItemOpcode(WorldPacket& recvPacket)
         // "187" value not found in achievement or criteria entries, have to hard-code it here? :(
         if (eitem->getItemProperties()->Quality == ITEM_QUALITY_RARE_BLUE && eitem->getItemProperties()->ItemLevel >= 187 ||
             eitem->getItemProperties()->Quality == ITEM_QUALITY_EPIC_PURPLE && eitem->getItemProperties()->ItemLevel >= 213)
-            _player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_EPIC_ITEM, Slot,
+            _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EQUIP_EPIC_ITEM, Slot,
                 eitem->getItemProperties()->Quality, 0);
 #endif
     }
     //Recalculate Expertise (for Weapon specs)
-    _player->CalcExpertise();
+    _player->calcExpertise();
 }
 
 void WorldSession::handleAutoEquipItemSlotOpcode(WorldPacket& recvPacket)
@@ -1164,7 +1418,7 @@ void WorldSession::handleAutoEquipItemSlotOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_AUTOEQUIP_ITEM_SLOT");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUTOEQUIP_ITEM_SLOT");
 
     int8_t srcSlot = static_cast<int8_t>(_player->getItemInterface()->GetInventorySlotByGuid(srlPacket.itemGuid));
     Item* item = _player->getItemInterface()->GetItemByGUID(srlPacket.itemGuid);
@@ -1293,7 +1547,7 @@ void WorldSession::handleItemQuerySingleOpcode(WorldPacket& recvPacket)
     data << itemProto->AllowableRace;
     data << itemProto->ItemLevel;
     data << itemProto->RequiredLevel;
-    data << itemProto->RequiredSkill;
+    data << uint32_t(itemProto->RequiredSkill);
     data << itemProto->RequiredSkillRank;
     data << itemProto->RequiredSkillSubRank;
     data << itemProto->RequiredPlayerRank1;
@@ -1358,7 +1612,13 @@ void WorldSession::handleItemQuerySingleOpcode(WorldPacket& recvPacket)
     data << itemProto->RandomPropId;
     data << itemProto->RandomSuffixId;
     data << itemProto->Block;
-    data << sMySQLStore.getItemSetLinkedBonus(itemProto->ItemSet);
+
+    const auto setBonus = sMySQLStore.getItemSetLinkedBonus(itemProto->ItemSet);
+    if (setBonus == 0)
+        data << itemProto->ItemSet;
+    else
+        data << setBonus;
+
     data << itemProto->MaxDurability;
     data << itemProto->ZoneNameID;
     data << itemProto->MapID;
@@ -1428,7 +1688,7 @@ void WorldSession::handleItemQuerySingleOpcode(WorldPacket& recvPacket)
     data << itemProperties->AllowableRace;
     data << itemProperties->ItemLevel;
     data << itemProperties->RequiredLevel;
-    data << itemProperties->RequiredSkill;
+    data << uint32_t(itemProperties->RequiredSkill);
     data << itemProperties->RequiredSkillRank;
     data << itemProperties->RequiredSkillSubRank;
     data << itemProperties->RequiredPlayerRank1;
@@ -1486,7 +1746,13 @@ void WorldSession::handleItemQuerySingleOpcode(WorldPacket& recvPacket)
     data << itemProperties->RandomPropId;
     data << itemProperties->RandomSuffixId;
     data << itemProperties->Block;
-    data << sMySQLStore.getItemSetLinkedBonus(itemProperties->ItemSet);
+
+    const auto setBonus = sMySQLStore.getItemSetLinkedBonus(itemProperties->ItemSet);
+    if (setBonus == 0)
+        data << itemProperties->ItemSet;
+    else
+        data << setBonus;
+
     data << itemProperties->MaxDurability;
     data << itemProperties->ZoneNameID;
     data << itemProperties->MapID;
@@ -1515,7 +1781,7 @@ void WorldSession::handleBuyBackOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_BUYBACK_ITEM");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BUYBACK_ITEM");
 
     srlPacket.buybackSlot -= 74;
 
@@ -1562,7 +1828,7 @@ void WorldSession::handleBuyBackOpcode(WorldPacket& recvPacket)
             if (!result)
             {
                 sLogger.failure("Error while adding item to free slot");
-                it->DeleteMe();
+                it->deleteMe();
             }
         }
         else
@@ -1571,8 +1837,8 @@ void WorldSession::handleBuyBackOpcode(WorldPacket& recvPacket)
             add->m_isDirty = true;
 
             // delete the item
-            it->DeleteFromDB();
-            it->DeleteMe();
+            it->deleteFromDB();
+            it->deleteMe();
         }
 
 #if VERSION_STRING < Cata
@@ -1600,7 +1866,7 @@ void WorldSession::handleSellItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_SELL_ITEM");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SELL_ITEM");
 
     _player->interruptSpell();
 
@@ -1611,7 +1877,7 @@ void WorldSession::handleSellItemOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    Creature* unit = _player->GetMapMgr()->GetCreature(srlPacket.vendorGuid.getGuidLowPart());
+    Creature* unit = _player->getWorldMap()->getCreature(srlPacket.vendorGuid.getGuidLowPart());
     // Check if Vendor exists
     if (unit == nullptr)
     {
@@ -1635,7 +1901,7 @@ void WorldSession::handleSellItemOpcode(WorldPacket& recvPacket)
     }
 
     // Check if item can be sold
-    if (it->SellPrice == 0 || item->wrapped_item_id != 0)
+    if (it->SellPrice == 0 || item->m_wrappedItemId != 0)
     {
         sendSellItem(srlPacket.vendorGuid.getRawGuid(), srlPacket.itemGuid, 2);
         return;
@@ -1652,7 +1918,7 @@ void WorldSession::handleSellItemOpcode(WorldPacket& recvPacket)
     if (quantity > stackcount)
         quantity = stackcount; //make sure we don't over do it
 
-    uint32_t price = GetSellPriceForItem(it, quantity);
+    uint32_t price = item->getSellPrice(quantity);
 
     // Check they don't have more than the max gold
     if (worldConfig.player.isGoldCapEnabled)
@@ -1679,7 +1945,7 @@ void WorldSession::handleSellItemOpcode(WorldPacket& recvPacket)
         if (item)
         {
             _player->getItemInterface()->AddBuyBackItem(item, it->SellPrice * quantity);
-            item->DeleteFromDB();
+            item->deleteFromDB();
         }
     }
 
@@ -1692,7 +1958,7 @@ void WorldSession::handleBuyItemInSlotOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_BUY_ITEM_IN_SLOT");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BUY_ITEM_IN_SLOT");
 
     int8_t slot = srlPacket.slot;
     uint8_t amount = srlPacket.amount;
@@ -1705,7 +1971,7 @@ void WorldSession::handleBuyItemInSlotOpcode(WorldPacket& recvPacket)
 
     _player->interruptSpell();
 
-    Creature* unit = _player->GetMapMgr()->GetCreature(srlPacket.srcGuid.getGuidLowPart());
+    Creature* unit = _player->getWorldMap()->getCreature(srlPacket.srcGuid.getGuidLowPart());
     if (unit == nullptr || !unit->HasItems())
         return;
 
@@ -1828,7 +2094,7 @@ void WorldSession::handleBuyItemInSlotOpcode(WorldPacket& recvPacket)
             pItem->m_isDirty = true;
             if (!_player->getItemInterface()->SafeAddItem(pItem, bagslot, slot))
             {
-                pItem->DeleteMe();
+                pItem->deleteMe();
                 return;
             }
         }
@@ -1871,12 +2137,12 @@ void WorldSession::handleBuyItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_BUY_ITEM");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BUY_ITEM");
 
     uint8_t error = 0;
     SlotResult slotResult;
 
-    auto creature = _player->GetMapMgr()->GetCreature(srlPacket.sourceGuid.getGuidLowPart());
+    auto creature = _player->getWorldMap()->getCreature(srlPacket.sourceGuid.getGuidLowPart());
     if (creature == nullptr || !creature->HasItems())
         return;
 
@@ -1960,11 +2226,11 @@ void WorldSession::handleBuyItemOpcode(WorldPacket& recvPacket)
             const auto addItemResult = _player->getItemInterface()->SafeAddItem(item, INVENTORY_SLOT_NOT_SET, slotResult.Slot);
             if (!addItemResult)
             {
-                item->DeleteMe();
+                item->deleteMe();
             }
             else
             {
-                if (item->IsEligibleForRefund() && item_extended_cost != nullptr)
+                if (item->isEligibleForRefund() && item_extended_cost != nullptr)
                 {
                     item->getOwner()->getItemInterface()->AddRefundable(item->getGuid(), item_extended_cost->costid);
                 }
@@ -1979,11 +2245,11 @@ void WorldSession::handleBuyItemOpcode(WorldPacket& recvPacket)
             {
                 if (!dynamic_cast<Container*>(bag)->AddItem(slotResult.Slot, item))
                 {
-                    item->DeleteMe();
+                    item->deleteMe();
                 }
                 else
                 {
-                    if (item->IsEligibleForRefund() && item_extended_cost != nullptr)
+                    if (item->isEligibleForRefund() && item_extended_cost != nullptr)
                     {
                         item->getOwner()->getItemInterface()->AddRefundable(item->getGuid(), item_extended_cost->costid);
                     }
@@ -2026,26 +2292,27 @@ void WorldSession::handleListInventoryOpcode(WorldPacket& recvPacket)
     WoWGuid wowGuid;
     wowGuid.Init(srlPacket.guid);
 
-    Creature* unit = _player->GetMapMgr()->GetCreature(wowGuid.getGuidLowPart());
+    Creature* unit = _player->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
     if (unit == nullptr)
         return;
 
     MySQLStructure::VendorRestrictions const* vendor = sMySQLStore.getVendorRestriction(unit->GetCreatureProperties()->Id);
 
     //this is a blizzlike check
-    if (!_player->obj_movement_info.hasMovementFlag(MOVEFLAG_TRANSPORT))
+    if (!_player->obj_movement_info.hasMovementFlag(MOVEFLAG_TRANSPORT) && !unit->obj_movement_info.hasMovementFlag(MOVEFLAG_TRANSPORT))
     {
         //avoid talking to anyone by guid hacking. Like sell farmed items anytime ? Low chance hack
         if (_player->getDistanceSq(unit) > 100)
             return;
     }
 
-    if (unit->GetAIInterface())
-        unit->GetAIInterface()->StopMovement(180000);
+    // makes npc stop when for example on its waypoint path // aaron02
+    unit->pauseMovement(180000);
+    unit->SetSpawnLocation(unit->GetPosition());
 
-    _player->Reputation_OnTalk(unit->m_factionEntry);
+    _player->onTalkReputation(unit->m_factionEntry);
 
-    if (_player->CanBuyAt(vendor))
+    if (_player->canBuyAt(vendor))
         sendInventoryList(unit);
     else
         GossipMenu::sendSimpleMenu(unit->getGuid(), vendor->cannotbuyattextid, _player);
@@ -2055,7 +2322,7 @@ void WorldSession::sendInventoryList(Creature* unit)
 {
     if (!unit->HasItems())
     {
-        sChatHandler.BlueSystemMessage(_player->GetSession(),
+        sChatHandler.BlueSystemMessage(_player->getSession(),
             "No sell template found. Report this to database's devs: %d (%s)",
             unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
         sLogger.failure("'%s' discovered that a creature with entry %u (%s) has no sell template.",
@@ -2103,7 +2370,10 @@ void WorldSession::sendInventoryList(Creature* unit)
                 uint32_t av_am = sellItem.max_amount > 0 ? sellItem.available_amount : 0xFFFFFFFF;
                 uint32_t price = 0;
                 if (sellItem.extended_cost == nullptr || curItem->HasFlag2(ITEM_FLAG2_EXT_COST_REQUIRES_GOLD))
-                    price = GetBuyPriceForItem(curItem, 1, _player, unit);
+                {
+                    uint32_t factionStanding = _player->getFactionStandingRank(unit->m_factionTemplate->Faction);
+                    price = curItem->getBuyPriceForItem(1, factionStanding);
+                }
 
 #if VERSION_STRING < Cata
                 data << uint32_t(counter + 1);    // we start from 0 but client starts from 1
@@ -2150,7 +2420,7 @@ void WorldSession::sendInventoryList(Creature* unit)
     }
 
 #if VERSION_STRING < Cata
-    const_cast<uint8_t*>(data.contents())[8] = static_cast<uint8_t>(counter);
+    data.contents()[8] = static_cast<uint8_t>(counter);
 #else
     ObjectGuid guid = unit->getGuid();
 
@@ -2198,7 +2468,7 @@ void WorldSession::handleAutoStoreBagItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_AUTO_STORE_BAG_ITEM");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUTO_STORE_BAG_ITEM");
 
     Item* srcitem = _player->getItemInterface()->GetInventoryItem(srlPacket.srcContainerSlot, srlPacket.srcSlot);
 
@@ -2236,7 +2506,7 @@ void WorldSession::handleAutoStoreBagItemOpcode(WorldPacket& recvPacket)
                     if (!result)
                     {
                         sLogger.failure("Error while adding item to newslot");
-                        srcitem->DeleteMe();
+                        srcitem->deleteMe();
                         return;
                     }
                 }
@@ -2277,7 +2547,7 @@ void WorldSession::handleAutoStoreBagItemOpcode(WorldPacket& recvPacket)
                             if (!result)
                             {
                                 sLogger.failure("Error while adding item to newslot");
-                                srcitem->DeleteMe();
+                                srcitem->deleteMe();
                             }
                         }
                     }
@@ -2305,7 +2575,7 @@ void WorldSession::handleReadItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_READ_ITEM %d", srlPacket.srcSlot);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_READ_ITEM %d", srlPacket.srcSlot);
 
     Item* item = _player->getItemInterface()->GetInventoryItem(srlPacket.srcContainerSlot, srlPacket.srcSlot);
     if (item)
@@ -2324,7 +2594,7 @@ void WorldSession::handleRepairItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    Creature* pCreature = _player->GetMapMgr()->GetCreature(srlPacket.creatureGuid.getGuidLowPart());
+    Creature* pCreature = _player->getWorldMap()->getCreature(srlPacket.creatureGuid.getGuidLowPart());
     if (pCreature == nullptr)
         return;
 
@@ -2351,7 +2621,7 @@ void WorldSession::handleRepairItemOpcode(WorldPacket& recvPacket)
                         {
                             pItem = pContainer->GetItem(static_cast<int16_t>(j));
                             if (pItem != nullptr)
-                                pItem->RepairItem(_player, srlPacket.isInGuild, &totalcost);
+                                pItem->repairItem(_player, srlPacket.isInGuild, &totalcost);
                         }   
                     }
                 }
@@ -2359,10 +2629,10 @@ void WorldSession::handleRepairItemOpcode(WorldPacket& recvPacket)
                 {
                     if (i < INVENTORY_SLOT_BAG_END)
                     {
-                        if (pItem->getDurability() == 0 && pItem->RepairItem(_player, srlPacket.isInGuild, &totalcost))
-                            _player->ApplyItemMods(pItem, static_cast<int16_t>(i), true);
+                        if (pItem->getDurability() == 0 && pItem->repairItem(_player, srlPacket.isInGuild, &totalcost))
+                            _player->applyItemMods(pItem, static_cast<int16_t>(i), true);
                         else
-                            pItem->RepairItem(_player, srlPacket.isInGuild, &totalcost);
+                            pItem->repairItem(_player, srlPacket.isInGuild, &totalcost);
                     }
                 }
             }
@@ -2381,14 +2651,14 @@ void WorldSession::handleRepairItemOpcode(WorldPacket& recvPacket)
             {
                 uint32_t cDurability = item->getDurability();
                 //only apply item mods if they are on char equipped
-                if (item->RepairItem(_player) && cDurability == 0
+                if (item->repairItem(_player) && cDurability == 0
                     && searchres->ContainerSlot == static_cast<int8_t>(INVALID_BACKPACK_SLOT)
                     && searchres->Slot < static_cast<int8_t>(INVENTORY_SLOT_BAG_END))
-                    _player->ApplyItemMods(item, searchres->Slot, true);
+                    _player->applyItemMods(item, searchres->Slot, true);
             }
         }
     }
-    sLogger.debug("Received CMSG_REPAIR_ITEM %d", srlPacket.itemGuid);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REPAIR_ITEM %d", srlPacket.itemGuid);
 }
 
 void WorldSession::handleAutoBankItemOpcode(WorldPacket& recvPacket)
@@ -2397,7 +2667,7 @@ void WorldSession::handleAutoBankItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_AUTO_BANK_ITEM Inventory slot: %u Source Slot: %u",
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUTO_BANK_ITEM Inventory slot: %u Source Slot: %u",
         static_cast<uint32_t>(srlPacket.srcInventorySlot), static_cast<uint32_t>(srlPacket.srcSlot));
 
     Item* eitem = _player->getItemInterface()->GetInventoryItem(srlPacket.srcInventorySlot, srlPacket.srcSlot);
@@ -2423,7 +2693,7 @@ void WorldSession::handleAutoBankItemOpcode(WorldPacket& recvPacket)
         {
             sLogger.failure("Error while adding item to bank bag!");
             if (!_player->getItemInterface()->SafeAddItem(eitem, srlPacket.srcInventorySlot, srlPacket.srcSlot))
-                eitem->DeleteMe();
+                eitem->deleteMe();
         }
     }
 }
@@ -2434,7 +2704,7 @@ void WorldSession::handleAutoStoreBankItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_AUTOSTORE_BANK_ITEM Inventory slot: %u Source Slot: %u",
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUTOSTORE_BANK_ITEM Inventory slot: %u Source Slot: %u",
         static_cast<uint32_t>(srlPacket.srcInventorySlot), static_cast<uint32_t>(srlPacket.srcSlot));
 
     Item* eitem = _player->getItemInterface()->GetInventoryItem(srlPacket.srcInventorySlot, srlPacket.srcSlot);
@@ -2460,15 +2730,13 @@ void WorldSession::handleAutoStoreBankItemOpcode(WorldPacket& recvPacket)
         {
             sLogger.failure("Error while adding item from one of the bank bags to the player bag!");
             if (!_player->getItemInterface()->SafeAddItem(eitem, srlPacket.srcInventorySlot, srlPacket.srcSlot))
-                eitem->DeleteMe();
+                eitem->deleteMe();
         }
     }
 }
 
 void WorldSession::handleCancelTemporaryEnchantmentOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgCancelTempEnchantment srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -2477,13 +2745,12 @@ void WorldSession::handleCancelTemporaryEnchantmentOpcode(WorldPacket& recvPacke
     if (!item)
         return;
 
-    item->RemoveAllEnchantments(true);
+    item->removeAllEnchantments(true);
 }
 
+#if VERSION_STRING > Classic
 void WorldSession::handleInsertGemOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgSocketGems srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -2511,20 +2778,30 @@ void WorldSession::handleInsertGemOpcode(WorldPacket& recvPacket)
     DBC::Structures::GemPropertiesEntry const* gem_properties;
     DBC::Structures::SpellItemEnchantmentEntry const* spell_item_enchant;
 
-    for (uint32_t i = 0; i < TargetItem->GetSocketsCount(); ++i)
+    for (uint8_t i = 0; i < TargetItem->getSocketSlotCount(); ++i)
     {
-        EnchantmentInstance* EI = TargetItem->GetEnchantment(SOCK_ENCHANTMENT_SLOT1 + i);
+        const auto enchantmentSlot = static_cast<EnchantmentSlot>(SOCK_ENCHANTMENT_SLOT1 + i);
+        EnchantmentInstance* EI = TargetItem->getEnchantment(enchantmentSlot);
+
         if (EI)
         {
-            FilledSlots++;
+            // Do not count enchanting/blacksmithing prismatic sockets towards socket bonus
+            if (TargetProto->Sockets[i].SocketColor)
+                FilledSlots++;
+
             ItemProperties const* ip = sMySQLStore.getItemProperties(EI->Enchantment->GemEntry);
             if (ip == nullptr)
                 gem_properties = nullptr;
             else
                 gem_properties = sGemPropertiesStore.LookupEntry(ip->GemProperties);
 
-            if (gem_properties && !(gem_properties->SocketMask & TargetProto->Sockets[i].SocketColor))
+            // Skip checks for enchanting/blacksmithing prismatic socket slots
+            // Also skip check if this gem is about to be replaced
+            if (gem_properties && TargetProto->Sockets[i].SocketColor && !srlPacket.gemGuid[i] &&
+                !(gem_properties->SocketMask & TargetProto->Sockets[i].SocketColor))
+            {
                 ColorMatch = false;
+            }
         }
 
         if (srlPacket.gemGuid[i])  //add or replace gem
@@ -2532,20 +2809,24 @@ void WorldSession::handleInsertGemOpcode(WorldPacket& recvPacket)
             Item* it = nullptr;
             ItemProperties const* ip = nullptr;
 
-            // tried to put gem in socket where no socket exists (take care about prismatic sockets)
+            // Check if item has socket slot in this slot
             if (!TargetProto->Sockets[i].SocketColor)
             {
-#if VERSION_STRING > TBC
-                // no prismatic socket
-                if (!TargetItem->GetEnchantment(PRISMATIC_ENCHANTMENT_SLOT))
+#if VERSION_STRING < WotLK
+                // Tried to add gem to a slot that does not exist in item
+                return;
+#else
+                // Check for prismatic slot enchantment
+                if (!TargetItem->getEnchantment(PRISMATIC_ENCHANTMENT_SLOT))
                     return;
-#endif
+
                 // not first not-colored (not normally used) socket
                 if (i != 0 && !TargetProto->Sockets[i - 1].SocketColor && (i + 1 >= 3
                     || TargetProto->Sockets[i + 1].SocketColor))
                     return;
 
                 // ok, this is first not colored socket for item with prismatic socket
+#endif
             }
 
             if (apply)
@@ -2564,7 +2845,7 @@ void WorldSession::handleInsertGemOpcode(WorldPacket& recvPacket)
                 // Skill requirement
                 if (ip->RequiredSkill)
                 {
-                    if (ip->RequiredSkillRank > _player->_GetSkillLineCurrent(ip->RequiredSkill, true))
+                    if (ip->RequiredSkillRank > _player->getSkillLineCurrent(ip->RequiredSkill, true))
                     {
                         itemi->buildInventoryChangeError(it, TargetItem, INV_ERR_SKILL_ISNT_HIGH_ENOUGH);
                         continue;
@@ -2589,12 +2870,13 @@ void WorldSession::handleInsertGemOpcode(WorldPacket& recvPacket)
                 return; //someone sending hacked packets to crash server
 
             gem_properties = sGemPropertiesStore.LookupEntry(it->getItemProperties()->GemProperties);
-            it->DeleteMe();
+            it->deleteMe();
 
             if (!gem_properties)
                 continue;
 
-            if (!(gem_properties->SocketMask & TargetProto->Sockets[i].SocketColor))
+            // Skip checks for enchanting/blacksmithing prismatic socket slots
+            if (TargetProto->Sockets[i].SocketColor && !(gem_properties->SocketMask & TargetProto->Sockets[i].SocketColor))
                 ColorMatch = false;
 
             //this is ok in few cases
@@ -2607,51 +2889,47 @@ void WorldSession::handleInsertGemOpcode(WorldPacket& recvPacket)
 
             //replace gem
             if (EI)
-                TargetItem->RemoveEnchantment(2 + i); //remove previous
-            else//add gem
-                FilledSlots++;
+            {
+                // Remove previous gem
+                TargetItem->removeEnchantment(enchantmentSlot);
+            }
+            else
+            {
+                // Do not count enchanting/blacksmithing prismatic sockets towards socket bonus
+                if (TargetProto->Sockets[i].SocketColor)
+                    FilledSlots++;
+            }
 
             spell_item_enchant = sSpellItemEnchantmentStore.LookupEntry(gem_properties->EnchantmentID);
             if (spell_item_enchant != nullptr)
-            {
-                if (TargetItem->getItemProperties()->SubClass != ITEM_SUBCLASS_WEAPON_THROWN)
-                    TargetItem->AddEnchantment(spell_item_enchant, 0, true, apply, false, 2 + i);
-            }
-
+                TargetItem->addEnchantment(gem_properties->EnchantmentID, enchantmentSlot, 0);
         }
     }
 
     //Add color match bonus
     if (TargetItem->getItemProperties()->SocketBonus)
     {
-        if (ColorMatch && FilledSlots == TargetItem->GetSocketsCount())
+        if (ColorMatch && FilledSlots >= TargetItem->getSocketSlotCount(false))
         {
-            if (TargetItem->HasEnchantment(TargetItem->getItemProperties()->SocketBonus) > 0)
+            if (TargetItem->hasEnchantment(TargetItem->getItemProperties()->SocketBonus))
                 return;
 
             spell_item_enchant = sSpellItemEnchantmentStore.LookupEntry(TargetItem->getItemProperties()->SocketBonus);
             if (spell_item_enchant != nullptr)
-            {
-                if (TargetItem->getItemProperties()->SubClass != ITEM_SUBCLASS_WEAPON_THROWN)
-                {
-                    int32_t Slot = TargetItem->FindFreeEnchantSlot(spell_item_enchant, 0);
-                    TargetItem->AddEnchantment(spell_item_enchant, 0, true, apply, false, Slot);
-                }
-            }
+                TargetItem->addEnchantment(TargetItem->getItemProperties()->SocketBonus, BONUS_ENCHANTMENT_SLOT, 0);
         }
         else  //remove
         {
-            TargetItem->RemoveSocketBonusEnchant();
+            TargetItem->removeSocketBonusEnchant();
         }
     }
 
     TargetItem->m_isDirty = true;
 }
+#endif
 
 void WorldSession::handleWrapItemOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgWrapItem srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -2687,7 +2965,7 @@ void WorldSession::handleWrapItemOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (dst->wrapped_item_id || src->wrapped_item_id)
+    if (dst->m_wrappedItemId || src->m_wrappedItemId)
     {
         _player->getItemInterface()->buildInventoryChangeError(src, dst, INV_ERR_WRAPPED_CANT_BE_WRAPPED);
         return;
@@ -2705,7 +2983,7 @@ void WorldSession::handleWrapItemOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (dst->HasEnchantments())
+    if (dst->hasEnchantments())
     {
         _player->getItemInterface()->buildInventoryChangeError(src, dst, INV_ERR_ITEM_LOCKED);
         return;
@@ -2761,7 +3039,7 @@ void WorldSession::handleWrapItemOpcode(WorldPacket& recvPacket)
     }
 
     // change the dest item's entry
-    dst->wrapped_item_id = dst->getEntry();
+    dst->m_wrappedItemId = dst->getEntry();
     dst->setEntry(itemid);
 
     // set the giftwrapper fields
@@ -2772,15 +3050,13 @@ void WorldSession::handleWrapItemOpcode(WorldPacket& recvPacket)
 
     // save it
     dst->m_isDirty = true;
-    dst->SaveToDB(srlPacket.destBagSlot, srlPacket.destSlot, false, nullptr);
+    dst->saveToDB(srlPacket.destBagSlot, srlPacket.destSlot, false, nullptr);
 }
 
 #if VERSION_STRING > TBC
 void WorldSession::handleEquipmentSetUse(WorldPacket& data)
 {
-    CHECK_INWORLD_RETURN
-    
-    sLogger.debug("Received CMSG_EQUIPMENT_SET_USE");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_EQUIPMENT_SET_USE");
 
     WoWGuid guid;
     int8_t SrcBagID;
@@ -2850,9 +3126,7 @@ void WorldSession::handleEquipmentSetUse(WorldPacket& data)
 
 void WorldSession::handleEquipmentSetSave(WorldPacket& data)
 {
-    CHECK_INWORLD_RETURN
-    
-    sLogger.debug("Received CMSG_EQUIPMENT_SET_SAVE");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_EQUIPMENT_SET_SAVE");
 
     WoWGuid guid;
 
@@ -2881,7 +3155,7 @@ void WorldSession::handleEquipmentSetSave(WorldPacket& data)
     if (_player->getItemInterface()->m_EquipmentSets.AddEquipmentSet(equipmentSet->SetGUID, equipmentSet))
     {
         sLogger.debug("Player %u successfully stored equipment set %u at slot %u ", _player->getGuidLow(), equipmentSet->SetGUID, equipmentSet->SetID);
-        _player->SendEquipmentSetSaved(equipmentSet->SetID, equipmentSet->SetGUID);
+        _player->sendEquipmentSetSaved(equipmentSet->SetID, equipmentSet->SetGUID);
     }
     else
     {
@@ -2891,9 +3165,7 @@ void WorldSession::handleEquipmentSetSave(WorldPacket& data)
 
 void WorldSession::handleEquipmentSetDelete(WorldPacket& data)
 {
-    CHECK_INWORLD_RETURN
-    
-    sLogger.debug("Received CMSG_EQUIPMENT_SET_DELETE");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_EQUIPMENT_SET_DELETE");
 
     WoWGuid guid;
 

@@ -1,20 +1,18 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
-#include "Map/InstanceDefines.hpp"
-#include "Map/MapMgr.h"
+
+#include "Map/Maps/InstanceDefines.hpp"
+#include "Map/Management/MapMgr.hpp"
 #include "Exceptions/PlayerExceptions.hpp"
-#include "Management/Item.h"
+#include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
-#include "Server/MainServerDefines.h"
-#include "Map/WorldCreatorDefines.hpp"
 #include "ChatHandler.hpp"
 #include "Server/WorldSession.h"
 #include "Server/World.h"
-#include "Server/World.Legacy.h"
+#include "Server/Packets/SmsgMessageChat.h"
 
 using namespace AscEmu::Packets;
 
@@ -42,10 +40,13 @@ bool ChatHandler::hasStringAbbr(const char* s1, const char* s2)
     {
         if (!*s2)
             return true;
-        else if (!*s1)
+        
+        if (!*s1)
             return false;
-        else if (tolower(*s1) != tolower(*s2))
+        
+        if (tolower(*s1) != tolower(*s2))
             return false;
+
         s1++;
         s2++;
     }
@@ -96,8 +97,10 @@ bool ChatHandler::ExecuteCommandInTable(ChatCommand* table, const char* text, Wo
         {
             if (!ExecuteCommandInTable(table[i].ChildCommands, text, m_session))
             {
-                if (table[i].Help != "")
+                if (!table[i].Help.empty())
+                {
                     SendMultilineMessage(m_session, table[i].Help.c_str());
+                }
                 else
                 {
                     GreenSystemMessage(m_session, "Available Subcommands:");
@@ -118,12 +121,10 @@ bool ChatHandler::ExecuteCommandInTable(ChatCommand* table, const char* text, Wo
 
         if (!(this->*(table[i].Handler))(text, m_session))
         {
-            if (table[i].Help != "")
+            if (!table[i].Help.empty())
                 SendMultilineMessage(m_session, table[i].Help.c_str());
             else
-            {
                 RedSystemMessage(m_session, "Incorrect syntax specified. Try .help %s for the correct syntax.", table[i].Name);
-            }
         }
 
         return true;
@@ -159,7 +160,7 @@ int ChatHandler::ParseCommands(const char* text, WorldSession* session)
             SystemMessage(session, "There is no such command, or you do not have access to it.");
         }
     }
-    catch (AscEmu::Exception::PlayerNotFoundException e)
+    catch (AscEmu::Exception::PlayerNotFoundException& e)
     {
         // TODO: Handle this properly (what do we do when we're running commands with no player object?)
         sLogger.failure("PlayerNotFoundException occurred when processing command [%s]. Exception: %s", text, e.AEwhat());
@@ -210,7 +211,7 @@ Player* ChatHandler::GetSelectedPlayer(WorldSession* m_session, bool showerror, 
     }
     else
     {
-        player_target = m_session->GetPlayer()->GetMapMgr()->GetPlayer((uint32)guid);
+        player_target = m_session->GetPlayer()->getWorldMap()->getPlayer((uint32)guid);
     }
 
     return player_target;
@@ -229,12 +230,12 @@ Creature* ChatHandler::GetSelectedCreature(WorldSession* m_session, bool showerr
     switch(wowGuid.getHigh())
     {
         case HighGuid::Pet:
-            creature = reinterpret_cast<Creature*>(m_session->GetPlayer()->GetMapMgr()->GetPet(wowGuid.getGuidLowPart()));
+            creature = reinterpret_cast<Creature*>(m_session->GetPlayer()->getWorldMap()->getPet(wowGuid.getGuidLowPart()));
             break;
 
         case HighGuid::Unit:
         case HighGuid::Vehicle:
-            creature = m_session->GetPlayer()->GetMapMgr()->GetCreature(wowGuid.getGuidLowPart());
+            creature = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
             break;
         default:
             is_invalid_type = true;
@@ -259,7 +260,7 @@ Unit* ChatHandler::GetSelectedUnit(WorldSession* m_session, bool showerror)
 
     uint64 guid = m_session->GetPlayer()->getTargetGuid();
 
-    Unit* unit = m_session->GetPlayer()->GetMapMgr()->GetUnit(guid);
+    Unit* unit = m_session->GetPlayer()->getWorldMap()->getUnit(guid);
     if (unit == nullptr)
     {
         if (showerror)
@@ -299,7 +300,7 @@ const char* ChatHandler::GetMapTypeString(uint8 type)
             return "Continent";
         case INSTANCE_RAID:
             return "Raid";
-        case INSTANCE_NONRAID:
+        case INSTANCE_DUNGEON:
             return "Non-Raid";
         case INSTANCE_BATTLEGROUND:
             return "PvP";
@@ -493,7 +494,7 @@ bool ChatHandler::ShowHelpForCommand(WorldSession* m_session, ChatCommand* table
                 return true;
         }
 
-        if (table[i].Help == "")
+        if (table[i].Help.empty())
         {
             SystemMessage(m_session, "There is no help for that command");
             return true;
@@ -535,7 +536,7 @@ bool ChatHandler::HandleCommandsCommand(const char* args, WorldSession* m_sessio
 
     for (uint32 i = 0; table[i].Name != NULL; i++)
     {
-        if (*args && !hasStringAbbr(table[i].Name, (char*)args))
+        if (*args && !hasStringAbbr(table[i].Name, args))
             continue;
 
         if (table[i].CommandGroup != '0' && !m_session->CanUseCommand(table[i].CommandGroup))
@@ -585,7 +586,7 @@ bool ChatHandler::HandleCommandsCommand(const char* args, WorldSession* m_sessio
 
 
     //FillSystemMessageData(&data, table[i].Name);
-    //m_session->SendPacket(&data);
+    //m_session->sendPacket(&data);
     //}
 
     SendMultilineMessage(m_session, output.c_str());
@@ -593,7 +594,7 @@ bool ChatHandler::HandleCommandsCommand(const char* args, WorldSession* m_sessio
     return true;
 }
 
-uint16 GetItemIDFromLink(const char* itemlink, uint32* itemid)
+uint16_t GetItemIDFromLink(const char* itemlink, uint32* itemid)
 {
     if (itemlink == NULL)
     {
@@ -622,33 +623,37 @@ uint16 GetItemIDFromLink(const char* itemlink, uint32* itemid)
 /// DGM: Get skill level command for getting information about a skill
 bool ChatHandler::HandleGetSkillLevelCommand(const char* args, WorldSession* m_session)
 {
-    uint32 skill = 0;
     char* pSkill = strtok((char*)args, " ");
     if (!pSkill)
         return false;
-    else
-        skill = atol(pSkill);
+
+    uint16_t skill = static_cast<uint16_t>(std::stoul(pSkill));
     Player* plr = GetSelectedPlayer(m_session, true, true);
-    if (!plr) return false;
+    if (!plr)
+        return false;
+
     if (skill > SkillNameManager->maxskill)
     {
         BlueSystemMessage(m_session, "Skill: %u does not exists", skill);
         return false;
     }
+
     char* SkillName = SkillNameManager->SkillNames[skill];
-    if (SkillName == 0)
+    if (SkillName == nullptr)
     {
         BlueSystemMessage(m_session, "Skill: %u does not exists", skill);
         return false;
     }
-    if (!plr->_HasSkillLine(skill))
+
+    if (!plr->hasSkillLine(skill))
     {
         BlueSystemMessage(m_session, "Player does not have %s skill.", SkillName);
         return false;
     }
-    uint32 nobonus = plr->_GetSkillLineCurrent(skill, false);
-    uint32 bonus = plr->_GetSkillLineCurrent(skill, true) - nobonus;
-    uint32 max = plr->_GetSkillLineMax(skill);
+
+    uint32 nobonus = plr->getSkillLineCurrent(skill, false);
+    uint32 bonus = plr->getSkillLineCurrent(skill, true) - nobonus;
+    uint32 max = plr->getSkillLineMax(skill);
     BlueSystemMessage(m_session, "Player's %s skill has level: %u maxlevel: %u. (+ %u bonus)", SkillName, nobonus, max, bonus);
     return true;
 }
@@ -680,22 +685,22 @@ void ChatHandler::SendItemLinkToPlayer(ItemProperties const* iProto, WorldSessio
         //int8 slot = owner->getItemInterface()->GetInventorySlotById(iProto->ItemId); //DISABLED due to being a retarded concept
         if (iProto->ContainerSlots > 0)
         {
-            SystemMessage(pSession, "Item %u %s Count %u ContainerSlots %u", iProto->ItemId, GetItemLinkByProto(iProto, language).c_str(), count, iProto->ContainerSlots);
+            SystemMessage(pSession, "Item %u %s Count %u ContainerSlots %u", iProto->ItemId, sMySQLStore.getItemLinkByProto(iProto, language).c_str(), count, iProto->ContainerSlots);
         }
         else
         {
-            SystemMessage(pSession, "Item %u %s Count %u", iProto->ItemId, GetItemLinkByProto(iProto, language).c_str(), count);
+            SystemMessage(pSession, "Item %u %s Count %u", iProto->ItemId, sMySQLStore.getItemLinkByProto(iProto, language).c_str(), count);
         }
     }
     else
     {
         if (iProto->ContainerSlots > 0)
         {
-            SystemMessage(pSession, "Item %u %s ContainerSlots %u", iProto->ItemId, GetItemLinkByProto(iProto, language).c_str(), iProto->ContainerSlots);
+            SystemMessage(pSession, "Item %u %s ContainerSlots %u", iProto->ItemId, sMySQLStore.getItemLinkByProto(iProto, language).c_str(), iProto->ContainerSlots);
         }
         else
         {
-            SystemMessage(pSession, "Item %u %s", iProto->ItemId, GetItemLinkByProto(iProto, language).c_str());
+            SystemMessage(pSession, "Item %u %s", iProto->ItemId, sMySQLStore.getItemLinkByProto(iProto, language).c_str());
         }
     }
 }
@@ -707,11 +712,11 @@ void ChatHandler::SendHighlightedName(WorldSession* m_session, const char* prefi
     start[0] = 0;
     message[0] = 0;
 
-    snprintf(start, 50, "%s %u: %s", prefix, (unsigned int)id, MSG_COLOR_WHITE);
+    snprintf(start, 50, "%s %u: %s", prefix, id, MSG_COLOR_WHITE);
 
     auto highlight_length = highlight.length();
     std::string fullname = std::string(full_name);
-    size_t offset = (size_t)lowercase_name.find(highlight);
+    size_t offset = lowercase_name.find(highlight);
     auto remaining = fullname.size() - offset - highlight_length;
 
     strcat(message, start);

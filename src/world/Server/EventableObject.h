@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -22,7 +22,7 @@
 #define EVENTABLEOBJECT_H
 
 #include "EventMgr.h"
-#include "../shared/Util.hpp"
+#include <Util.hpp>
 #include <list>
 #include <set>
 

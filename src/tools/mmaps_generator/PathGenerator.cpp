@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,9 +17,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <filesystem>
+
 #include "PathCommon.h"
 #include "MapBuilder.h"
 #include "Util.hpp"
+
+namespace fs = std::filesystem;
 
 using namespace MMAP;
 
@@ -43,8 +47,7 @@ bool checkDirectories(bool debugOutput)
     dirFiles.clear();
     if (getDirContents(dirFiles, "mmaps") == LISTFILE_DIRECTORY_NOT_FOUND)
     {
-        printf("'mmaps' directory does not exist\n");
-        return false;
+        return fs::create_directory("mmaps");
     }
 
     dirFiles.clear();

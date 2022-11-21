@@ -1,15 +1,14 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include <Database/Field.hpp>
-#include "CommonDefines.hpp"
 #include "Server/EventableObject.h"
 #include "Management/Quest.h"
-#include "Units/Players/Player.h"
+#include "Objects/Units/Players/Player.hpp"
 #include "Server/Script/ScriptMgr.h"
 
 enum QuestLogState : uint32_t
@@ -53,6 +52,7 @@ public:
     bool isUnitAffected(Unit* unit) const;
     void addAffectedUnit(Unit* unit);
     void clearAffectedUnits();
+    uint32_t getQuestState() { return m_state; }
 
     bool canBeFinished() const;
     void finishAndRemove();
@@ -60,7 +60,9 @@ public:
 
     void updatePlayerFields();
     void sendQuestComplete();
-    void SendUpdateAddKill(uint8_t index);
+    void sendUpdateAddKill(uint8_t index);
+
+    QuestScript* getQuestScript() const;
 
 private:
 
@@ -78,5 +80,3 @@ private:
 
     std::set<uint64_t> m_affected_units;
 };
-
-#define CALL_QUESTSCRIPT_EVENT(obj, func) if (static_cast<QuestLogEntry*>(obj)->getQuestProperties()->pQuestScript != NULL) static_cast<QuestLogEntry*>(obj)->getQuestProperties()->pQuestScript->func

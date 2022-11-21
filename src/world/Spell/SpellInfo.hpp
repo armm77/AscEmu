@@ -1,23 +1,62 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Definitions/AuraEffects.h"
-#include "Definitions/PowerType.h"
-#include "SpellDefines.hpp"
-#include "SpellScript.h"
+#include "Definitions/AuraEffects.hpp"
+#include "Definitions/PowerType.hpp"
+#include "SpellScript.hpp"
 
 #include "CommonTypes.hpp"
 #include "WorldConf.h"
 #include <string>
 #include "Logging/Logger.hpp"
+#include "Storage/DBC/DBCStructures.hpp"
 
 class Item;
 class Player;
 class Unit;
+
+struct SpellForcedBasePoints
+{
+public:
+    inline void set(uint8_t effIndex, int32_t value)
+    {
+        if (effIndex >= MAX_SPELL_EFFECTS)
+            return;
+
+        for (auto& values : m_forcedBasePoints)
+        {
+            if (values.first == effIndex)
+            {
+                values.second = value;
+                return;
+            }
+        }
+
+        m_forcedBasePoints.push_back(std::make_pair(effIndex, value));
+    }
+
+    inline void get(uint8_t effIndex, int32_t* basePoints) const
+    {
+        if (effIndex >= MAX_SPELL_EFFECTS)
+            return;
+
+        for (const auto& values : m_forcedBasePoints)
+        {
+            if (values.first == effIndex)
+            {
+                *basePoints = values.second;
+                break;
+            }
+        }
+    }
+
+private:
+    std::vector<std::pair<uint8_t, int32_t>> m_forcedBasePoints;
+};
 
 class SERVER_DECL SpellInfo
 {
@@ -60,7 +99,8 @@ public:
 
     bool hasTargetType(uint32_t type) const;
     uint32_t getRequiredTargetMaskForEffectTarget(uint32_t implicitTarget, uint8_t effectIndex) const;
-    uint32_t getRequiredTargetMaskForEffect(uint8_t effectIndex) const;
+    uint32_t getRequiredTargetMaskForEffect(uint8_t effectIndex, bool getExplicitMask = false) const;
+    uint32_t getRequiredTargetMask(bool getExplicitMask) const;
     int aiTargetType() const;
     bool isTargetingStealthed() const;
 
@@ -74,13 +114,21 @@ public:
     bool isChanneled() const;
     bool isRangedAutoRepeat() const;
     bool isOnNextMeleeAttack() const;
+    // If spell stacks from different casters (i.e. Sunder Armor)
+    bool isStackableFromMultipleCasters() const;
 
-    int32_t calculateEffectValue(uint8_t effIndex, Unit* unitCaster = nullptr, Item* itemCaster = nullptr, uint32_t forcedBasePoints = 0) const;
+    int32_t calculateEffectValue(uint8_t effIndex, Unit* unitCaster = nullptr, Item* itemCaster = nullptr, SpellForcedBasePoints forcedBasePoints = SpellForcedBasePoints()) const;
 
     bool doesEffectApplyAura(uint8_t effIndex) const;
 
+    bool isAreaAuraEffect(uint8_t effIndex) const;
     bool appliesAreaAura(uint32_t auraType) const;
     uint32_t getAreaAuraEffect() const;
+
+    bool isTriggerSpellCastedByCaster(SpellInfo const* triggeringSpell) const;
+
+    float_t getMinRange(bool friendly = false) const;
+    float_t getMaxRange(bool friendly = false, Object* caster = nullptr, Spell* spell = nullptr) const;
 
     // Getters for spell data
     uint32_t getId() const { return Id; }
@@ -460,7 +508,7 @@ public:
     uint32_t getCustom_BGR_one_buff_on_target() const { return custom_BGR_one_buff_on_target; }
     uint32_t getCustom_c_is_flags() const { return custom_c_is_flags; }
     uint32_t getCustom_RankNumber() const { return custom_RankNumber; }
-    uint32_t getCustom_ThreatForSpell() const { return custom_ThreatForSpell; }
+    int32_t getCustom_ThreatForSpell() const { return custom_ThreatForSpell; }
     float getCustom_ThreatForSpellCoef() const { return custom_ThreatForSpellCoef; }
 
     float getCustom_base_range_or_radius_sqr() const { return custom_base_range_or_radius_sqr; }

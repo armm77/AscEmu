@@ -2,7 +2,7 @@
 
 ## Introduction
 Shared project for functions/structures/classes used by world and logon project.
-Do not add code which is not used by world- AND logonserver.
+Do not add code which is not used by world AND logonserver.
 
 ## State
 ### Legacy Code
@@ -12,7 +12,7 @@ Keep legacy code inside a AGPL file. Do NOT copy any legacy code to a MIT file!
 Keep in mind that legacy code was written mostly in C-style/c++98 and horrible outdated.
 
 ### New Code
-New code has to be placed inside a MIT file. The current max standard is C++14.
+New code has to be placed inside a MIT file. The current standard is C++14 and newer.
 
 ## List of Legacy files
 ### Not rewritten - yet
@@ -21,10 +21,8 @@ New code has to be placed inside a MIT file. The current max standard is C++14.
 * 2014 | CommonTypes.hpp
 * 2014 | CommonHelpers.hpp
 * 2014 | CommonDefines.hpp
-* 2014 | AscemuServerDefines.hpp
 * 2008 | WoWGuid.h
 * 2008 | WorldPacket.h
-* 2008 | TLSObject.h
 * 2008 | Threading/ThreadStarter.h
 * 2008 | Threading/ThreadPool.h
 * 2008 | Threading/ThreadPool.cpp
@@ -156,13 +154,19 @@ New code has to be placed inside a MIT file. The current max standard is C++14.
 ### Removed on 02 Feb 2021
 * 2008 | Threading/RWLock.h
 
+### Removed on 10 May 2022
+* 2008 | TLSObject.h
+
+### Removed on 07 Jun 2022
+* 2014 | AscemuServerDefines.hpp
+
 ### New files
 * 2015 | Exceptions/PlayerExceptions.hpp
 * 2015 | Exceptions/Exceptions.hpp
 * 2017 | Common.hpp
 * 2017 | Log.cpp
 * 2017 | Log.hpp
-* 2017 | LogDefines.hpp
+* 2017 | Logging/LoggerDefines.hpp
 * 2017 | Util.cpp
 * 2017 | Util.hpp
 * 2017 | Auth/WowCrypt.cpp

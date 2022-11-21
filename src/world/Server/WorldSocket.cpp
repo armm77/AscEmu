@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -21,9 +21,6 @@
 // Class WorldSocket - Main network code functions, handles
 // reading/writing of all packets.
 
-#include "StdAfx.h"
-//#include "Server/CharacterErrors.h"
-//#include "Management/AddonMgr.h"
 #include "Server/LogonCommClient/LogonCommHandler.h"
 #include "Server/MainServerDefines.h"
 #include "Auth/Sha1.h"
@@ -33,7 +30,6 @@
 #include "Packets/SmsgAuthChallenge.h"
 #include "Packets/SmsgAuthResponse.h"
 #include "OpcodeTable.hpp"
-//#include "World.Legacy.h"
 
 using namespace AscEmu::Packets;
 
@@ -610,7 +606,7 @@ void WorldSocket::InformationRetreiveCallback(WorldPacket & recvData, uint32 req
     if (forcedPermissions != nullptr)
         GMFlags.assign(*forcedPermissions);
 
-    sLogger.debug(" >> got information packet from logon: `%s` ID %u (request %u)", AccountName.c_str(), AccountID, mRequestID);
+    sLogger.debug("InformationRetreiveCallback : got information packet from logon: `%s` ID %u (request %u)", AccountName.c_str(), AccountID, mRequestID);
 
     mRequestID = 0;
 
@@ -733,8 +729,9 @@ void WorldSocket::InformationRetreiveCallback(WorldPacket & recvData, uint32 req
 
     // Allocate session
     WorldSession* pSession = new WorldSession(AccountID, AccountName, this);
+
     mSession = pSession;
-    ARCEMU_ASSERT(mSession != nullptr);
+
     // aquire delete mutex
     pSession->deleteMutex.Acquire();
 
@@ -813,28 +810,34 @@ void WorldSocket::InformationRetreiveCallback(WorldPacket & recvData, uint32 req
 
 void WorldSocket::Authenticate()
 {
-    ARCEMU_ASSERT(pAuthenticationPacket != NULL);
-    mQueued = false;
+    if (pAuthenticationPacket != nullptr)
+    {
+        mQueued = false;
 
-    if (mSession == nullptr)
-        return;
+        if (mSession == nullptr)
+            return;
 
-    SendPacket(SmsgAuthResponse(AuthOkay, ARST_ACCOUNT_DATA).serialise().get());
+        SendPacket(SmsgAuthResponse(AuthOkay, ARST_ACCOUNT_DATA).serialise().get());
 #if VERSION_STRING < Cata
-    sAddonMgr.SendAddonInfoPacket(pAuthenticationPacket, static_cast<uint32>(pAuthenticationPacket->rpos()), mSession);
+        sAddonMgr.SendAddonInfoPacket(pAuthenticationPacket, static_cast<uint32>(pAuthenticationPacket->rpos()), mSession);
 #else
-    mSession->sendAddonInfo();
+        mSession->sendAddonInfo();
 #endif
 #if VERSION_STRING > TBC
-    mSession->sendClientCacheVersion(BUILD_VERSION);
+        mSession->sendClientCacheVersion(BUILD_VERSION);
 #endif
-    mSession->_latency = _latency;
+        mSession->_latency = _latency;
 
-    delete pAuthenticationPacket;
-    pAuthenticationPacket = nullptr;
+        delete pAuthenticationPacket;
+        pAuthenticationPacket = nullptr;
 
-    sWorld.addSession(mSession);
-    sWorld.addGlobalSession(mSession);
+        sWorld.addSession(mSession);
+        sWorld.addGlobalSession(mSession);
+    }
+    else
+    {
+        sLogger.failure("WorldSocket::Authenticate something tried to Authenticate but packet is invalid (nullptr)");
+    }
 }
 
 void WorldSocket::UpdateQueuePosition(uint32 Position)
@@ -912,7 +915,7 @@ void WorldSocket::OnRead()
 
             // Copy from packet buffer into header local var
             ClientPktHeader Header;
-            readBuffer.Read(reinterpret_cast<uint8*>(&Header), 6);
+            readBuffer.Read(&Header, 6);
 
             // Decrypt the header
 #if VERSION_STRING < WotLK
@@ -974,7 +977,7 @@ void WorldSocket::OnRead()
         {
             // Copy from packet buffer into our actual buffer.
             ///Read(mRemaining, (uint8*)Packet->contents());
-            readBuffer.Read(static_cast<uint8*>(packet->contents()), mRemaining);
+            readBuffer.Read(packet->contents(), mRemaining);
         }
 
         sWorldPacketLog.logPacket(mSize, mOpcode, mSize ? packet->contents() : nullptr, 0, (mSession ? mSession->GetAccountId() : 0));
@@ -1030,11 +1033,15 @@ void WorldPacketLog::logPacket(uint32_t len, uint16_t opcode, const uint8_t* dat
         //stop spaming opcodes here
         case SMSG_MONSTER_MOVE:
         case MSG_MOVE_HEARTBEAT:
+        case SMSG_ATTACKERSTATEUPDATE:
+        case SMSG_EMOTE:
+        case SMSG_TIME_SYNC_REQ:
+        case CMSG_TIME_SYNC_RESP:
         {
         } break;
         default:
         {
-            sLogger.debug("[%s]: %s %s (0x%03X) of %u bytes.", direction ? "SERVER" : "CLIENT", direction ? "sent" : "received",
+            sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "[%s]: %s %s (0x%03X) of %u bytes.", direction ? "SERVER" : "CLIENT", direction ? "sent" : "received",
                 sOpcodeTables.getNameForInternalId(opcode).c_str(), sOpcodeTables.getHexValueForVersionId(sOpcodeTables.getVersionIdForAEVersion(), opcode), len);
         } break;
     }

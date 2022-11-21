@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,12 +19,12 @@
  *
  */
 
-#include "StdAfx.h"
-#include "Management/Item.h"
+
+#include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
-#include "SpellProc.h"
-#include "Units/Unit.h"
-#include "Units/Players/Player.h"
+#include "SpellProc.hpp"
+#include "Objects/Units/Unit.hpp"
+#include "Objects/Units/Players/Player.hpp"
 
 class TwinBladesOfAzzinothSpellProc : public SpellProc
 {

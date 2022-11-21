@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * Circular Buffer Class
@@ -22,7 +22,7 @@
  *
  */
 
-#include "../Common.hpp"
+#include <Common.hpp>
 #include "CircularBuffer.h"
 
 /** Constructor
@@ -238,7 +238,6 @@ void CircularBuffer::Remove(size_t len)
             m_regionBPointer = NULL;
             m_regionBSize = 0;
             m_regionAPointer = m_buffer;
-            m_regionASize = 0;
         }
     }
 }

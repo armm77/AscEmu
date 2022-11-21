@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +23,7 @@
 #include <string>
 
 #include "GameEventMgr.h"
-#include "Units/Creatures/Creature.h"
-#include "Macros/ScriptMacros.hpp"
+#include "Objects/Units/Creatures/Creature.h"
 
 struct EventNamesQueryResult;
 struct EventCreatureSpawnsQueryResult;
@@ -91,7 +90,7 @@ class GameEvent
             mEventScript = nullptr;
         }
 
-        GameEvent(){}
+        GameEvent() = default;
 
         bool isValid() const { return length > 0 && end > time(0); }
         void SpawnAllEntities();

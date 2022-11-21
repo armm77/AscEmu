@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -20,14 +20,14 @@
 #include "Setup.h"
 #include "Spell/SpellAuras.h"
 #include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.h"
+#include "Spell/Definitions/ProcFlags.hpp"
 
 bool Cold_Snap(uint8_t /*effectIndex*/, Spell* pSpell)
 {
     if (!pSpell->getPlayerCaster())
         return true;
 
-    pSpell->getPlayerCaster()->ClearCooldownsOnLine(6, pSpell->getSpellInfo()->getId());
+    pSpell->getPlayerCaster()->clearCooldownsOnLine(6, pSpell->getSpellInfo()->getId());
     return true;
 }
 
@@ -45,7 +45,7 @@ bool SummonWaterElemental(uint8_t /*effectIndex*/, Spell* pSpell)
     if (caster == NULL)
         return true;
 
-    if (caster->HasAura(70937))    // Glyph of Eternal Water
+    if (caster->hasAurasWithId(70937))    // Glyph of Eternal Water
         caster->castSpell(caster, 70908, true);
     else
         caster->castSpell(caster, 70907, true);
@@ -59,7 +59,7 @@ bool TormentOfTheWeak(uint8_t effectIndex, Aura* a, bool apply)
 
     if (m_target->isPlayer())
     {
-        static_cast<Player*>(m_target)->m_IncreaseDmgSnaredSlowed += ((apply) ? 1 : -1) * (uint32_t)(((float)a->getEffectDamage(effectIndex)) / 100);
+        static_cast<Player*>(m_target)->m_increaseDmgSnaredSlowed += ((apply) ? 1 : -1) * (uint32_t)(((float)a->getEffectDamage(effectIndex)) / 100);
     }
 
     return true;
@@ -73,9 +73,9 @@ bool FingersOfFrost(uint8_t effectIndex, Aura* a, bool apply) // Should be visib
         return true;
 
     if (apply)
-        caster->SetTriggerChill(44544, a->getEffectDamage(effectIndex), false);
+        caster->setTriggerChill(44544, a->getEffectDamage(effectIndex), false);
     else
-        caster->SetTriggerChill(0, 0, false);
+        caster->setTriggerChill(0, 0, false);
 
     return true;
 }
@@ -88,9 +88,9 @@ bool BrainFreeze(uint8_t effectIndex, Aura* a, bool apply)
         return true;
 
     if (apply)
-        caster->SetTriggerChill(57761, a->getEffectDamage(effectIndex), false);
+        caster->setTriggerChill(57761, a->getEffectDamage(effectIndex), false);
     else
-        caster->SetTriggerChill(0, 0, false);
+        caster->setTriggerChill(0, 0, false);
 
     return true;
 }

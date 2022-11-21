@@ -1,47 +1,36 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include "Common.hpp"
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <random>
 #include <utility>
-
 
 namespace Util
 {
     //////////////////////////////////////////////////////////////////////////////////////////
-    // String functions
-
-    /*! \brief Manipulates the string to lowercase */
-    void StringToLowerCase(std::string& str);
-
-    /*! \brief Manipulates the string to uppercase */
-    void StringToUpperCase(std::string& str);
-
-    /*! \brief Capitalize word (uppercase first char, lowercase rest) */
-    void CapitalizeString(std::string& str);
-
-    /*! \brief Seperates string by seperator (one char) returns string vecotr */
-    std::vector<std::string> SplitStringBySeperator(const std::string& str_src, const std::string& str_sep);
-
-    /*! \brief Returns true if string x is in sttrin y */
-    bool findXinYString(std::string& x, std::string& y);
+    // WoW String functions
 
     /*! \brief Returns wow specific language string to id*/
-    uint32_t getLanguagesIdFromString(std::string langstr);
+    uint8_t getLanguagesIdFromString(const std::string& langstr);
+
+    /*! \brief Returns wow specific language id to string*/
+    std::string getLanguagesStringFromId(uint8_t id);
 
     /*! \brief Returns an uint32_t from a string between start/endcharacter */
-    uint32_t getNumberFromStringByRange(std::string string, int startCharacter, int endCharacter);
+    uint32_t getNumberFromStringByRange(const std::string& string, int startCharacter, int endCharacter);
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // WString functions
-    bool Utf8toWStr(std::string utf8str, std::wstring& wstr);
-    bool WStrToUtf8(std::wstring wstr, std::string& utf8str);
+    bool Utf8toWStr(const std::string& utf8str, std::wstring& wstr);
+    bool WStrToUtf8(const std::wstring& wstr, std::string& utf8str);
 
     size_t Utf8length(std::string& utf8str);
 
@@ -101,20 +90,28 @@ namespace Util
         std::transform(str.begin(), str.end(), str.begin(), WCharToLower);
     }
 
+    inline uint32_t MAKE_PAIR32(uint16_t l, uint16_t h)
+    {
+        return uint32_t(l | (uint32_t(h) << 16));
+    }
+
     //////////////////////////////////////////////////////////////////////////////////////////
     // Time calculation/formatting
 
     /*! \brief Returns the current point in time */
     std::chrono::high_resolution_clock::time_point TimeNow();
 
+    /*! \ brief Returns TimeNow() as time_t*/
+    time_t getTimeNow();
+
     /*! \ brief Returns TimeNow() as uint32_t*/
     uint32_t getMSTime();
 
     /*! \brief Returns the difference between start_time and now in milliseconds */
-    long long GetTimeDifferenceToNow(std::chrono::high_resolution_clock::time_point start_time);
+    long long GetTimeDifferenceToNow(const std::chrono::high_resolution_clock::time_point& start_time);
 
     /*! \brief Returns the difference between start_time and end_time in milliseconds */
-    long long GetTimeDifference(std::chrono::high_resolution_clock::time_point start_time, std::chrono::high_resolution_clock::time_point end_time);
+    long long GetTimeDifference(const std::chrono::high_resolution_clock::time_point& start_time, const std::chrono::high_resolution_clock::time_point& end_time);
 
     /*! \brief Returns the current Date Time as string */
     std::string GetCurrentDateTimeString();
@@ -133,6 +130,8 @@ namespace Util
 
     /*! \brief Returns generated time value for client packets */
     uint32_t getGameTime();
+
+    time_t getLocalHourTimestamp(time_t time, uint8_t hour, bool onlyAfterTime = true);
 
     std::string ByteArrayToHexString(uint8_t const* bytes, uint32_t arrayLength, bool reverseArray = false);
 
@@ -156,19 +155,53 @@ namespace Util
     // Gets random number from 1-100 and returns true if val is greater than the number
     bool checkChance(float_t val);
 
+    template <class T>
+    inline T square(T x) { return x * x; }
+
+    // Percentage calculation
+    template <class T, class U>
+    inline T calculatePct(T base, U pct)
+    {
+        return T(base * static_cast<float>(pct) / 100.0f);
+    }
+
+    template <class T, class U>
+    inline T addPct(T& base, U pct)
+    {
+        return base += calculatePct(base, pct);
+    }
+
+    template <class T, class U>
+    inline T applyPct(T& base, U pct)
+    {
+        return base = calculatePct(base, pct);
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // Container helper functions
+
+    template<typename T>
+    inline void randomShuffleVector(std::vector<T>* vector)
+    {
+        std::random_device rd;
+        std::mt19937 mt(rd());
+
+        std::shuffle(vector->begin(), vector->end(), mt);
+    }
+
     //////////////////////////////////////////////////////////////////////////////////////////
     // C++17 filesystem dependent functions
 
     /*! \brief Returns map of directory file names. */
-    std::map<uint32_t, std::string> getDirectoryContent(std::string pathName, std::string specialSuffix = "", bool withPath = false);
+    std::map<uint32_t, std::string> getDirectoryContent(const std::string& pathName, const std::string& specialSuffix = "", bool withPath = false);
 
     /*! \brief Reads the file into a string based on the given path. */
     std::string readFileIntoString(fs::path path);
 
     /*! \brief Returns the first 8 chars of the file name as major version. */
-    uint32_t readMajorVersionFromString(std::string fileName);
+    uint32_t readMajorVersionFromString(const std::string& fileName);
 
-    uint32_t readMinorVersionFromString(std::string fileName);
+    uint32_t readMinorVersionFromString(const std::string& fileName);
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Benchmark
@@ -211,10 +244,10 @@ struct SmallTimeTracker
 
     public:
 
-        SmallTimeTracker(uint32_t expired = 0) : mExpireTime(expired) {}
+        SmallTimeTracker(uint32_t expired = 0) : mExpireTime(static_cast<int32_t>(expired)) {}
 
-        void updateTimer(int32_t diffTime) { mExpireTime -= diffTime; }
-        void resetInterval(uint32_t intervalTime) { mExpireTime = intervalTime; }
+        void updateTimer(uint32_t diffTime) { mExpireTime -= diffTime; }
+        void resetInterval(uint32_t intervalTime) { mExpireTime = static_cast<int32_t>(intervalTime); }
 
         int32_t getExpireTime() const { return mExpireTime; }
         bool isTimePassed() const { return mExpireTime <= 0; }

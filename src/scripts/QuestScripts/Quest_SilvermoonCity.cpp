@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,14 +19,14 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class PathoftheAdept : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        GossipMenu menu(pObject->getGuid(), 1, plr->GetSession()->language);
+        GossipMenu menu(pObject->getGuid(), 1, plr->getSession()->language);
         if (plr->hasQuestInQuestLog(9692))
             menu.addItem(GOSSIP_ICON_CHAT, 493, 1); // Take Insignia
 
@@ -41,7 +41,8 @@ public:
 
 class LordDawnstar : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(LordDawnstar)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new LordDawnstar(c); }
     explicit LordDawnstar(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnLoad() override
@@ -49,7 +50,7 @@ class LordDawnstar : public CreatureAIScript
         getCreature()->setNpcFlags(UNIT_NPC_FLAG_GOSSIP);
         getCreature()->setStandState(STANDSTATE_DEAD);
         getCreature()->setDeathState(CORPSE);
-        getCreature()->GetAIInterface()->m_canMove = false;
+        getCreature()->setControlled(true, UNIT_STATE_ROOTED);
     }
 };
 

@@ -1,14 +1,14 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
- //////////////////////////////////////////////////////////////////////////////////////////
- ///\brief This script will add support for an SQL table called gameobject_teleports.
- /// This table can be used to teleport players when they use a game object such
- /// as a door or portal. Any object used in this table should exist in the
- /// gameobject_properties table, and be of type 10. Custom portal can use the generic
- /// display id of 6831. Portals also have the Sound2 field set to '1'.
+//////////////////////////////////////////////////////////////////////////////////////////
+//\brief This script will add support for an SQL table called gameobject_teleports.
+// This table can be used to teleport players when they use a game object such
+// as a door or portal. Any object used in this table should exist in the
+// gameobject_properties table, and be of type 10. Custom portal can use the generic
+// display id of 6831. Portals also have the Sound2 field set to '1'.
 //////////////////////////////////////////////////////////////////////////////////////////
 
 #include "Setup.h"
@@ -28,18 +28,13 @@ std::map<uint32_t, GameobjectTeleport*> m_teleStorage;
 class CustomTeleport : public GameObjectAIScript // Custom Portals
 {
 public:
+    explicit CustomTeleport(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
 
-    explicit CustomTeleport(GameObject* goinstance) : GameObjectAIScript(goinstance)
-    { }
+    ~CustomTeleport() override
+    {}
 
-    ~CustomTeleport()
-    { }
-
-    void OnActivate(Player* pPlayer)
+    void OnActivate(Player* pPlayer) override
     {
-        float x, y, z, orientation;
-        uint32_t mapid;
-
         std::map<uint32_t, GameobjectTeleport*>::iterator itr = m_teleStorage.find(this->_gameobject->getEntry());
         if (itr != m_teleStorage.end())
         {
@@ -50,36 +45,36 @@ public:
 
             if (required_level > pPlayer->getLevel())
             {
-                pPlayer->BroadcastMessage("You must be at least level %u to use this portal", required_level);
+                pPlayer->broadcastMessage("You must be at least level %u to use this portal", required_level);
                 return;
             }
             else if (req_class != 0 && req_class != pPlayer->getClass())
             {
-                pPlayer->BroadcastMessage("You do not have the required class to use this Portal");
+                pPlayer->broadcastMessage("You do not have the required class to use this Portal");
                 return;
             }
 #if VERSION_STRING > TBC
-            else if (req_achievement != 0 && pPlayer->GetAchievementMgr().HasCompleted(req_achievement))
+            else if (req_achievement != 0 && pPlayer->getAchievementMgr().HasCompleted(req_achievement))
             {
-                pPlayer->BroadcastMessage("You do not have the required achievement to use this Portal");
+                pPlayer->broadcastMessage("You do not have the required achievement to use this Portal");
                 return;
             }
 #endif
             else
             {
-                mapid = gt->mapid;
-                x = gt->x;
-                y = gt->y;
-                z = gt->z;
-                orientation = gt->o;
+                uint32_t mapid = gt->mapid;
+                LocationVector location;
+                location.x = gt->x;
+                location.y = gt->y;
+                location.z = gt->z;
+                location.o = gt->o;
 
-                pPlayer->SafeTeleport(mapid, 0, x, y, z, orientation);
+                pPlayer->safeTeleport(mapid, 0, location);
             }
         }
     }
     static GameObjectAIScript* Create(GameObject* GO) { return new CustomTeleport(GO); }
 };
-
 
 void InitializeGameObjectTeleportTable(ScriptMgr* mgr)
 {

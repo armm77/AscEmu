@@ -1,14 +1,15 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/MainServerDefines.h"
 #include "Chat/ChatHandler.hpp"
 #include "Server/WorldSession.h"
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 #include "Storage/MySQLDataStore.hpp"
+#include "Util/Strings.hpp"
 
 
 //.recall port
@@ -21,7 +22,7 @@ bool ChatHandler::HandleRecallGoCommand(const char* args, WorldSession* m_sessio
     {
         if (m_session->GetPlayer() != nullptr)
         {
-            m_session->GetPlayer()->SafeTeleport(recall->mapId, 0, recall->location);
+            m_session->GetPlayer()->safeTeleport(recall->mapId, 0, recall->location);
             return true;
         }
     }
@@ -42,8 +43,8 @@ bool ChatHandler::HandleRecallPortUsCommand(const char* args, WorldSession* m_se
         if (!target)
             return true;
 
-        player->SafeTeleport(recall->mapId, 0, recall->location);
-        target->SafeTeleport(recall->mapId, 0, recall->location);
+        player->safeTeleport(recall->mapId, 0, recall->location);
+        target->safeTeleport(recall->mapId, 0, recall->location);
         return true;
     }
 
@@ -118,12 +119,12 @@ bool ChatHandler::HandleRecallListCommand(const char* args, WorldSession* m_sess
     recout += "Recall locations|r:\n\n";
 
     std::string search(args);
-    Util::StringToLowerCase(search);
+    AscEmu::Util::Strings::toLowerCase(search);
 
     for (auto* recall : sMySQLStore.getRecallStore())
     {
         std::string recallName(recall->name);
-        Util::StringToLowerCase(recallName);
+        AscEmu::Util::Strings::toLowerCase(recallName);
         if (recallName.find(search) == 0)
         {
             recout += MSG_COLOR_LIGHTBLUE;
@@ -159,13 +160,13 @@ bool ChatHandler::HandleRecallPortPlayerCommand(const char* args, WorldSession* 
     if (const auto recall = sMySQLStore.getRecallByName(args))
     {
         sGMLog.writefromsession(m_session, "ported %s to %s ( map: %u, x: %f, y: %f, z: %f, 0: %f )", player->getName().c_str(), recall->name.c_str(), recall->mapId, recall->location.x, recall->location.y, recall->location.z, recall->location.o);
-        if (player->GetSession() && (player->GetSession()->CanUseCommand('a') || !m_session->GetPlayer()->m_isGmInvisible))
-            player->GetSession()->SystemMessage("%s teleported you to location %s!", m_session->GetPlayer()->getName().c_str(), recall->name.c_str());
+        if (player->getSession() && (player->getSession()->CanUseCommand('a') || !m_session->GetPlayer()->m_isGmInvisible))
+            player->getSession()->SystemMessage("%s teleported you to location %s!", m_session->GetPlayer()->getName().c_str(), recall->name.c_str());
 
         if (player->GetInstanceID() != m_session->GetPlayer()->GetInstanceID())
-            sEventMgr.AddEvent(player, &Player::EventSafeTeleport, recall->mapId, uint32_t(0), recall->location, EVENT_PLAYER_TELEPORT, 1, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+            sEventMgr.AddEvent(player, &Player::eventTeleport, recall->mapId, recall->location, uint32_t(0), EVENT_PLAYER_TELEPORT, 1, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
         else
-            player->SafeTeleport(recall->mapId, 0, recall->location);
+            player->safeTeleport(recall->mapId, 0, recall->location);
 
         return true;
     }

@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@
 #define SKILLNAMEMGR_H
 
 #include "Storage/DBC/DBCStores.h"
+#include "Server/World.h"
 
 enum SpellTreeName
 {
@@ -89,7 +90,7 @@ class SkillNameMgr
 
                 uint32 SkillID = skill_line->id;
 #if VERSION_STRING < Cata
-                char* SkillName = skill_line->Name[0];
+                char* SkillName = skill_line->Name[sWorld.getDbcLocaleLanguageId()];
 #else
                 char* SkillName = skill_line->Name;
 #endif

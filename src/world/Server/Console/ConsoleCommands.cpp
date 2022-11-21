@@ -1,9 +1,7 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
-
-#include "StdAfx.h"
 
 #include "ConsoleCommands.h"
 #include <git_version.h>
@@ -13,9 +11,8 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Master.h"
 #include "crc32.h"
 #include "Server/World.h"
-#include "Server/World.Legacy.h"
-#include "Objects/ObjectMgr.h"
-
+#include "Management/ObjectMgr.h"
+#include "Server/Script/ScriptMgr.h"
 
 bool handleSendChatAnnounceCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool /*isWebClient*/)
 {
@@ -122,11 +119,11 @@ bool handleServerInfoCommand(BaseConsole* baseConsole, int /*argumentCount*/, st
     sObjectMgr._playerslock.lock();
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
-        if (itr->second->GetSession())
+        if (itr->second->getSession())
         {
             onlineCount++;
-            avgLatency += itr->second->GetSession()->GetLatency();
-            if (itr->second->GetSession()->GetPermissionCount())
+            avgLatency += itr->second->getSession()->GetLatency();
+            if (itr->second->getSession()->GetPermissionCount())
                 gmCount++;
         }
     }
@@ -135,19 +132,20 @@ bool handleServerInfoCommand(BaseConsole* baseConsole, int /*argumentCount*/, st
     if (isWebClient)
     {
         // send pure data to webclient
-        baseConsole->Write("'%d', '%.3f', '%3.2f', '%4.2f'\r\n", clientsNum, onlineCount ? ((float)((float)avgLatency / (float)onlineCount)) : 0.0f, sWorld.getCPUUsage(), sWorld.getRAMUsage());
+        baseConsole->Write("'%d', '%.3f', '%3.2f', '%4.2f'\r\n", clientsNum, onlineCount ? (float)avgLatency / (float)onlineCount : 0.0f, sWorld.getCPUUsage(), sWorld.getRAMUsage());
     }
     else
     {
         baseConsole->Write("======================================================================\r\n");
         baseConsole->Write("Server Information: \r\n");
         baseConsole->Write("======================================================================\r\n");
-        baseConsole->Write("Server Revision: AscEmu %s/%s-%s-%s (www.ascemu.org)\r\n", BUILD_HASH_STR, CONFIG, PLATFORM_TEXT, ARCH);
+        baseConsole->Write("Server Revision: AscEmu %s-%s-%s (www.ascemu.org)\r\n", CONFIG, AE_PLATFORM, AE_ARCHITECTURE);
+        baseConsole->Write("Build hash: %s\r\n", BUILD_HASH_STR);
         baseConsole->Write("Server Uptime: %s\r\n", sWorld.getWorldUptimeString().c_str());
         baseConsole->Write("Current Players: %d (%d GMs, %d queued)\r\n", clientsNum, gmCount, 0);
         baseConsole->Write("Active Thread Count: %u\r\n", ThreadPool.GetActiveThreadCount());
         baseConsole->Write("Free Thread Count: %u\r\n", ThreadPool.GetFreeThreadCount());
-        baseConsole->Write("Average Latency: %.3fms\r\n", onlineCount ? ((float)((float)avgLatency / (float)onlineCount)) : 0.0f);
+        baseConsole->Write("Average Latency: %.3fms\r\n", onlineCount ? (float)avgLatency / (float)onlineCount : 0.0f);
         baseConsole->Write("CPU Usage: %3.2f %%\r\n", sWorld.getCPUUsage());
         baseConsole->Write("RAM Usage: %4.2f MB\r\n", sWorld.getRAMUsage());
         baseConsole->Write("SQL Query Cache Size (World): %u queries delayed\r\n", WorldDatabase.GetQueueSize());
@@ -162,22 +160,22 @@ bool handleServerInfoCommand(BaseConsole* baseConsole, int /*argumentCount*/, st
 bool handleOnlineGmsCommand(BaseConsole* baseConsole, int /*argumentCount*/, std::string /*consoleInput*/, bool /*isWebClient*/)
 {
     baseConsole->Write("There are the following GM's online on this server: \r\n");
-    baseConsole->Write("======================================================\r\n");
-    baseConsole->Write("| %21s | %15s | % 03s  |\r\n", "Name", "Permissions", "Latency");
-    baseConsole->Write("======================================================\r\n");
+    baseConsole->Write("======================================================================\r\n");
+    baseConsole->Write("| %21s | %15s | % 03s                                                |\r\n", "Name", "Permissions", "Latency");
+    baseConsole->Write("======================================================================\r\n");
 
     sObjectMgr._playerslock.lock();
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
-        if (itr->second->GetSession()->GetPermissionCount())
+        if (itr->second->getSession()->GetPermissionCount())
         {
-            baseConsole->Write("| %21s | %15s | %03u ms |\r\n", itr->second->getName().c_str(), itr->second->GetSession()->GetPermissions(),
-                itr->second->GetSession()->GetLatency());
+            baseConsole->Write("| %21s | %15s | %03u ms |\r\n", itr->second->getName().c_str(), itr->second->getSession()->GetPermissions(),
+                itr->second->getSession()->GetLatency());
         }
     }
     sObjectMgr._playerslock.unlock();
 
-    baseConsole->Write("======================================================\r\n\r\n");
+    baseConsole->Write("======================================================================\r\n\r\n");
 
     return true;
 }
@@ -208,7 +206,7 @@ bool handleKickPlayerCommand(BaseConsole* baseConsole, int argumentCount, std::s
     worldAnnounce << MSG_COLOR_LIGHTBLUE << "Console:|r " << player->getName().c_str() << " was removed from the server. Reason: " << kickReason;
     sWorld.sendMessageToAll(worldAnnounce.str());
 
-    player->BroadcastMessage("You are now being removed by the game by an administrator via the console. Reason: %s", kickReason.c_str());
+    player->broadcastMessage("You are now being removed by the game by an administrator via the console. Reason: %s", kickReason.c_str());
     player->kickFromServer(5000);
     baseConsole->Write("Kicked player %s.\r\n", player->getName().c_str());
 
@@ -236,19 +234,19 @@ bool handleMotdCommand(BaseConsole* baseConsole, int argumentCount, std::string 
 bool handleListOnlinePlayersCommand(BaseConsole* baseConsole, int /*argumentCount*/, std::string /*consoleInput*/, bool /*isWebClient*/)
 {
     baseConsole->Write("There following players online on this server: \r\n");
-    baseConsole->Write("======================================================\r\n");
-    baseConsole->Write("| %21s | %15s | % 03s  |\r\n", "Name", "Level", "Latency");
-    baseConsole->Write("======================================================\r\n");
+    baseConsole->Write("======================================================================\r\n");
+    baseConsole->Write("| %21s | %15s | % 03s                  |\r\n", "Name", "Level", "Latency");
+    baseConsole->Write("======================================================================\r\n");
 
     sObjectMgr._playerslock.lock();
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
-        baseConsole->Write("| %21s | %15u | %03u ms |\r\n", itr->second->getName().c_str(), itr->second->GetSession()->GetPlayer()->getLevel(),
-            itr->second->GetSession()->GetLatency());
+        baseConsole->Write("| %21s | %15u | %03u ms                   |\r\n", itr->second->getName().c_str(), itr->second->getSession()->GetPlayer()->getLevel(),
+            itr->second->getSession()->GetLatency());
     }
     sObjectMgr._playerslock.unlock();
 
-    baseConsole->Write("======================================================\r\n\r\n");
+    baseConsole->Write("======================================================================\r\n\r\n");
     return true;
 }
 
@@ -265,11 +263,16 @@ bool handlePlayerInfoCommand(BaseConsole* baseConsole, int argumentCount, std::s
     }
 
     baseConsole->Write("Player: %s\r\n", player->getName().c_str());
-    baseConsole->Write("Race: %s\r\n", player->myRace->name[0]);
-    baseConsole->Write("Class: %s\r\n", player->myClass->name[0]);
-    baseConsole->Write("IP: %s\r\n", player->GetSession()->GetSocket() ? player->GetSession()->GetSocket()->GetRemoteIP().c_str() : "disconnected");
+#if VERSION_STRING < Cata
+    baseConsole->Write("Race: %s\r\n", player->getDbcRaceEntry()->name[sWorld.getDbcLocaleLanguageId()]);
+    baseConsole->Write("Class: %s\r\n", player->getDbcClassEntry()->name[sWorld.getDbcLocaleLanguageId()]);
+#else
+    baseConsole->Write("Race: %s\r\n", player->getDbcRaceEntry()->name);
+    baseConsole->Write("Class: %s\r\n", player->getDbcClassEntry()->name);
+#endif
+    baseConsole->Write("IP: %s\r\n", player->getSession()->GetSocket() ? player->getSession()->GetSocket()->GetRemoteIP().c_str() : "disconnected");
     baseConsole->Write("Level: %u\r\n", player->getLevel());
-    baseConsole->Write("Account: %s\r\n", player->GetSession()->GetAccountNameS());
+    baseConsole->Write("Account: %s\r\n", player->getSession()->GetAccountNameS());
     return true;
 }
 
@@ -282,8 +285,8 @@ bool handleShutDownServerCommand(BaseConsole* baseConsole, int /*argumentCount*/
         sObjectMgr._playerslock.lock();
         for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
         {
-            if (itr->second->GetSession())
-                itr->second->SaveToDB(false);
+            if (itr->second->getSession())
+                itr->second->saveToDB(false);
         }
         sObjectMgr._playerslock.unlock();
 
@@ -360,7 +363,7 @@ bool handleWhisperCommand(BaseConsole* baseConsole, int argumentCount, std::stri
     std::stringstream whisperOut;
     whisperOut << MSG_COLOR_LIGHTBLUE << "Console whisper: |r" << consoleInput;
 
-    player->BroadcastMessage(whisperOut.str().c_str());
+    player->broadcastMessage(whisperOut.str().c_str());
     baseConsole->Write("Message '%s' sent to player %s.\r\n", consoleInput.c_str(), player->getName().c_str());
 
     return true;
@@ -391,7 +394,7 @@ bool handleRevivePlayerCommand(BaseConsole* baseConsole, int argumentCount, std:
 
     if (player->isDead())
     {
-        player->RemoteRevive();
+        player->setResurrect();
         baseConsole->Write("Revived player %s.\r\n", player->getName().c_str());
     }
     else
@@ -427,7 +430,7 @@ bool handlePrintTimeDateCommand(BaseConsole* baseConsole, int /*argumentCount*/,
     std::string current_time = Util::GetCurrentDateTimeString();
 
     std::stringstream currentTimeStream;
-    currentTimeStream << "Date and time according to localtime() (american style): " << current_time << std::endl;
+    currentTimeStream << "Date and time according to localtime() (american style): " << current_time << "\n";
 
     baseConsole->Write(currentTimeStream.str().c_str());
 
@@ -438,7 +441,7 @@ bool handleGetAccountsCommand(BaseConsole* baseConsole, int /*argumentCount*/, s
 {
     sLogonCommHandler.requestAccountData();
 
-    std::cout << "Command result is: " << sLogonCommHandler.accountResult << std::endl;
+    std::cout << "Command result is: " << sLogonCommHandler.accountResult << "\n";
 
     baseConsole->Write("%s\r\n", sLogonCommHandler.accountResult.c_str());
 

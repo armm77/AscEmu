@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2011 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,14 +18,14 @@
  */
 
 #include "Setup.h"
-#include "Management/Item.h"
+#include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Spell/SpellAuras.h"
 #include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.h"
-#include <Spell/Definitions/SpellIsFlags.h>
-#include <Spell/Definitions/SpellMechanics.h>
+#include "Spell/Definitions/ProcFlags.hpp"
+#include <Spell/Definitions/SpellIsFlags.hpp>
+#include <Spell/Definitions/SpellMechanics.hpp>
 
 //Alice : Correct formula for Rogue - Preparation
 
@@ -43,7 +43,7 @@ bool Preparation(uint8_t /*effectIndex*/, Spell* pSpell)
     pSpell->getPlayerCaster()->clearCooldownForSpell(26889);         // Vanish Rank 3
     pSpell->getPlayerCaster()->clearCooldownForSpell(14177);         // Cold Blood
     pSpell->getPlayerCaster()->clearCooldownForSpell(36554);         // Shadowstep
-    if (pSpell->getPlayerCaster()->HasAura(56819))                   // Glyph of Preparation item = 42968 casts 57127 that apply aura 56819.
+    if (pSpell->getPlayerCaster()->hasAurasWithId(56819))                   // Glyph of Preparation item = 42968 casts 57127 that apply aura 56819.
     {
         pSpell->getPlayerCaster()->clearCooldownForSpell(13877);     // Blade Flurry
         pSpell->getPlayerCaster()->clearCooldownForSpell(51722);     // Dismantle
@@ -63,7 +63,7 @@ bool Shiv(uint8_t /*effectIndex*/, Spell* pSpell)
     if (!it)
         return true;
 
-    EnchantmentInstance* ench = it->GetEnchantment(TEMP_ENCHANTMENT_SLOT);
+    EnchantmentInstance* ench = it->getEnchantment(TEMP_ENCHANTMENT_SLOT);
     if (ench)
     {
         DBC::Structures::SpellItemEnchantmentEntry const* Entry = ench->Enchantment;
@@ -92,8 +92,14 @@ bool ImprovedSprint(uint8_t effectIndex, Spell* pSpell)
         if (target == NULL)
             return true;
 
-        target->RemoveAllAurasByMechanic(MECHANIC_ENSNARED, 0, true);
-        target->RemoveAllAurasByMechanic(MECHANIC_ROOTED, 0, true);
+        SpellMechanic mechanics[3] =
+        {
+            MECHANIC_ENSNARED,
+            MECHANIC_ROOTED,
+            MECHANIC_NONE
+        };
+
+        target->removeAllAurasBySpellMechanic(mechanics);
     }
 
     return true;
@@ -106,12 +112,10 @@ bool CloakOfShadows(uint8_t /*effectIndex*/, Spell* s)
     if (!unitTarget || !unitTarget->isAlive())
         return false;
 
-    Aura* pAura;
-    for (uint32_t j = MAX_NEGATIVE_AURAS_EXTEDED_START; j < MAX_NEGATIVE_AURAS_EXTEDED_END; ++j)
+    for (uint16_t j = AuraSlots::NEGATIVE_SLOT_START; j < AuraSlots::NEGATIVE_SLOT_END; ++j)
     {
-        pAura = unitTarget->m_auras[j];
-        if (pAura != NULL && !pAura->IsPassive()
-            && pAura->isNegative()
+        auto pAura = unitTarget->getAuraWithAuraSlot(j);
+        if (pAura != NULL
             && !(pAura->getSpellInfo()->getAttributes() & ATTRIBUTES_IGNORE_INVULNERABILITY)
             && pAura->getSpellInfo()->getFirstSchoolFromSchoolMask() != 0
             )
@@ -131,7 +135,7 @@ bool CheatDeath(uint8_t /*effectIndex*/, Aura* a, bool apply)
 
     if (p_target != NULL)
     {
-        int32_t m = (int32_t)(8.0f * p_target->CalcRating(PCR_MELEE_CRIT_RESILIENCE));
+        int32_t m = (int32_t)(8.0f * p_target->calcRating(CR_HIT_TAKEN_MELEE));
         if (m > 90)
             m = 90;
 
@@ -147,7 +151,7 @@ bool CheatDeath(uint8_t /*effectIndex*/, Aura* a, bool apply)
         }
 
         for (uint32_t x = 0; x < 7; x++)
-            p_target->DamageTakenPctMod[x] += val;
+            p_target->m_damageTakenPctMod[x] += val;
     }
 
     return true;
@@ -192,8 +196,7 @@ bool PreyOnTheWeakPeriodicDummy(uint8_t /*effectIndex*/, Aura* a, bool apply)
 
     if (p_target != NULL && p_target->getClass() == ROGUE)
     {
-
-        Unit* target = p_target->GetMapMgr()->GetUnit(p_target->CombatStatus.GetPrimaryAttackTarget());
+        Unit* target = p_target->getWorldMapUnit(p_target->getTargetGuid());
         if (target == NULL)
             return true;
 

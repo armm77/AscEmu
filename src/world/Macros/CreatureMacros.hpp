@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -15,10 +15,7 @@ This file is released under the MIT license. See README-MIT for more information
 #define TRAINER_TYPE_MAX 16
 
 /// -
-#define TRAINER_STATUS_LEARNABLE 0
+#define CREATURE_AI_TEXT_COUNT 5
 
 /// -
-#define TRAINER_STATUS_NOT_LEARNABLE 1
-
-/// -
-#define TRAINER_STATUS_ALREADY_HAVE 2
+#define GOSSIP_EMOTE_COUNT 3

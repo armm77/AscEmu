@@ -1,12 +1,11 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include "WorldConf.h"
-#include <cstdint>
 
 #if VERSION_STRING <= TBC
 enum MovementFlags
@@ -220,7 +219,7 @@ enum MovementFlags
     MOVEFLAG_FULL_FALLING_MASK      = 0xE000
 };
 
-enum MovementFlags2
+enum MovementFlags2 : uint16_t
 {
     MOVEFLAG2_NONE                  = 0x0000,
     MOVEFLAG2_NO_STRAFING           = 0x0001,
@@ -332,7 +331,10 @@ enum MovementStatusElements
     MSEByteParam,
     MSECustomSpeed,
     MSEEnd,
-    MSE_COUNT
+    MSE_COUNT,
+
+    MSEExtraFloat,
+    MSEExtraInt8
 };
 
 static MovementStatusElements PlayerMoveSequence[] =
@@ -4256,7 +4258,7 @@ static MovementStatusElements MoveUpdateTeleport[] =
     MSEEnd,
 };
 
-static MovementStatusElements* GetMovementStatusElementsSequence(uint16_t opcode)
+static inline MovementStatusElements* GetMovementStatusElementsSequence(uint16_t opcode)
 {
     switch (opcode)
     {
@@ -4430,4 +4432,26 @@ static MovementStatusElements* GetMovementStatusElementsSequence(uint16_t opcode
     }
 }
 
+class ExtraMovementStatusElement
+{
+public:
+    ExtraMovementStatusElement(MovementStatusElements const* elements) : _elements(elements), _index(0) { }
+
+    void readNextElement(ByteBuffer& packet);
+    void writeNextElement(ByteBuffer& packet);
+
+    struct
+    {
+        ObjectGuid guid;
+        float floatData;
+        int8_t byteData;
+    } Data;
+
+protected:
+    void resetIndex() { _index = 0; }
+
+private:
+    MovementStatusElements const* _elements;
+    uint32_t _index;
+};
 #endif

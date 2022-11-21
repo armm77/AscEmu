@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -81,18 +81,14 @@ LuaSpellEntry luaSpellVars[] =
     //{ "manaPerSecondPerLevel", 0, offsetof(SpellInfo, manaPerSecondPerLevel) },
     //{ "rangeIndex", 0, offsetof(SpellInfo, rangeIndex) },
     //{ "speed", 3, offsetof(SpellInfo, speed) },
-#if VERSION_STRING < Cata
     //{ "modalNextSpell", 0, offsetof(SpellInfo, modalNextSpell) },
-#endif
     //{ "maxstack", 0, offsetof(SpellInfo, maxstack) },
     //{ "Totem", 0, offsetof(SpellInfo, Totem[0]) },
     //{ "Reagent", 0, offsetof(SpellInfo, Reagent[0]) },
     //{ "ReagentCount", 0, offsetof(SpellInfo, ReagentCount[0]) },
     //{ "EquippedItemClass", 0, offsetof(SpellInfo, EquippedItemClass) },
     //{ "EquippedItemSubClass", 0, offsetof(SpellInfo, EquippedItemSubClass) },
-#if VERSION_STRING < Cata
     //{ "RequiredItemFlags", 0, offsetof(SpellInfo, RequiredItemFlags) },
-#endif
     //{ "Effect", 0, offsetof(SpellInfo, Effect[0]) },
     //{ "EffectDieSides", 0, offsetof(SpellInfo, EffectDieSides[0]) },
     //{"EffectBaseDice", 0, offsetof(SpellEntry, EffectBaseDice[0])},
@@ -112,16 +108,12 @@ LuaSpellEntry luaSpellVars[] =
     //{ "EffectMiscValueB", 0, offsetof(SpellInfo, EffectMiscValueB[0]) },
     //{ "EffectTriggerSpell", 0, offsetof(SpellInfo, EffectTriggerSpell[0]) },
     //{ "EffectPointsPerComboPoint", 3, offsetof(SpellInfo, EffectPointsPerComboPoint[0]) },
-#if VERSION_STRING < Cata
     //{ "EffectSpellClassMask", 0, offsetof(SpellInfo, EffectSpellClassMask[0][0]) },
-#endif
     //{ "SpellVisual", 0, offsetof(SpellInfo, SpellVisual) },
     //{ "field114", 0, offsetof(SpellInfo, field114) },
     //{ "spellIconID", 0, offsetof(SpellInfo, spellIconID) },
     //{ "activeIconID", 0, offsetof(SpellInfo, activeIconID) },
-#if VERSION_STRING < Cata
     //{ "spellPriority", 0, offsetof(SpellInfo, spellPriority) },
-#endif
     //{ "Name", 1, offsetof(SpellInfo, Name) },
     //{ "Rank", 1, offsetof(SpellInfo, Rank) },
     //{ "Description", 1, offsetof(SpellInfo, Description) },
@@ -135,15 +127,11 @@ LuaSpellEntry luaSpellVars[] =
     //{ "MaxTargets", 0, offsetof(SpellInfo, MaxTargets) },
     //{ "Spell_Dmg_Type", 0, offsetof(SpellInfo, Spell_Dmg_Type) },
     //{ "PreventionType", 0, offsetof(SpellInfo, PreventionType) },
-#if VERSION_STRING < Cata
     //{ "StanceBarOrder", 0, offsetof(SpellInfo, StanceBarOrder) },
-#endif
     //{ "dmg_multiplier", 3, offsetof(SpellInfo, dmg_multiplier[0]) },
-#if VERSION_STRING < Cata
     //{ "MinFactionID", 0, offsetof(SpellInfo, MinFactionID) },
     //{ "MinReputation", 0, offsetof(SpellInfo, MinReputation) },
     //{ "RequiredAuraVision", 0, offsetof(SpellInfo, RequiredAuraVision) },
-#endif
     //{ "TotemCategory", 0, offsetof(SpellInfo, TotemCategory[0]) },
     //{ "RequiresAreaId", 0, offsetof(SpellInfo, RequiresAreaId) },
     //{ "School", 0, offsetof(SpellInfo, School) },
@@ -189,21 +177,21 @@ namespace LuaSpell
             PUSH_UNIT(L, sp->getUnitCaster());
             return 1;
         }
-        else if (sp->getGameObjectCaster())  //gameobject
+
+        if (sp->getGameObjectCaster())  //gameobject
         {
             PUSH_GO(L, sp->getGameObjectCaster());
             return 1;
         }
-        else if (sp->getItemCaster())  //item
+        
+        if (sp->getItemCaster())  //item
         {
             PUSH_ITEM(L, sp->getItemCaster());
             return 1;
         }
-        else
-        {
-            lua_pushnil(L);
-            return 1;
-        }
+
+        lua_pushnil(L);
+        return 1;
     }
 
     int GetEntry(lua_State* L, Spell* sp)
@@ -281,22 +269,29 @@ namespace LuaSpell
     int GetTarget(lua_State* L, Spell* sp)
     {
         if (!sp || !sp->getCaster()->IsInWorld())
-            RET_NIL()
+        {
+            lua_pushnil(L);
+            return 1;
+        }
 
-            if (sp->m_targets.getUnitTarget())
+        if (sp->m_targets.getUnitTarget())
+        {
+            PUSH_UNIT(L, sp->getCaster()->getWorldMap()->getUnit(sp->m_targets.getUnitTarget()));
+            return 1;
+        }
+        
+        if (sp->m_targets.getItemTarget())
+        {
+            if (!sp->getPlayerCaster())
             {
-                PUSH_UNIT(L, sp->getCaster()->GetMapMgr()->GetUnit(sp->m_targets.getUnitTarget()));
+                lua_pushnil(L);
+                PUSH_ITEM(L, sp->getPlayerCaster()->getItemInterface()->GetItemByGUID(sp->m_targets.getItemTarget()));
                 return 1;
             }
-            else if (sp->m_targets.getItemTarget())
-            {
-                if (!sp->getPlayerCaster())
-                    RET_NIL()
-                    PUSH_ITEM(L, sp->getPlayerCaster()->getItemInterface()->GetItemByGUID(sp->m_targets.getItemTarget()));
-                return 1;
-            }
-            else
-                RET_NIL()
+        }
+
+        lua_pushnil(L);
+        return 1;
     }
 
     int IsStealthSpell(lua_State* L, Spell* sp)
@@ -415,7 +410,10 @@ namespace LuaSpell
         SpellInfo const* proto = sp->getSpellInfo();
         LuaSpellEntry l = GetLuaSpellEntryByName(var);
         if (!l.name)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
         switch (l.typeId)  //0: int, 1: char*, 2: bool, 3: float
         {
             case 0:

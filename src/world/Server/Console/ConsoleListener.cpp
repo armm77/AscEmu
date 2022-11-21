@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,20 +19,15 @@
  *
  */
 
-#include "StdAfx.h"
-
 #include <cstdint>
 #include <Network/Network.h>
 #include <Config/Config.h>
-#include <git_version.h>
-
 #include "BaseConsole.h"
 #include "ConsoleCommands.h"
 #include "Server/World.h"
-#include "Server/World.Legacy.h"
-
 #include "ConsoleSocket.h"
 #include "ConsoleAuthMgr.h"
+#include "Threading/LegacyThreadBase.h"
 
 ListenSocket<ConsoleSocket>* g_pListenSocket = nullptr;
 
@@ -73,10 +68,6 @@ bool StartConsoleListener()
     uint32_t consoleListenPort = worldConfig.remoteConsole.port;
 
     g_pListenSocket = new ListenSocket<ConsoleSocket>(consoleListenHost.c_str(), consoleListenPort);
-    if (g_pListenSocket == nullptr)
-    {
-        return false;
-    }
 
     if (g_pListenSocket->IsOpen() == false)
     {
@@ -92,10 +83,12 @@ bool StartConsoleListener()
     return true;
 }
 
+#ifdef WIN32
 ThreadBase* GetConsoleListener()
 {
-    return (ThreadBase*)g_pListenSocket;
+    return static_cast<ThreadBase*>(g_pListenSocket);
 }
+#endif
 
 RemoteConsole::RemoteConsole(ConsoleSocket* pSocket)
 {
@@ -178,7 +171,7 @@ void processConsoleInput(BaseConsole* baseConsole, std::string consoleInput, boo
         if (commandName.empty())
             break;
 
-        if (commandName.compare("help") == 0 || commandName.compare("?") == 0)
+        if (commandName.compare("Help") == 0 || commandName.compare("help") == 0 || commandName.compare("?") == 0)
         {
             isHelpCommand = true;
             break;
@@ -196,20 +189,20 @@ void processConsoleInput(BaseConsole* baseConsole, std::string consoleInput, boo
     {
         if (isWebClient == false)
         {
-            baseConsole->Write("Show Command list with ----- :%s\r\n", commandName.c_str());
-
-            baseConsole->Write("===============================================================================\r\n");
-            baseConsole->Write("| %15s | %57s |\r\n", "Name", "Arguments");
-            baseConsole->Write("===============================================================================\r\n");
+            baseConsole->Write("================================================================================\r\n");
+            baseConsole->Write("| Console::Help                                                                |\r\n");
+            baseConsole->Write("================================================================================\r\n");
+            baseConsole->Write("| %20s | %53s |\r\n", "Name", "Arguments");
+            baseConsole->Write("================================================================================\r\n");
 
             for (int j = 0; Commands[j].consoleCommand.empty() == false; ++j)
             {
-                baseConsole->Write("| %15s | %57s |\r\n", Commands[j].consoleCommand.c_str(), Commands[j].argumentFormat.c_str());
+                baseConsole->Write("| %20s | %53s |\r\n", Commands[j].consoleCommand.c_str(), Commands[j].argumentFormat.c_str());
             }
 
-            baseConsole->Write("===============================================================================\r\n");
-            baseConsole->Write("| type 'quit' to terminate a Remote Console Session                           |\r\n");
-            baseConsole->Write("===============================================================================\r\n");
+            baseConsole->Write("================================================================================\r\n");
+            baseConsole->Write("| type 'quit' to terminate a Remote Console Session                            |\r\n");
+            baseConsole->Write("================================================================================\r\n");
         }
     }
     else

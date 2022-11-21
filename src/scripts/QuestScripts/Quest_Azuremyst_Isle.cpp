@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,18 +20,20 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
- // Chieftain Oomooroo
+// Chieftain Oomooroo
 class ChieftainOomoorooQAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ChieftainOomoorooQAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ChieftainOomoorooQAI(c); }
     explicit ChieftainOomoorooQAI(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnDied(Unit* mKiller)
+    void OnDied(Unit* mKiller) override
     {
         if (mKiller->isPlayer())
         {
-            static_cast<Player*>(mKiller)->AddQuestKill(9573, 1, 0);
+            static_cast<Player*>(mKiller)->addQuestKill(9573, 1, 0);
         }
     }
 };

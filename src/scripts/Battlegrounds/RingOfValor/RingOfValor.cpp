@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -18,11 +18,11 @@
  */
 
 #include "RingOfValor.h"
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Objects/GameObject.h"
 #include "Server/Master.h"
 
-RingOfValor::RingOfValor(MapMgr* mgr, uint32_t id, uint32_t lgroup, uint32_t t, uint32_t players_per_side) :
+RingOfValor::RingOfValor(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t, uint32_t players_per_side) :
     Arena(mgr, id, lgroup, t, players_per_side)
 {}
 
@@ -33,24 +33,24 @@ void RingOfValor::OnCreate()
 {
     GameObject* obj = nullptr;
 
-    obj = SpawnGameObject(194030, 618, 763.93f, -295.0f, 26.0f, 0.0f, 40, 1375, 1.0f);
+    obj = spawnGameObject(194030, LocationVector(763.93f, -295.0f, 26.0f, 0.0f), 40, 1375, 1.0f);
     obj->PushToWorld(m_mapMgr);
 
-    obj = SpawnGameObject(194031, 618, 763.93f, -274.0f, 26.0f, 0.0f, 40, 1375, 1.0f);
+    obj = spawnGameObject(194031, LocationVector(763.93f, -274.0f, 26.0f, 0.0f), 40, 1375, 1.0f);
     obj->PushToWorld(m_mapMgr);
 
-    obj = SpawnGameObject(193458, 618, 763.630f, -261.783f, 26.0f, 0.0f, 40, 1375, 1.0f);
+    obj = spawnGameObject(193458, LocationVector(763.630f, -261.783f, 26.0f, 0.0f), 40, 1375, 1.0f);
     obj->PushToWorld(m_mapMgr);
 
-    obj = SpawnGameObject(193461, 618, 723.522f, -284.428f, 24.6f, 0.0f, 40, 1375, 1.0f);
+    obj = spawnGameObject(193461, LocationVector(723.522f, -284.428f, 24.6f, 0.0f), 40, 1375, 1.0f);
     obj->PushToWorld(m_mapMgr);
 
-    obj = SpawnGameObject(192392, 618, 763.93f, -295.0f, 27.0f, 0.0f, 32, 1375, 1.0f);
+    obj = spawnGameObject(192392, LocationVector(763.93f, -295.0f, 27.0f, 0.0f), 32, 1375, 1.0f);
     obj->setState(GO_STATE_CLOSED);
     obj->setAnimationProgress(100);
     m_gates.insert(obj);
 
-    obj = SpawnGameObject(192391, 618, 763.93f, -274.0f, 27.0f, 0.0f, 32, 1375, 1.0f);
+    obj = spawnGameObject(192391, LocationVector(763.93f, -274.0f, 27.0f, 0.0f), 32, 1375, 1.0f);
     obj->setState(GO_STATE_CLOSED);
     obj->setAnimationProgress(100);
     m_gates.insert(obj);
@@ -85,6 +85,6 @@ bool RingOfValor::HookHandleRepop(Player* plr)
 {
     LocationVector dest;
     dest.ChangeCoords({ 762.91f, -284.28f, 28.28f });
-    plr->SafeTeleport(m_mapMgr->GetMapId(), m_mapMgr->GetInstanceID(), dest);
+    plr->safeTeleport(m_mapMgr->getBaseMap()->getMapId(), m_mapMgr->getInstanceId(), dest);
     return true;
 }

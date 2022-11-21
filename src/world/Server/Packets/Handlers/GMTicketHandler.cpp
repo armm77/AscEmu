@@ -1,15 +1,12 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
-
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 #include "Server/MainServerDefines.h"
-#include "Config/Config.h"
-#include "Management/Channel.h"
-#include "Management/ChannelMgr.h"
+#include "Chat/Channel.hpp"
+#include "Chat/ChannelMgr.hpp"
 #include "Server/Packets/CmsgGmTicketCreate.h"
 #include "Server/Packets/SmsgGmTicketCreate.h"
 #include "Server/Packets/CmsgGmTicketUpdateText.h"
@@ -19,7 +16,10 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/SmsgGmTicketSystemstatus.h"
 #include "Server/Packets/CmsgGmReportLag.h"
 #include "Server/Packets/CmsgGmSurveySubmit.h"
+
+#if VERSION_STRING > WotLK
 #include <zlib.h>
+#endif
 
 using namespace AscEmu::Packets;
 
@@ -119,7 +119,7 @@ void WorldSession::handleGMTicketUpdateOpcode(WorldPacket& recvPacket)
         ss << GM_TICKET_CHAT_OPCODE_UPDATED;
         ss << ":";
         ss << ticket->guid;
-        channel->Say(_player, ss.str().c_str(), nullptr, true);
+        channel->say(_player, ss.str().c_str(), nullptr, true);
     }
 #endif
 }
@@ -145,7 +145,7 @@ void WorldSession::handleGMTicketDeleteOpcode(WorldPacket& /*recvPacket*/)
         ss << ":";
         ss << ticket->guid;
 #endif
-        channel->Say(_player, ss.str().c_str(), nullptr, true);
+        channel->say(_player, ss.str(), nullptr, true);
     }
 }
 
@@ -218,7 +218,7 @@ void WorldSession::handleGMTicketCreateOpcode(WorldPacket& recvPacket)
         ss << ":" << ticket->level;
         ss << ":" << ticket->name;
 #endif
-        channel->Say(_player, ss.str().c_str(), nullptr, true);
+        channel->say(_player, ss.str(), nullptr, true);
     }
 }
 

@@ -1,13 +1,13 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/MainServerDefines.h"
 #include "Chat/ChatHandler.hpp"
 #include "Server/WorldSession.h"
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 
 //.gm active
 bool ChatHandler::HandleGMActiveCommand(const char* args, WorldSession* m_session)
@@ -22,9 +22,9 @@ bool ChatHandler::HandleGMActiveCommand(const char* args, WorldSession* m_sessio
             BlueSystemMessage(m_session, "<GM> Will no longer show in chat messages or above your name until you use this command again.");
         }
         player->removePlayerFlags(PLAYER_FLAG_GM);
-        player->SetFaction(player->GetInitialFactionId());
-        player->UpdatePvPArea();
-        player->UpdateVisibility();
+        player->setFaction(player->getInitialFactionId());
+        player->updatePvPArea();
+        player->updateVisibility();
     }
     else
     {
@@ -34,9 +34,9 @@ bool ChatHandler::HandleGMActiveCommand(const char* args, WorldSession* m_sessio
         SystemMessage(m_session, "GM Flag set.");
         BlueSystemMessage(m_session, "<GM> will now appear above your name and in chat messages until you use this command again.");
         player->addPlayerFlags(PLAYER_FLAG_GM);
-        player->SetFaction(35);
+        player->setFaction(35);
         player->removePvpFlag();
-        player->UpdateVisibility();
+        player->updateVisibility();
     }
     return true;
 }
@@ -148,7 +148,7 @@ bool ChatHandler::HandleGMListCommand(const char* /*args*/, WorldSession* m_sess
     sObjectMgr._playerslock.lock();
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
-        if (itr->second->GetSession()->GetPermissionCount())
+        if (itr->second->getSession()->GetPermissionCount())
         {
             if (!worldConfig.gm.listOnlyActiveGms)
             {
@@ -158,7 +158,7 @@ bool ChatHandler::HandleGMListCommand(const char* /*args*/, WorldSession* m_sess
                 if (worldConfig.gm.hidePermissions && !is_gamemaster)
                     SystemMessage(m_session, " - %s", itr->second->getName().c_str());
                 else
-                    SystemMessage(m_session, " - %s [%s]", itr->second->getName().c_str(), itr->second->GetSession()->GetPermissions());
+                    SystemMessage(m_session, " - %s [%s]", itr->second->getName().c_str(), itr->second->getSession()->GetPermissions());
 
                 print_headline = false;
             }
@@ -172,7 +172,7 @@ bool ChatHandler::HandleGMListCommand(const char* /*args*/, WorldSession* m_sess
                     if (worldConfig.gm.hidePermissions && !is_gamemaster)
                         SystemMessage(m_session, " - %s", itr->second->getName().c_str());
                     else
-                        SystemMessage(m_session, " - %s [%s]", itr->second->getName().c_str(), itr->second->GetSession()->GetPermissions());
+                        SystemMessage(m_session, " - %s [%s]", itr->second->getName().c_str(), itr->second->getSession()->GetPermissions());
 
                     print_headline = false;
                 }

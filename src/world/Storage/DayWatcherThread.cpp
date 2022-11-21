@@ -1,14 +1,16 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
 
-#include "Management/ArenaTeam.h"
+
+#include "Management/ArenaTeam.hpp"
 #include "Server/MainServerDefines.h"
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 #include "DayWatcherThread.h"
+
+#include "Chat/ChatHandler.hpp"
 
 using AscEmu::Threading::AEThread;
 using std::chrono::milliseconds;
@@ -211,11 +213,11 @@ void DayWatcherThread::update_arena()
                 ArenaTeam* team = sObjectMgr.GetArenaTeamByGuid(guid, i);
                 if (team != nullptr)
                 {
-                    const auto arenaTeamMember = team->GetMemberByGuid(guid);
+                    const auto arenaTeamMember = team->getMemberByGuid(guid);
                     if (arenaTeamMember == nullptr || team->m_stats.played_week < 10 || arenaTeamMember->Played_ThisWeek * 100 / team->m_stats.played_week < 30)
                         continue;
 
-                    const double arenaStatsRating = static_cast<double>(team->m_stats.rating);
+                    const double arenaStatsRating = team->m_stats.rating;
                     double anrenaPoints;
 
                     if (arenaStatsRating <= 510.0)
@@ -228,7 +230,7 @@ void DayWatcherThread::update_arena()
                     else
                     {
                         const double power = -0.00412 * arenaStatsRating;
-                        double divisor = pow(static_cast<double>(2.71828), power);
+                        double divisor = pow(2.71828, power);
                         divisor *= 1639.28;
                         divisor += 1.0;
 
@@ -265,11 +267,11 @@ void DayWatcherThread::update_arena()
                 auto player = sObjectMgr.GetPlayer(guid);
                 if (player != nullptr)
                 {
-                    player->AddArenaPoints(arenapoints, false);
+                    player->addArenaPoints(arenapoints, false);
 
                     // update fields (no uint lock)
-                    sEventMgr.AddEvent(player, &Player::UpdateArenaPoints, EVENT_PLAYER_UPDATE, 100, 1, 0);
-                    sChatHandler.SystemMessage(player->GetSession(), "Your arena points have been updated! Check your PvP tab!");
+                    sEventMgr.AddEvent(player, &Player::updateArenaPoints, EVENT_PLAYER_UPDATE, 100, 1, 0);
+                    sChatHandler.SystemMessage(player->getSession(), "Your arena points have been updated! Check your PvP tab!");
                 }
 
                 CharacterDatabase.Execute("UPDATE characters SET arenaPoints = %u WHERE guid = %u", arenapoints, guid);

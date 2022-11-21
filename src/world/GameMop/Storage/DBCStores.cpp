@@ -1,15 +1,14 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
 #include "../world/Storage/DBC/DBCGlobals.hpp"
 #include "Map/Area/AreaStorage.hpp"
 #include "WorldConf.h"
 #include "Server/World.h"
 #include "Spell/SpellAuras.h"
-#include "Units/Players/PlayerDefines.hpp"
+#include "Objects/Units/Players/PlayerDefines.hpp"
 
 #if VERSION_STRING == Mop
 typedef std::map<WMOAreaTableTripple, DBC::Structures::WMOAreaTableEntry const*> WMOAreaInfoByTripple;
@@ -41,8 +40,11 @@ uint8_t powerIndexByClass[MAX_PLAYER_CLASSES][TOTAL_PLAYER_POWER_TYPES];
 SERVER_DECL DBC::DBCStorage<DBC::Structures::CharTitlesEntry> sCharTitlesStore(DBC::Structures::char_titles_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::ChatChannelsEntry> sChatChannelsStore(DBC::Structures::chat_channels_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::GtCombatRatingsEntry> sGtCombatRatingsStore(DBC::Structures::gt_combat_ratings_format);
+SERVER_DECL DBC::DBCStorage<DBC::Structures::GtOCTBaseHPByClassEntry> sGtOCTBaseHPByClassStore(DBC::Structures::gt_oct_base_hp_by_class_format);
+SERVER_DECL DBC::DBCStorage<DBC::Structures::GtOCTBaseMPByClassEntry> sGtOCTBaseMPByClassStore(DBC::Structures::gt_oct_base_mp_by_class_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::CreatureDisplayInfoEntry> sCreatureDisplayInfoStore(DBC::Structures::creature_display_info_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::CreatureDisplayInfoExtraEntry> sCreatureDisplayInfoExtraStore(DBC::Structures::creature_display_info_extra_format);
+SERVER_DECL DBC::DBCStorage<DBC::Structures::CreatureModelDataEntry> sCreatureModelDataStore(DBC::Structures::creature_model_Data_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::CreatureSpellDataEntry> sCreatureSpellDataStore(DBC::Structures::creature_spell_data_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::CreatureFamilyEntry> sCreatureFamilyStore(DBC::Structures::creature_family_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::CurrencyTypesEntry> sCurrencyTypesStore(DBC::Structures::currency_types_format);
@@ -74,6 +76,7 @@ SERVER_DECL DBC::DBCStorage<DBC::Structures::ScalingStatValuesEntry> sScalingSta
 SERVER_DECL DBC::DBCStorage<DBC::Structures::SkillLineAbilityEntry> sSkillLineAbilityStore(DBC::Structures::skill_line_ability_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::SkillLineEntry> sSkillLineStore(DBC::Structures::skill_line_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::SpellCastTimesEntry> sSpellCastTimesStore(DBC::Structures::spell_cast_times_format);
+SERVER_DECL DBC::DBCStorage<DBC::Structures::SpellMiscEntry> sSpellMiscStore(DBC::Structures::spell_misc_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::SpellDifficultyEntry> sSpellDifficultyStore(DBC::Structures::spell_difficulty_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::SpellDurationEntry> sSpellDurationStore(DBC::Structures::spell_duration_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::SpellAuraOptionsEntry> sSpellAuraOptionsStore(DBC::Structures::spell_aura_options_format);
@@ -130,6 +133,8 @@ SERVER_DECL DBC::DBCStorage<DBC::Structures::VehicleSeatEntry> sVehicleSeatStore
 SERVER_DECL DBC::DBCStorage<DBC::Structures::WorldMapAreaEntry> sWorldMapAreaStore(DBC::Structures::world_map_area_entry_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::TransportAnimationEntry> sTransportAnimationStore(DBC::Structures::transport_animation_format);
 SERVER_DECL DBC::DBCStorage<DBC::Structures::TransportRotationEntry> sTransportRotationStore(DBC::Structures::transport_rotation_format);
+MapDifficultyMap sMapDifficultyMap;
+SERVER_DECL DBC::DBCStorage<DBC::Structures::MapDifficultyEntry> sMapDifficultyStore(DBC::Structures::map_difficulty_entry_format);
 
 bool LoadDBCs()
 {
@@ -161,83 +166,84 @@ bool LoadDBCs()
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSkillLineStore, dbc_path, "SkillLine.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSpellStore, dbc_path, "Spell.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sTalentStore, dbc_path, "Talent.dbc");
-    DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sTalentTabStore, dbc_path, "TalentTab.dbc");
-    {
-        std::map< uint32, uint32 > InspectTalentTabPos;
-        std::map< uint32, uint32 > InspectTalentTabSize;
-        std::map< uint32, uint32 > InspectTalentTabBit;
+    //DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sTalentTabStore, dbc_path, "TalentTab.dbc");
+    //{
+    //    std::map< uint32, uint32 > InspectTalentTabPos;
+    //    std::map< uint32, uint32 > InspectTalentTabSize;
+    //    std::map< uint32, uint32 > InspectTalentTabBit;
 
-        uint32 talent_max_rank;
-        uint32 talent_pos;
-        uint32 talent_class;
+    //    uint32 talent_max_rank;
+    //    uint32 talent_pos;
+    //    uint32 talent_class;
 
-        for (uint32 i = 0; i < sTalentStore.GetNumRows(); ++i)
-        {
-            auto talent_info = sTalentStore.LookupEntry(i);
-            if (talent_info == nullptr)
-                continue;
+    //    for (uint32 i = 0; i < sTalentStore.GetNumRows(); ++i)
+    //    {
+    //        auto talent_info = sTalentStore.LookupEntry(i);
+    //        if (talent_info == nullptr)
+    //            continue;
 
-            // Don't add invalid talents or Hunter Pet talents (trees 409, 410 and 411) to the inspect table
-            if (talent_info->TalentTree == 409 || talent_info->TalentTree == 410 || talent_info->TalentTree == 411)
-                continue;
+    //        // Don't add invalid talents or Hunter Pet talents (trees 409, 410 and 411) to the inspect table
+    //        if (talent_info->TalentTree == 409 || talent_info->TalentTree == 410 || talent_info->TalentTree == 411)
+    //            continue;
 
-            auto talent_tab = sTalentTabStore.LookupEntry(talent_info->TalentTree);
-            if (talent_tab == nullptr)
-                continue;
+    //        auto talent_tab = sTalentTabStore.LookupEntry(talent_info->TalentTree);
+    //        if (talent_tab == nullptr)
+    //            continue;
 
-            talent_max_rank = 0;
-            for (uint32 j = 5; j > 0; --j)
-            {
-                if (talent_info->RankID[j - 1])
-                {
-                    talent_max_rank = j;
-                    break;
-                }
-            }
+    //        talent_max_rank = 0;
+    //        for (uint32 j = 5; j > 0; --j)
+    //        {
+    //            if (talent_info->RankID[j - 1])
+    //            {
+    //                talent_max_rank = j;
+    //                break;
+    //            }
+    //        }
 
-            InspectTalentTabBit[(talent_info->Row << 24) + (talent_info->Col << 16) + talent_info->TalentID] = talent_max_rank;
-            InspectTalentTabSize[talent_info->TalentTree] += talent_max_rank;
-        }
+    //        InspectTalentTabBit[(talent_info->Row << 24) + (talent_info->Col << 16) + talent_info->TalentID] = talent_max_rank;
+    //        InspectTalentTabSize[talent_info->TalentTree] += talent_max_rank;
+    //    }
 
-        for (uint32 i = 0; i < sTalentTabStore.GetNumRows(); ++i)
-        {
-            auto talent_tab = sTalentTabStore.LookupEntry(i);
-            if (talent_tab == nullptr)
-                continue;
+    //    for (uint32 i = 0; i < sTalentTabStore.GetNumRows(); ++i)
+    //    {
+    //        auto talent_tab = sTalentTabStore.LookupEntry(i);
+    //        if (talent_tab == nullptr)
+    //            continue;
 
-            if (talent_tab->ClassMask == 0)
-                continue;
+    //        if (talent_tab->ClassMask == 0)
+    //            continue;
 
-            talent_pos = 0;
+    //        talent_pos = 0;
 
-            for (talent_class = 0; talent_class < 12; ++talent_class)
-            {
-                if (talent_tab->ClassMask & (1 << talent_class))
-                    break;
-            }
+    //        for (talent_class = 0; talent_class < 12; ++talent_class)
+    //        {
+    //            if (talent_tab->ClassMask & (1 << talent_class))
+    //                break;
+    //        }
 
-            if (talent_class > 0 && talent_class < 12)
-                InspectTalentTabPages[talent_class][talent_tab->TabPage] = talent_tab->TalentTabID;
+    //        if (talent_class > 0 && talent_class < 12)
+    //            InspectTalentTabPages[talent_class][talent_tab->TabPage] = talent_tab->TalentTabID;
 
-            for (std::map<uint32, uint32>::iterator itr = InspectTalentTabBit.begin(); itr != InspectTalentTabBit.end(); ++itr)
-            {
-                uint32 talent_id = itr->first & 0xFFFF;
-                auto talent_info = sTalentStore.LookupEntry(talent_id);
-                if (talent_info == nullptr)
-                    continue;
+    //        for (std::map<uint32, uint32>::iterator itr = InspectTalentTabBit.begin(); itr != InspectTalentTabBit.end(); ++itr)
+    //        {
+    //            uint32 talent_id = itr->first & 0xFFFF;
+    //            auto talent_info = sTalentStore.LookupEntry(talent_id);
+    //            if (talent_info == nullptr)
+    //                continue;
 
-                if (talent_info->TalentTree != talent_tab->TalentTabID)
-                    continue;
+    //            if (talent_info->TalentTree != talent_tab->TalentTabID)
+    //                continue;
 
-                InspectTalentTabPos[talent_id] = talent_pos;
-                talent_pos += itr->second;
-            }
-        }
-    }
+    //            InspectTalentTabPos[talent_id] = talent_pos;
+    //            talent_pos += itr->second;
+    //        }
+    //    }
+    //}
 
-    DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sTalentTreePrimarySpellsStore, dbc_path, "TalentTreePrimarySpells.dbc");
+    //DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sTalentTreePrimarySpellsStore, dbc_path, "TalentTreePrimarySpells.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSpellCastTimesStore, dbc_path, "SpellCastTimes.dbc");
-    DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSpellDifficultyStore, dbc_path, "SpellDifficulty.dbc");
+    DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSpellMiscStore, dbc_path, "SpellMisc.dbc");
+    //DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSpellDifficultyStore, dbc_path, "SpellDifficulty.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSpellRadiusStore, dbc_path, "SpellRadius.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSpellRangeStore, dbc_path, "SpellRange.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSpellRuneCostStore, dbc_path, "SpellRuneCost.dbc");
@@ -297,10 +303,20 @@ bool LoadDBCs()
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sChrRacesStore, dbc_path, "ChrRaces.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sChrClassesStore, dbc_path, "ChrClasses.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sMapStore, dbc_path, "Map.dbc");
+    DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sMapDifficultyStore, dbc_path, "MapDifficulty.dbc");
+    {
+        for (uint32_t i = 0; i < sMapDifficultyStore.GetNumRows(); ++i)
+        {
+            if (auto entry = sMapDifficultyStore.LookupEntry(i))
+                sMapDifficultyMap[Util::MAKE_PAIR32(entry->MapID, entry->Difficulty)] = DBC::Structures::MapDifficulty(entry->RaidDuration, entry->MaxPlayers, entry->Message[0] != '\0');
+        }
+    }
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sHolidaysStore, dbc_path, "Holidays.dbc");       //loaded but not used
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sAuctionHouseStore, dbc_path, "AuctionHouse.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sItemRandomSuffixStore, dbc_path, "ItemRandomSuffix.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtCombatRatingsStore, dbc_path, "gtCombatRatings.dbc");
+    DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtOCTBaseHPByClassStore, dbc_path, "gtOCTBaseHPByClass.dbc");
+    DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtOCTBaseMPByClassStore, dbc_path, "gtOCTBaseMPByClass.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sChatChannelsStore, dbc_path, "ChatChannels.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sCreatureDisplayInfoStore, dbc_path, "CreatureDisplayInfo.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sCreatureDisplayInfoExtraStore, dbc_path, "CreatureDisplayInfoExtra.dbc");
@@ -315,7 +331,7 @@ bool LoadDBCs()
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtChanceToSpellCritBaseStore, dbc_path, "gtChanceToSpellCritBase.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtRegenMPPerSptStore, dbc_path, "gtRegenMPPerSpt.dbc");     //loaded but not used
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtOCTClassCombatRatingScalarStore, dbc_path, "gtOCTClassCombatRatingScalar.dbc");
-    DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtOCTRegenMPStore, dbc_path, "gtOCTRegenMP.dbc");
+    //DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtOCTRegenMPStore, dbc_path, "gtOCTRegenMP.dbc");
     //DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtRegenHPPerSptStore, dbc_path, "gtRegenHPPerSpt.dbc");
     //DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sGtOCTRegenHPStore, dbc_path, "gtOCTRegenHP.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sAreaTriggerStore, dbc_path, "AreaTrigger.dbc");
@@ -335,7 +351,7 @@ bool LoadDBCs()
     }
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sSummonPropertiesStore, dbc_path, "SummonProperties.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sNameGenStore, dbc_path, "NameGen.dbc");
-    DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sNumTalentsAtLevel, dbc_path, "NumTalentsAtLevel.dbc");
+    //DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sNumTalentsAtLevel, dbc_path, "NumTalentsAtLevel.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sPhaseStore, dbc_path, "Phase.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sLFGDungeonStore, dbc_path, "LFGDungeons.dbc");
     DBC::LoadDBC(available_dbc_locales, bad_dbc_files, sDungeonEncounterStore, dbc_path, "DungeonEncounter.dbc");
@@ -412,6 +428,35 @@ DBC::Structures::SpellEffectEntry const* GetSpellEffectEntry(uint32 spellId, uin
     return itr->second.effects[effect];
 }
 
+DBC::Structures::MapDifficulty const* getMapDifficultyData(uint32_t mapId, InstanceDifficulty::Difficulties difficulty)
+{
+    MapDifficultyMap::const_iterator itr = sMapDifficultyMap.find(Util::MAKE_PAIR32(mapId, difficulty));
+    return itr != sMapDifficultyMap.end() ? &itr->second : nullptr;
+}
+
+DBC::Structures::MapDifficulty const* getDownscaledMapDifficultyData(uint32_t mapId, InstanceDifficulty::Difficulties& difficulty)
+{
+    uint32_t tmpDiff = difficulty;
+    DBC::Structures::MapDifficulty const* mapDiff = getMapDifficultyData(mapId, InstanceDifficulty::Difficulties(tmpDiff));
+    if (!mapDiff)
+    {
+        if (tmpDiff > 1) // heroic, downscale to normal
+            tmpDiff -= 2;
+        else
+            tmpDiff -= 1;   // any non-normal mode for raids like tbc (only one mode)
+
+        // pull new data
+        mapDiff = getMapDifficultyData(mapId, InstanceDifficulty::Difficulties(tmpDiff)); // we are 10 normal or 25 normal
+        if (!mapDiff)
+        {
+            tmpDiff -= 1;
+            mapDiff = getMapDifficultyData(mapId, InstanceDifficulty::Difficulties(tmpDiff)); // 10 normal
+        }
+    }
+
+    difficulty = InstanceDifficulty::Difficulties(tmpDiff);
+    return mapDiff;
+}
 
 std::string generateName(uint32 type)
 {
@@ -425,6 +470,14 @@ std::string generateName(uint32 type)
 uint32 const* getTalentTabPages(uint8 playerClass)
 {
     return InspectTalentTabPages[playerClass];
+}
+
+uint32_t getLiquidFlags(uint32_t liquidType)
+{
+    if (DBC::Structures::LiquidTypeEntry const* liq = sLiquidTypeStore.LookupEntry(liquidType))
+        return 1 << liq->Type;
+
+    return 0;
 }
 
 uint8_t getPowerIndexByClass(uint8_t playerClass, uint8_t powerType)

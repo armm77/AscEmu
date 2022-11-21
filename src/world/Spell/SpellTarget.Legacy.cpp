@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
 
  * This program is free software: you can redistribute it and/or modify
@@ -18,22 +18,70 @@
  *
  */
 
-#include "StdAfx.h"
+
 #include "VMapFactory.h"
-#include "Map/MapMgr.h"
-#include "Objects/Faction.h"
+#include "VMapManager2.h"
+#include "Map/Management/MapMgr.hpp"
+#include "Management/Faction.h"
 #include "SpellTarget.h"
 #include "Spell.h"
 #include "Objects/GameObject.h"
 #include "Server/World.h"
-#include "Server/World.Legacy.h"
-#include "Definitions/SpellCastTargetFlags.h"
-#include "Definitions/SpellDidHitResult.h"
-#include "Definitions/SpellEffectTarget.h"
-#include "Units/Creatures/Pet.h"
+#include "Definitions/SpellCastTargetFlags.hpp"
+#include "Definitions/SpellDidHitResult.hpp"
+#include "Objects/Units/Creatures/Pet.h"
 
  // APGL End
  // MIT Start
+
+SpellCastResult Spell::checkExplicitTarget(Object* target, uint32_t requiredTargetMask) const
+{
+    if (target == nullptr || !target->IsInWorld())
+        return SPELL_FAILED_BAD_IMPLICIT_TARGETS;
+
+    // Gameobject target, not item
+    if (!target->isGameObject() && (requiredTargetMask & SPELL_TARGET_REQUIRE_GAMEOBJECT) && !(requiredTargetMask & SPELL_TARGET_REQUIRE_ITEM))
+        return SPELL_FAILED_BAD_TARGETS;
+
+    // Check if spell can target gameobjects
+    if (target->isGameObject() && !m_triggeredSpell && !(requiredTargetMask & SPELL_TARGET_OBJECT_SCRIPTED) && !(requiredTargetMask & SPELL_TARGET_REQUIRE_GAMEOBJECT))
+        return SPELL_FAILED_BAD_TARGETS;
+
+    // Check if spell can target items
+    if (target->isItem() && !m_triggeredSpell && !(requiredTargetMask & SPELL_TARGET_REQUIRE_ITEM))
+        return SPELL_FAILED_BAD_TARGETS;
+
+    // Check if spell can target friendly unit
+    if (requiredTargetMask & SPELL_TARGET_REQUIRE_FRIENDLY && !isFriendly(m_caster, target))
+        return SPELL_FAILED_BAD_TARGETS;
+
+    // Check if spell can target attackable unit
+    if (requiredTargetMask & SPELL_TARGET_REQUIRE_ATTACKABLE && !(requiredTargetMask & SPELL_TARGET_AREA_SELF && m_caster == target) && !isAttackable(m_caster, target, false))
+        return SPELL_FAILED_BAD_TARGETS;
+
+    if (requiredTargetMask & SPELL_TARGET_OBJECT_TARCLASS)
+    {
+        const auto* const originalTarget = m_caster->getWorldMapObject(m_targets.getUnitTarget());
+        if (originalTarget == nullptr)
+            return SPELL_FAILED_BAD_TARGETS;
+        if (originalTarget->isPlayer() != target->isPlayer())
+            return SPELL_FAILED_BAD_TARGETS;
+        if ((originalTarget->isPlayer() && target->isPlayer() && static_cast<Player const*>(originalTarget)->getClass() != static_cast<Player const*>(target)->getClass()))
+            return SPELL_FAILED_BAD_TARGETS;
+    }
+
+    // Check if spell can target pet
+    if (requiredTargetMask & SPELL_TARGET_OBJECT_CURPET && !target->isPet())
+        return SPELL_FAILED_BAD_TARGETS;
+
+    // Area spells cannot target totems or dead units unless spell caster is the target
+    if (m_caster != target &&
+        ((target->isCreatureOrPlayer() && !static_cast<Unit const*>(target)->isAlive()) || (target->isCreature() && target->isTotem()))
+        && (requiredTargetMask & (SPELL_TARGET_AREA | SPELL_TARGET_AREA_SELF | SPELL_TARGET_AREA_CURTARGET | SPELL_TARGET_AREA_CONE | SPELL_TARGET_AREA_PARTY | SPELL_TARGET_AREA_RAID)))
+        return SPELL_FAILED_BAD_TARGETS;
+
+    return SPELL_CAST_SUCCESS;
+}
 
 void Spell::safeAddMissedTarget(uint64_t targetGuid, SpellDidHitResult hitResult, SpellDidHitResult extendedHitResult)
 {
@@ -53,14 +101,15 @@ void Spell::safeAddMissedTarget(uint64_t targetGuid, SpellDidHitResult hitResult
 void Spell::FillTargetMap(uint32 i)
 {
     //Spell::prepare() has already a m_caster->IsInWorld() check so if now the caster is no more in world something bad happened.
-    ARCEMU_ASSERT(m_caster->IsInWorld());
+    if (!m_caster->IsInWorld())
+        return;
 
     uint32 TargetType = 0;
     TargetType |= getSpellInfo()->getRequiredTargetMaskForEffect(static_cast<uint8_t>(i));
 
     if (TargetType & SPELL_TARGET_NOT_IMPLEMENTED)
         return;
-    if (TargetType & SPELL_TARGET_NO_OBJECT)  //summon spells that appear infront of caster
+    if (TargetType == SPELL_TARGET_NO_OBJECT)  //summon spells that appear infront of caster
     {
         HandleTargetNoObject();
         return;
@@ -71,13 +120,13 @@ void Spell::FillTargetMap(uint32 i)
     {
         Object* target = nullptr;
         if (TargetType & SPELL_TARGET_REQUIRE_GAMEOBJECT)
-            target = m_caster->GetMapMgrObject(m_targets.getGameObjectTarget());
+            target = m_caster->getWorldMapObject(m_targets.getGameObjectTarget());
         else if (TargetType & SPELL_TARGET_REQUIRE_ITEM)
-            target = m_caster->GetMapMgrObject(m_targets.getItemTarget());
+            target = m_caster->getWorldMapObject(m_targets.getItemTarget());
 
         // If target was not found, try unit
         if (target == nullptr)
-            target = m_caster->GetMapMgrObject(m_targets.getUnitTarget());
+            target = m_caster->getWorldMapObject(m_targets.getUnitTarget());
 
         AddTarget(i, TargetType, target);
     }
@@ -85,47 +134,47 @@ void Spell::FillTargetMap(uint32 i)
     if (TargetType & SPELL_TARGET_OBJECT_SELF)
         AddTarget(i, TargetType, m_caster);
     if (TargetType & (SPELL_TARGET_AREA | SPELL_TARGET_AREA_SELF))  //targetted aoe
-        AddAOETargets(i, TargetType, GetRadius(i), m_spellInfo->getMaxTargets());
+        AddAOETargets(i, TargetType, getEffectRadius(i), m_spellInfo->getMaxTargets());
     ///\todo arcemu, doesn't support summon slots?
     /*if (TargetType & SPELL_TARGET_OBJECT_CURTOTEMS && u_caster != NULL)
         for (uint32 i=1; i<5; ++i) //totem slots are 1, 2, 3, 4
         AddTarget(i, TargetType, u_caster->m_summonslot[i]);*/
     if (TargetType & SPELL_TARGET_OBJECT_CURPET && p_caster != nullptr)
-        AddTarget(i, TargetType, p_caster->GetSummon());
+        AddTarget(i, TargetType, p_caster->getFirstPetFromSummons());
     if (TargetType & SPELL_TARGET_OBJECT_PETOWNER)
     {
         WoWGuid wowGuid;
         wowGuid.Init(m_targets.getUnitTarget());
         if (wowGuid.isPet())
         {
-            Pet* p = m_caster->GetMapMgr()->GetPet(wowGuid.getGuidLowPart());
+            Pet* p = m_caster->getWorldMap()->getPet(wowGuid.getGuidLowPart());
             if (p != nullptr)
-                AddTarget(i, TargetType, p->getPlayerOwner());
+                AddTarget(i, TargetType, p->getUnitOwner());
         }
     }
     //targets party, not raid
     if ((TargetType & SPELL_TARGET_AREA_PARTY) && !(TargetType & SPELL_TARGET_AREA_RAID))
     {
         if (p_caster == nullptr && !m_caster->isPet() && (!m_caster->isCreature() || !m_caster->isTotem()))
-            AddAOETargets(i, TargetType, GetRadius(i), m_spellInfo->getMaxTargets()); //npcs
+            AddAOETargets(i, TargetType, getEffectRadius(i), m_spellInfo->getMaxTargets()); //npcs
         else
-            AddPartyTargets(i, TargetType, GetRadius(i), m_spellInfo->getMaxTargets()); //players/pets/totems
+            AddPartyTargets(i, TargetType, getEffectRadius(i), m_spellInfo->getMaxTargets()); //players/pets/totems
     }
     if (TargetType & SPELL_TARGET_AREA_RAID)
     {
         if (p_caster == nullptr && !m_caster->isPet() && (!m_caster->isCreature() || !m_caster->isTotem()))
-            AddAOETargets(i, TargetType, GetRadius(i), m_spellInfo->getMaxTargets()); //npcs
+            AddAOETargets(i, TargetType, getEffectRadius(i), m_spellInfo->getMaxTargets()); //npcs
         else
-            AddRaidTargets(i, TargetType, GetRadius(i), m_spellInfo->getMaxTargets(), (TargetType & SPELL_TARGET_AREA_PARTY) ? true : false); //players/pets/totems
+            AddRaidTargets(i, TargetType, getEffectRadius(i), m_spellInfo->getMaxTargets(), (TargetType & SPELL_TARGET_AREA_PARTY) ? true : false); //players/pets/totems
     }
     if (TargetType & SPELL_TARGET_AREA_CHAIN)
-        AddChainTargets(i, TargetType, GetRadius(i), m_spellInfo->getMaxTargets());
+        AddChainTargets(i, TargetType, getEffectRadius(i), m_spellInfo->getMaxTargets());
     //target cone
     if (TargetType & SPELL_TARGET_AREA_CONE)
-        AddConeTargets(i, TargetType, GetRadius(i), m_spellInfo->getMaxTargets());
+        AddConeTargets(i, TargetType, getEffectRadius(i), m_spellInfo->getMaxTargets());
 
     if (TargetType & SPELL_TARGET_OBJECT_SCRIPTED)
-        AddScriptedOrSpellFocusTargets(i, TargetType, GetRadius(i), m_spellInfo->getMaxTargets());
+        AddScriptedOrSpellFocusTargets(i, TargetType, getEffectRadius(i), m_spellInfo->getMaxTargets());
 }
 
 void Spell::AddScriptedOrSpellFocusTargets(uint32 i, uint32 targetType, float r, uint32 /*maxtargets*/)
@@ -159,7 +208,7 @@ void Spell::AddConeTargets(uint32 i, uint32 targetType, float /*r*/, uint32 maxt
             continue;
 
         //is Creature in range
-        if (m_caster->isInRange(itr, GetRadius(i)))
+        if (m_caster->isInRange(itr, getEffectRadius(i)))
         {
             if (m_spellInfo->cone_width ? m_caster->isInArc(itr, m_spellInfo->cone_width) : m_caster->isInFront(itr))  // !!! is the target within our cone ?
             {
@@ -176,7 +225,7 @@ void Spell::AddChainTargets(uint32 i, uint32 targetType, float /*r*/, uint32 /*m
     if (!m_caster->IsInWorld())
         return;
 
-    Object* targ = m_caster->GetMapMgr()->_GetObject(m_targets.getUnitTarget());
+    Object* targ = m_caster->getWorldMap()->getObject(m_targets.getUnitTarget());
 
     if (targ == nullptr)
         return;
@@ -192,13 +241,13 @@ void Spell::AddChainTargets(uint32 i, uint32 targetType, float /*r*/, uint32 /*m
         firstTarget = u_caster;
 
     bool RaidOnly = false;
-    float range = GetMaxRange(sSpellRangeStore.LookupEntry(m_spellInfo->getRangeIndex()));//this is probably wrong,
+    float range = m_spellInfo->getMaxRange(false, m_caster, this);//this is probably wrong,
     //this is cast distance, not searching distance
     range *= range;
 
     //is this party only?
-    Player* casterFrom = u_caster->getPlayerOwner();
-    Player* pfirstTargetFrom = firstTarget->getPlayerOwner();
+    Player* casterFrom = u_caster->getPlayerOwnerOrSelf();
+    Player* pfirstTargetFrom = firstTarget->getPlayerOwnerOrSelf();
     if (casterFrom != nullptr && pfirstTargetFrom != nullptr && casterFrom->getGroup() == pfirstTargetFrom->getGroup())
         RaidOnly = true;
 
@@ -239,11 +288,19 @@ void Spell::AddChainTargets(uint32 i, uint32 targetType, float /*r*/, uint32 /*m
 
 void Spell::AddPartyTargets(uint32 i, uint32 targetType, float r, uint32 /*maxtargets*/)
 {
-    Object* u = m_caster->GetMapMgr()->_GetObject(m_targets.getUnitTarget());
+    Object* u = m_caster->getWorldMap()->getObject(m_targets.getUnitTarget());
     if (u == nullptr)
         u = m_caster;
 
-    Player* p = u->getPlayerOwner();
+    // If spell has area aura effect, aura code will handle proper targetting
+    // so add just caster
+    if (getSpellInfo()->isAreaAuraEffect(i))
+    {
+        AddTarget(i, targetType, u);
+        return;
+    }
+
+    Player* p = u->getPlayerOwnerOrSelf();
     if (p == nullptr || u_caster == nullptr)
         return;
 
@@ -270,11 +327,19 @@ void Spell::AddPartyTargets(uint32 i, uint32 targetType, float r, uint32 /*maxta
 
 void Spell::AddRaidTargets(uint32 i, uint32 targetType, float r, uint32 /*maxtargets*/, bool /*partylimit*/)
 {
-    Object* u = m_caster->GetMapMgr()->_GetObject(m_targets.getUnitTarget());
+    Object* u = m_caster->getWorldMap()->getObject(m_targets.getUnitTarget());
     if (u == nullptr)
         u = m_caster;
 
-    Player* p = u->getPlayerOwner();
+    // If spell has area aura effect, aura code will handle proper targetting
+    // so add just caster
+    if (getSpellInfo()->isAreaAuraEffect(i))
+    {
+        AddTarget(i, targetType, u);
+        return;
+    }
+
+    Player* p = u->getPlayerOwnerOrSelf();
     if (p == nullptr || u_caster == nullptr)
         return;
 
@@ -307,7 +372,7 @@ void Spell::AddAOETargets(uint32 i, uint32 targetType, float r, uint32 maxtarget
     if (targetType & (SPELL_TARGET_AREA_PARTY | SPELL_TARGET_AREA_RAID) && !(p_caster == nullptr && !m_caster->isPet() && (!m_caster->isCreature() || !m_caster->isTotem())))
         return;
 
-    Object* tarobj = m_caster->GetMapMgr()->_GetObject(m_targets.getUnitTarget());
+    Object* tarobj = m_caster->getWorldMap()->getObject(m_targets.getUnitTarget());
 
     if (targetType & SPELL_TARGET_AREA_SELF)
         source = m_caster->GetPosition();
@@ -320,7 +385,7 @@ void Spell::AddAOETargets(uint32 i, uint32 targetType, float r, uint32 maxtarget
             // If position is not set, try unit target's position
             if (m_targets.getUnitTarget() != 0)
             {
-                const auto targetUnit = m_caster->GetMapMgrUnit(m_targets.getUnitTarget());
+                const auto targetUnit = m_caster->getWorldMapUnit(m_targets.getUnitTarget());
                 if (targetUnit != nullptr)
                     m_targets.setDestination(targetUnit->GetPosition());
             }
@@ -337,8 +402,11 @@ void Spell::AddAOETargets(uint32 i, uint32 targetType, float r, uint32 maxtarget
     }
 
     //caster might be in the aoe LOL
-    if (m_caster->CalcDistance(source) <= r)
-        AddTarget(i, targetType, m_caster);
+    if (!(targetType & SPELL_TARGET_REQUIRE_ATTACKABLE))
+    {
+        if (m_caster->CalcDistance(source) <= r)
+            AddTarget(i, targetType, m_caster);
+    }
 
     std::vector<uint64_t>* t = &m_effectTargets[i];
 
@@ -358,40 +426,18 @@ void Spell::AddAOETargets(uint32 i, uint32 targetType, float r, uint32 maxtarget
 
 bool Spell::AddTarget(uint32 i, uint32 TargetType, Object* obj)
 {
-    std::vector<uint64_t>* t = &m_effectTargets[i];
-
-    if (obj == nullptr || !obj->IsInWorld())
+    const auto targetCheck = checkExplicitTarget(obj, TargetType);
+    if (targetCheck != SPELL_CAST_SUCCESS)
         return false;
 
-    //GO target, not item
-    if ((TargetType & SPELL_TARGET_REQUIRE_GAMEOBJECT) && !(TargetType & SPELL_TARGET_REQUIRE_ITEM) && !obj->isGameObject())
-        return false;
-
-    //target go, not able to target go
-    if (obj->isGameObject() && !(TargetType & SPELL_TARGET_OBJECT_SCRIPTED) && !(TargetType & SPELL_TARGET_REQUIRE_GAMEOBJECT) && !m_triggeredSpell)
-        return false;
-    //target item, not able to target item
-    if (obj->isItem() && !(TargetType & SPELL_TARGET_REQUIRE_ITEM) && !m_triggeredSpell)
+    // If checked in checkExplicitTarget, initial aoe spell cast check can fail
+    if (getSpellInfo()->getAttributesExC() & ATTRIBUTESEXC_TARGET_ONLY_PLAYERS && !obj->isPlayer())
         return false;
 
     if (u_caster != nullptr && u_caster->hasUnitFlags(UNIT_FLAG_IGNORE_PLAYER_COMBAT) && ((obj->isPlayer() || obj->isPet()) || (p_caster != nullptr || m_caster->isPet())))
         return false;
 
-    if (TargetType & SPELL_TARGET_REQUIRE_FRIENDLY && !isFriendly(m_caster, obj))
-        return false;
-    if (TargetType & SPELL_TARGET_REQUIRE_ATTACKABLE && !isAttackable(m_caster, obj, false))
-        return false;
-    if (TargetType & SPELL_TARGET_OBJECT_TARCLASS)
-    {
-        Object* originaltarget = m_caster->GetMapMgr()->_GetObject(m_targets.getUnitTarget());
-
-        if (originaltarget == nullptr || (originaltarget->isPlayer() && obj->isPlayer() && static_cast<Player*>(originaltarget)->getClass() != static_cast<Player*>(obj)->getClass()) || (originaltarget->isPlayer() && !obj->isPlayer()) || (!originaltarget->isPlayer() && obj->isPlayer()))
-            return false;
-    }
-    if (TargetType & SPELL_TARGET_OBJECT_CURPET && !obj->isPet())
-        return false;
-    if (TargetType & (SPELL_TARGET_AREA | SPELL_TARGET_AREA_SELF | SPELL_TARGET_AREA_CURTARGET | SPELL_TARGET_AREA_CONE | SPELL_TARGET_AREA_PARTY | SPELL_TARGET_AREA_RAID) && ((obj->isCreatureOrPlayer() && !static_cast<Unit*>(obj)->isAlive()) || (obj->isCreature() && obj->isTotem())))
-        return false;
+    std::vector<uint64_t>* t = &m_effectTargets[i];
 
     SpellDidHitResult hitresult = (TargetType & SPELL_TARGET_REQUIRE_ATTACKABLE && obj->isCreatureOrPlayer()) ? static_cast<SpellDidHitResult>(DidHit(i, static_cast<Unit*>(obj))) : SPELL_DID_HIT_SUCCESS;
     if (hitresult != SPELL_DID_HIT_SUCCESS)
@@ -423,7 +469,7 @@ bool Spell::AddTarget(uint32 i, uint32 TargetType, Object* obj)
     auto spell_range = sSpellRangeStore.LookupEntry(m_spellInfo->getRangeIndex());
     if (spell_range != nullptr)
     {
-        if (worldConfig.terrainCollision.isCollisionEnabled && spell_range->maxRange < 50000 && GetRadius(i) < 50000 && !obj->isItem())
+        if (worldConfig.terrainCollision.isCollisionEnabled && spell_range->maxRange < 50000 && getEffectRadius(i) < 50000 && !obj->isItem())
         {
             float x = m_caster->GetPositionX(), y = m_caster->GetPositionY(), z = m_caster->GetPositionZ() + 0.5f;
 
@@ -441,7 +487,7 @@ bool Spell::AddTarget(uint32 i, uint32 TargetType, Object* obj)
                 /*Object* lasttarget = NULL;
                 if (m_orderedObjects.size() > 0)
                 {
-                lasttarget = m_caster->GetMapMgr()->_GetObject(m_orderedObjects[m_orderedObjects.size() - 1]);
+                lasttarget = m_caster->getWorldMap()->_GetObject(m_orderedObjects[m_orderedObjects.size() - 1]);
                 if (lasttarget != NULL)
                 {
                 x = lasttarget->GetPositionX();
@@ -451,8 +497,7 @@ bool Spell::AddTarget(uint32 i, uint32 TargetType, Object* obj)
                 }*/
             }
 
-            VMAP::IVMapManager* mgr = VMAP::VMapFactory::createOrGetVMapManager();
-            bool isInLOS = mgr->isInLineOfSight(m_caster->GetMapId(), x, y, z + 2.0f, obj->GetPositionX(), obj->GetPositionY(), obj->GetPositionZ() + 2.0f);
+            bool isInLOS = m_caster->getWorldMap()->isInLineOfSight(LocationVector(x, y, z), obj->GetPosition(), m_caster->GetPhase(), LineOfSightChecks::LINEOFSIGHT_ALL_CHECKS);
 
             if (!isInLOS)
                 return false;
@@ -464,7 +509,7 @@ bool Spell::AddTarget(uint32 i, uint32 TargetType, Object* obj)
 
 bool Spell::GenerateTargets(SpellCastTargets* t)
 {
-    if (u_caster == nullptr || u_caster->GetAIInterface() == nullptr || !u_caster->IsInWorld())
+    if (u_caster == nullptr || u_caster->getAIInterface() == nullptr || !u_caster->IsInWorld())
         return false;
 
     bool result = false;
@@ -497,7 +542,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
                 if (u_caster->getTargetGuid())
                 {
                     //generate targets for things like arcane missiles trigger, tame pet, etc
-                    Object* target = u_caster->GetMapMgr()->_GetObject(u_caster->getTargetGuid());
+                    Object* target = u_caster->getWorldMap()->getObject(u_caster->getTargetGuid());
                     if (target != nullptr)
                     {
                         if (target->isCreatureOrPlayer())
@@ -522,7 +567,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
                 if (u_caster->getChannelObjectGuid())
                 {
                     //generate targets for things like arcane missiles trigger, tame pet, etc
-                    Object* target = u_caster->GetMapMgr()->_GetObject(u_caster->getChannelObjectGuid());
+                    Object* target = u_caster->getWorldMap()->getObject(u_caster->getChannelObjectGuid());
                     if (target != nullptr)
                     {
                         if (target->isCreatureOrPlayer())
@@ -542,7 +587,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
                 else if (u_caster->getTargetGuid())
                 {
                     //generate targets for things like arcane missiles trigger, tame pet, etc
-                    Object* target = u_caster->GetMapMgr()->_GetObject(u_caster->getTargetGuid());
+                    Object* target = u_caster->getWorldMap()->getObject(u_caster->getTargetGuid());
                     if (target != nullptr)
                     {
                         if (target->isCreatureOrPlayer())
@@ -562,7 +607,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
                 }
                 else if (u_caster->isCreature() && u_caster->isTotem())
                 {
-                    Unit* target = u_caster->GetMapMgr()->GetUnit(GetSinglePossibleEnemy(i));
+                    Unit* target = u_caster->getWorldMap()->getUnit(GetSinglePossibleEnemy(i));
                     if (target != nullptr)
                     {
                         t->addTargetMask(TARGET_FLAG_UNIT);
@@ -573,7 +618,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
 
             if (TargetType & SPELL_TARGET_REQUIRE_FRIENDLY)
             {
-                Unit* target = u_caster->GetMapMgr()->GetUnit(GetSinglePossibleFriend(i));
+                Unit* target = u_caster->getWorldMap()->getUnit(GetSinglePossibleFriend(i));
                 if (target != nullptr)
                 {
                     t->addTargetMask(TARGET_FLAG_UNIT);
@@ -601,17 +646,16 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
                 if (attempts > 10)
                     return false;
 
-                float r = Util::getRandomFloat(GetRadius(0));
+                float r = Util::getRandomFloat(getEffectRadius(0));
                 float ang = Util::getRandomFloat(M_PI_FLOAT * 2);
                 auto lv = LocationVector();
                 lv.x = m_caster->GetPositionX() + (cosf(ang) * r);
                 lv.y = m_caster->GetPositionY() + (sinf(ang) * r);
-                lv.z = m_caster->GetMapMgr()->GetLandHeight(lv.x, lv.y, m_caster->GetPositionZ() + 2.0f);
+                lv.z = m_caster->getMapHeight(LocationVector(lv.x, lv.y, m_caster->GetPositionZ() + 2.0f));
                 t->setDestination(lv);
                 t->setTargetMask(TARGET_FLAG_DEST_LOCATION);
 
-                VMAP::IVMapManager* mgr = VMAP::VMapFactory::createOrGetVMapManager();
-                isInLOS = mgr->isInLineOfSight(m_caster->GetMapId(), m_caster->GetPositionX(), m_caster->GetPositionY(), m_caster->GetPositionZ(), lv.x, lv.y, lv.z);
+                isInLOS = m_caster->IsWithinLOS(lv);
             }
             while (worldConfig.terrainCollision.isCollisionEnabled && !isInLOS);
             result = true;
@@ -621,7 +665,7 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
             //spells like blizzard, rain of fire
             if (u_caster->getChannelObjectGuid())
             {
-                Object* target = u_caster->GetMapMgr()->_GetObject(u_caster->getChannelObjectGuid());
+                Object* target = u_caster->getWorldMap()->getObject(u_caster->getChannelObjectGuid());
                 if (target)
                 {
                     t->addTargetMask(TARGET_FLAG_DEST_LOCATION | TARGET_FLAG_UNIT);
@@ -631,10 +675,10 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
             }
             else
             {
-                if (u_caster->GetAIInterface()->getNextTarget() != nullptr && TargetType & SPELL_TARGET_REQUIRE_ATTACKABLE)
+                if (u_caster->getAIInterface()->getCurrentTarget() != nullptr && TargetType & SPELL_TARGET_REQUIRE_ATTACKABLE)
                 {
                     t->addTargetMask(TARGET_FLAG_DEST_LOCATION | TARGET_FLAG_UNIT);
-                    t->setDestination(u_caster->GetAIInterface()->getNextTarget()->GetPosition());
+                    t->setDestination(u_caster->getAIInterface()->getCurrentTarget()->GetPosition());
                     result = true;
                 }
                 else if (TargetType & SPELL_TARGET_REQUIRE_FRIENDLY)
@@ -658,10 +702,10 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
         {
             if (TargetType & SPELL_TARGET_REQUIRE_ATTACKABLE)
             {
-                if (u_caster->GetAIInterface()->getNextTarget() != nullptr)
+                if (u_caster->getAIInterface()->getCurrentTarget() != nullptr)
                 {
                     t->addTargetMask(TARGET_FLAG_UNIT);
-                    t->setUnitTarget(u_caster->GetAIInterface()->getNextTarget()->getGuid());
+                    t->setUnitTarget(u_caster->getAIInterface()->getCurrentTarget()->getGuid());
                     result = true;
                 }
             }
@@ -675,10 +719,10 @@ bool Spell::GenerateTargets(SpellCastTargets* t)
         //target cone
         if (TargetType & SPELL_TARGET_AREA_CONE)
         {
-            if (u_caster->GetAIInterface()->getNextTarget() != nullptr)
+            if (u_caster->getAIInterface()->getCurrentTarget() != nullptr)
             {
                 t->addTargetMask(TARGET_FLAG_DEST_LOCATION);
-                t->setDestination(u_caster->GetAIInterface()->getNextTarget()->GetPosition());
+                t->setDestination(u_caster->getAIInterface()->getCurrentTarget()->GetPosition());
                 result = true;
             }
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,12 +18,12 @@
  */
 
 #include "Setup.h"
-#include "Management/Item.h"
+#include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
 #include "Spell/SpellAuras.h"
 #include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.h"
-#include <Spell/Definitions/PowerType.h>
+#include "Spell/Definitions/ProcFlags.hpp"
+#include <Spell/Definitions/PowerType.hpp>
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Spell Defs
@@ -49,10 +49,10 @@ bool SkyShatterRegalia(uint8_t /*effectIndex*/, Spell* s)
     if (!s->getPlayerCaster())
         return false;
 
-    if (s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(TotemSlots(0)) &&
-        s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(TotemSlots(1)) &&
-        s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(TotemSlots(2)) &&
-        s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(TotemSlots(3)))
+    if (s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(SUMMON_SLOT_TOTEM_FIRE) &&
+        s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(SUMMON_SLOT_TOTEM_EARTH) &&
+        s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(SUMMON_SLOT_TOTEM_WATER) &&
+        s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(SUMMON_SLOT_TOTEM_AIR))
     {
         Aura* aur = sSpellMgr.newAura(sSpellMgr.getSpellInfo(38437), 5000, s->getPlayerCaster(), s->getPlayerCaster(), true);
 
@@ -88,9 +88,9 @@ bool Reincarnation(uint8_t /*effectIndex*/, Aura* a, bool apply)
     Player* p_target = static_cast<Player*>(u_target);
 
     if (apply)
-        p_target->bReincarnation = true;
+        p_target->m_reincarnation = true;
     else
-        p_target->bReincarnation = false;
+        p_target->m_reincarnation = false;
 
     return true;
 }

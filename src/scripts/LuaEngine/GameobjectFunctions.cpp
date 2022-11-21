@@ -1,24 +1,21 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "GameobjectFunctions.h"
 #include "LuaMacros.h"
 #include <Objects/GameObject.h>
-#include <Map/MapMgr.h>
+#include <Map/Management/MapMgr.hpp>
 #include "LuaGlobal.h"
 #include "LUAEngine.h"
-#include <Map/MapScriptInterface.h>
-#include <Units/Creatures/Creature.h>
+#include <Map/Maps/MapScriptInterface.h>
+#include <Objects/Units/Creatures/Creature.h>
 #include <Storage/MySQLDataStore.hpp>
-#include <Map/WorldCreatorDefines.hpp>
-#include <Spell/SpellMgr.h>
+#include <Spell/SpellMgr.hpp>
 #include <Server/MainServerDefines.h>
-#include <StdAfx.h>
 #include "LuaHelpers.h"
-#include <Map/WorldCreator.h>
-#include "Management/WeatherMgr.h"
+#include "Management/WeatherMgr.hpp"
 
 extern "C"
 {
@@ -115,7 +112,10 @@ int LuaGameObject::GossipSendPOI(lua_State* L, GameObject* /*ptr*/)
 
 int LuaGameObject::GossipSendQuickMenu(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
 
     uint32_t text_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     Player* player = CHECK_PLAYER(L, 2);
@@ -136,7 +136,11 @@ int LuaGameObject::GossipSendQuickMenu(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::RegisterAIUpdate(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint32_t time = CHECK_ULONG(L, 1);
     sEventMgr.AddEvent(ptr, &GameObject::CallScriptUpdate, EVENT_SCRIPT_UPDATE_EVENT, time, 0, 0);
     return 0;
@@ -144,7 +148,11 @@ int LuaGameObject::RegisterAIUpdate(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::ModAIUpdate(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint32_t newtime = CHECK_ULONG(L, 1);
     sEventMgr.ModifyEventTimeAndTimeLeft(ptr, EVENT_SCRIPT_UPDATE_EVENT, newtime);
     return 0;
@@ -152,7 +160,11 @@ int LuaGameObject::ModAIUpdate(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::RemoveAIUpdate(lua_State* /*L*/, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     sEventMgr.RemoveEvents(ptr, EVENT_SCRIPT_UPDATE_EVENT);
     return 0;
 }
@@ -172,7 +184,11 @@ int LuaGameObject::RemoveFromWorld(lua_State* /*L*/, GameObject* ptr)
 
 int LuaGameObject::GetName(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     if (!ptr->GetGameObjectProperties())
         return 0;
     lua_pushstring(L, ptr->GetGameObjectProperties()->name.c_str());
@@ -181,12 +197,17 @@ int LuaGameObject::GetName(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetCreatureNearestCoords(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     float x = CHECK_FLOAT(L, 1);
     float y = CHECK_FLOAT(L, 2);
     float z = CHECK_FLOAT(L, 3);
     uint32_t entryid = CHECK_ULONG(L, 4);
-    Creature* crc = ptr->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(x, y, z, entryid);
+    Creature* crc = ptr->getWorldMap()->getInterface()->getCreatureNearestCoords(x, y, z, entryid);
     if (crc && crc->isCreatureOrPlayer())
     {
         PUSH_UNIT(L, crc);
@@ -200,12 +221,17 @@ int LuaGameObject::GetCreatureNearestCoords(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetGameObjectNearestCoords(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     float x = CHECK_FLOAT(L, 1);
     float y = CHECK_FLOAT(L, 2);
     float z = CHECK_FLOAT(L, 3);
     uint32_t entryid = CHECK_ULONG(L, 4);
-    GameObject* go = ptr->GetMapMgr()->GetInterface()->GetGameObjectNearestCoords(x, y, z, entryid);
+    GameObject* go = ptr->getWorldMap()->getInterface()->getGameObjectNearestCoords(x, y, z, entryid);
     if (go != NULL)
     PUSH_GO(L, go);
     else
@@ -215,7 +241,11 @@ int LuaGameObject::GetGameObjectNearestCoords(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetClosestPlayer(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     float d2 = 0;
     float dist = 0;
     Player* ret = nullptr;
@@ -241,7 +271,12 @@ int LuaGameObject::GetClosestPlayer(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetDistance(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     Object* target = CHECK_OBJECT(L, 1);
     lua_pushnumber(L, ptr->GetDistance2dSq(target));
     return 1;
@@ -263,7 +298,12 @@ int LuaGameObject::IsInWorld(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetZoneId(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     lua_pushinteger(L, ptr->GetZoneId());
     return 1;
 }
@@ -279,7 +319,11 @@ int LuaGameObject::PlaySoundToSet(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::SpawnCreature(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint32_t entry = CHECK_ULONG(L, 1);
     float x = CHECK_FLOAT(L, 2);
     float y = CHECK_FLOAT(L, 3);
@@ -304,7 +348,7 @@ int LuaGameObject::SpawnCreature(lua_State* L, GameObject* ptr)
         lua_pushnil(L);
         return 1;
     }
-    Creature* pCreature = ptr->GetMapMgr()->CreateCreature(entry);
+    Creature* pCreature = ptr->getWorldMap()->createCreature(entry);
     if (pCreature == nullptr)
     {
         lua_pushnil(L);
@@ -312,13 +356,13 @@ int LuaGameObject::SpawnCreature(lua_State* L, GameObject* ptr)
     }
     pCreature->Load(p, x, y, z, o);
     pCreature->m_loadedFromDB = true;
-    pCreature->SetFaction(faction);
+    pCreature->setFaction(faction);
     pCreature->setVirtualItemSlotId(MELEE, equip1);
     pCreature->setVirtualItemSlotId(OFFHAND, equip2);
     pCreature->setVirtualItemSlotId(RANGED, equip3);
-    pCreature->Phase(PHASE_SET, phase);
+    pCreature->setPhase(PHASE_SET, phase);
     pCreature->m_noRespawn = true;
-    pCreature->PushToWorld(ptr->GetMapMgr());
+    pCreature->PushToWorld(ptr->getWorldMap());
     if (duration)
         pCreature->Despawn(duration, 0);
     if (save)
@@ -329,7 +373,11 @@ int LuaGameObject::SpawnCreature(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::SpawnGameObject(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint32_t entry_id = CHECK_ULONG(L, 1);
     float x = CHECK_FLOAT(L, 2);
     float y = CHECK_FLOAT(L, 3);
@@ -342,66 +390,93 @@ int LuaGameObject::SpawnGameObject(lua_State* L, GameObject* ptr)
     if (!entry_id)
         return 0;
 
-    GameObject* go = ptr->GetMapMgr()->CreateGameObject(entry_id);
-    uint32_t mapid = ptr->GetMapId();
-    go->CreateFromProto(entry_id, mapid, x, y, z, o);
+    GameObject* go = ptr->getWorldMap()->createGameObject(entry_id);
+    go->create(entry_id, ptr->getWorldMap(), ptr->GetPhase(), LocationVector(x, y, z, o), QuaternionData(), GO_STATE_CLOSED);
     go->Phase(PHASE_SET, phase);
     go->setScale(scale);
-    go->AddToWorld(ptr->GetMapMgr());
+    go->AddToWorld(ptr->getWorldMap());
 
     if (duration)
-    sEventMgr.AddEvent(go, &GameObject::ExpireAndDelete, EVENT_GAMEOBJECT_UPDATE, duration, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+        go->despawn( duration, 0);
     if (save)
-        go->SaveToDB();
+        go->saveToDB(true);
     PUSH_GO(L, go);
     return 1;
 }
 
 int LuaGameObject::GetSpawnX(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->GetSpawnX());
     return 1;
 }
 
 int LuaGameObject::GetSpawnY(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->GetSpawnY());
     return 1;
 }
 
 int LuaGameObject::GetSpawnZ(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->GetSpawnZ());
     return 1;
 }
 
 int LuaGameObject::GetSpawnO(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->GetSpawnO());
     return 1;
 }
 
 int LuaGameObject::GetX(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->GetPositionX());
     return 1;
 }
 
 int LuaGameObject::GetY(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->GetPositionY());
     return 1;
 }
 
 int LuaGameObject::GetZ(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     if (ptr)
         lua_pushnumber(L, ptr->GetPositionZ());
     return 1;
@@ -409,21 +484,33 @@ int LuaGameObject::GetZ(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetO(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->GetOrientation());
     return 1;
 }
 
 int LuaGameObject::GetInRangePlayersCount(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, static_cast<lua_Number>(ptr->getInRangePlayersCount()));
     return 1;
 }
 
 int LuaGameObject::GetEntry(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->getEntry());
     return 1;
 }
@@ -451,8 +538,13 @@ int LuaGameObject::CalcRadAngle(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetInstanceID(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
-    if (ptr->GetMapMgr()->GetMapInfo()->type == INSTANCE_NULL)
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    if (ptr->getWorldMap()->getBaseMap()->getMapInfo()->isNonInstanceMap())
         lua_pushnil(L);
     else
         lua_pushinteger(L, ptr->GetInstanceID());
@@ -461,7 +553,12 @@ int LuaGameObject::GetInstanceID(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetInRangePlayers(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     uint32_t count = 0;
     lua_newtable(L);
     for (const auto& itr : ptr->getInRangePlayersSet())
@@ -479,7 +576,12 @@ int LuaGameObject::GetInRangePlayers(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetInRangeGameObjects(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     uint32_t count = 0;
     lua_newtable(L);
     for (const auto& itr : ptr->getInRangeObjectsSet())
@@ -497,7 +599,11 @@ int LuaGameObject::GetInRangeGameObjects(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetInRangeUnits(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint32_t count = 0;
     lua_newtable(L);
     for (const auto& itr : ptr->getInRangeObjectsSet())
@@ -515,7 +621,12 @@ int LuaGameObject::GetInRangeUnits(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::IsInFront(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     Object* target = CHECK_OBJECT(L, 1);
     if (!target)
     {
@@ -531,7 +642,12 @@ int LuaGameObject::IsInFront(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::IsInBack(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     Object* target = CHECK_OBJECT(L, 1);
     if (!target)
     {
@@ -545,7 +661,7 @@ int LuaGameObject::IsInBack(lua_State* L, GameObject* ptr)
     return 1;
 }
 
-int LuaGameObject::GetUInt32Value(lua_State* L, GameObject* ptr)
+int LuaGameObject::GetUInt32Value(lua_State* /*L*/, GameObject* /*ptr*/)
 {
     /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     if (ptr && field > 0)
@@ -555,7 +671,7 @@ int LuaGameObject::GetUInt32Value(lua_State* L, GameObject* ptr)
     return 1;
 }
 
-int LuaGameObject::GetUInt64Value(lua_State* L, GameObject* ptr)
+int LuaGameObject::GetUInt64Value(lua_State* /*L*/, GameObject* /*ptr*/)
 {
     /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     if (ptr && field)
@@ -565,7 +681,7 @@ int LuaGameObject::GetUInt64Value(lua_State* L, GameObject* ptr)
     return 1;
 }
 
-int LuaGameObject::SetUInt32Value(lua_State* L, GameObject* ptr)
+int LuaGameObject::SetUInt32Value(lua_State* /*L*/, GameObject* /*ptr*/)
 {
     /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     uint32_t value = static_cast<uint32_t>(luaL_checkinteger(L, 2));
@@ -574,7 +690,7 @@ int LuaGameObject::SetUInt32Value(lua_State* L, GameObject* ptr)
     return 0;
 }
 
-int LuaGameObject::SetUInt64Value(lua_State* L, GameObject* ptr)
+int LuaGameObject::SetUInt64Value(lua_State* /*L*/, GameObject* /*ptr*/)
 {
     /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     uint64_t guid = CHECK_GUID(L, 1);
@@ -583,7 +699,7 @@ int LuaGameObject::SetUInt64Value(lua_State* L, GameObject* ptr)
     return 0;
 }
 
-int LuaGameObject::SetFloatValue(lua_State* L, GameObject* ptr)
+int LuaGameObject::SetFloatValue(lua_State* /*L*/, GameObject* /*ptr*/)
 {
     /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     float value = CHECK_FLOAT(L, 2);
@@ -592,7 +708,7 @@ int LuaGameObject::SetFloatValue(lua_State* L, GameObject* ptr)
     return 0;
 }
 
-int LuaGameObject::RemoveFlag(lua_State* L, GameObject* ptr)
+int LuaGameObject::RemoveFlag(lua_State* /*L*/, GameObject* /*ptr*/)
 {
     /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     uint32_t value = static_cast<uint32_t>(luaL_checkinteger(L, 2));
@@ -601,7 +717,7 @@ int LuaGameObject::RemoveFlag(lua_State* L, GameObject* ptr)
     return 0;
 }
 
-int LuaGameObject::SetFlag(lua_State* L, GameObject* ptr)
+int LuaGameObject::SetFlag(lua_State* /*L*/, GameObject* /*ptr*/)
 {
     /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     uint32_t value = static_cast<uint32_t>(luaL_checkinteger(L, 2));
@@ -610,21 +726,24 @@ int LuaGameObject::SetFlag(lua_State* L, GameObject* ptr)
     return 0;
 }
 
+// despawns/respawns to update GO visuals
 int LuaGameObject::Update(lua_State* /*L*/, GameObject* ptr)
 {
-    //just despawns/respawns to update GO visuals
-    //credits: Sadikum
-    TEST_GO()
-    MapMgr* mapmgr = ptr->GetMapMgr();
-    uint32_t NewGuid = mapmgr->GenerateGameobjectGuid();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
+    auto* mapmgr = ptr->getWorldMap();
+    uint32_t NewGuid = mapmgr->generateGameobjectGuid();
     ptr->RemoveFromWorld(true);
     ptr->SetNewGuid(NewGuid);
     ptr->PushToWorld(mapmgr);
-    ptr->SaveToDB();
+    ptr->saveToDB();
     return 0;
 }
 
-int LuaGameObject::GetFloatValue(lua_State* L, GameObject* ptr)
+int LuaGameObject::GetFloatValue(lua_State* /*L*/, GameObject* /*ptr*/)
 {
     /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     if (ptr && field)
@@ -634,7 +753,7 @@ int LuaGameObject::GetFloatValue(lua_State* L, GameObject* ptr)
     return 1;
 }
 
-int LuaGameObject::ModUInt32Value(lua_State* L, GameObject* ptr)
+int LuaGameObject::ModUInt32Value(lua_State* /*L*/, GameObject* /*ptr*/)
 {
     /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     uint32_t value = static_cast<uint32_t>(luaL_checkinteger(L, 2));
@@ -645,7 +764,11 @@ int LuaGameObject::ModUInt32Value(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::CastSpell(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint32_t sp = CHECK_ULONG(L, 1);
     if (sp)
     {
@@ -658,7 +781,11 @@ int LuaGameObject::CastSpell(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::CastSpellOnTarget(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint32_t sp = CHECK_ULONG(L, 1);
     Object* target = CHECK_OBJECT(L, 2);
     if (sp && target != NULL)
@@ -678,7 +805,7 @@ int LuaGameObject::GetLandHeight(lua_State* L, GameObject* ptr)
         lua_pushnil(L);
     else
     {
-        float lH = ptr->GetMapMgr()->GetADTLandHeight(x, y);
+        float lH = ptr->getWorldMap()->getGridHeight(x, y);
         lua_pushnumber(L, lH);
     }
     return 1;
@@ -721,7 +848,7 @@ int LuaGameObject::PhaseSet(lua_State* L, GameObject* ptr)
         ptr->m_spawn->phase = newphase;
     if (Save)
     {
-        ptr->SaveToDB();
+        ptr->saveToDB();
         ptr->m_loadedFromDB = true;
     }
     return 0;
@@ -738,7 +865,7 @@ int LuaGameObject::PhaseAdd(lua_State* L, GameObject* ptr)
         ptr->m_spawn->phase |= newphase;
     if (Save)
     {
-        ptr->SaveToDB();
+        ptr->saveToDB();
         ptr->m_loadedFromDB = true;
     }
     return 0;
@@ -755,7 +882,7 @@ int LuaGameObject::PhaseDelete(lua_State* L, GameObject* ptr)
         ptr->m_spawn->phase &= ~newphase;
     if (Save)
     {
-        ptr->SaveToDB();
+        ptr->saveToDB();
         ptr->m_loadedFromDB = true;
     }
     return 0;
@@ -775,20 +902,30 @@ int LuaGameObject::SendPacket(lua_State* L, GameObject* ptr)
     WorldPacket* data = CHECK_PACKET(L, 1);
     bool self = CHECK_BOOL(L, 2);
     if (ptr != NULL && data != NULL)
-        ptr->SendMessageToSet(data, self);
+        ptr->sendMessageToSet(data, self);
     return 0;
 }
 
 int LuaGameObject::GetGUID(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     PUSH_GUID(L, ptr->getGuid());
     return 1;
 }
 
 int LuaGameObject::IsActive(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     if (ptr->getState())
     RET_BOOL(true)
     RET_BOOL(false)
@@ -796,7 +933,12 @@ int LuaGameObject::IsActive(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::Activate(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     if (ptr->getState() == 1)
         ptr->setState(GO_STATE_OPEN);
     else
@@ -807,18 +949,26 @@ int LuaGameObject::Activate(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::DespawnObject(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     int delay = static_cast<int>(luaL_checkinteger(L, 1));
     int respawntime = static_cast<int>(luaL_checkinteger(L, 2));
     if (!delay)
         delay = 1; //Delay 0 might cause bugs
-    ptr->Despawn(delay, respawntime);
+    ptr->despawn(delay, respawntime);
     return 0;
 }
 
 int LuaGameObject::AddLoot(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     if ((lua_gettop(L) != 3) || (lua_gettop(L) != 5))
         return 0;
 
@@ -829,63 +979,23 @@ int LuaGameObject::AddLoot(lua_State* L, GameObject* ptr)
     uint32_t itemid = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     uint32_t mincount = static_cast<uint32_t>(luaL_checkinteger(L, 2));
     uint32_t maxcount = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+    std::vector<float> ichance;
+
+    float chance = CHECK_FLOAT(L, 5);
+
+    for (uint8_t i = 0; i == 3; i++)
+        ichance.push_back(chance);
+
     bool perm = ((luaL_optinteger(L, 4, 0) == 1) ? true : false);
     if (perm)
     {
-        float chance = CHECK_FLOAT(L, 5);
         QueryResult* result = WorldDatabase.Query("SELECT * FROM loot_gameobjects WHERE entryid = %u, itemid = %u", ptr->getEntry(), itemid);
         if (!result)
         WorldDatabase.Execute("REPLACE INTO loot_gameobjects VALUES (%u, %u, %f, 0, 0, 0, %u, %u )", ptr->getEntry(), itemid, chance, mincount, maxcount);
         delete result;
     }
-    sLootMgr.AddLoot(&lt->loot, itemid, mincount, maxcount);
+    sLootMgr.addLoot(&lt->loot, itemid, ichance, mincount, maxcount, ptr->getWorldMap()->getDifficulty());
     return 0;
-}
-
-int LuaGameObject::GetInstanceOwner(lua_State* L, GameObject* ptr)
-{
-    MySQLStructure::MapInfo const* pMapinfo = sMySQLStore.getWorldMapInfo(ptr->GetMapId());
-    if (pMapinfo) //this block = IsInInstace()
-    {
-        if (pMapinfo->type != INSTANCE_NULL)
-        {
-            lua_pushboolean(L, 0);
-            return 1;
-        }
-    }
-    Instance* pInstance = sInstanceMgr.GetInstanceByIds(ptr->GetMapId(), ptr->GetInstanceID());
-    if (pInstance == nullptr)
-        return 0;
-
-    if (pInstance->m_creatorGuid != 0) // creator guid is 0 if its owned by a group.
-    {
-        Player* owner = pInstance->m_mapMgr->GetPlayer(pInstance->m_creatorGuid);
-        PUSH_UNIT(L, owner);
-    }
-    else
-    {
-        uint32_t group_id = pInstance->m_creatorGroup;
-        if (group_id == 0)
-        {
-            DLLLogDetail("Instance is not not owned by a group or a guid!");
-            return 0;
-        }
-
-        auto get_group_id = sObjectMgr.GetGroupById(group_id);
-        if (get_group_id == nullptr)
-            return 0;
-
-        auto group_leader = get_group_id->GetLeader();
-        if (group_leader == nullptr)
-            return 0;
-
-        auto group_leader_online = group_leader->m_loggedInPlayer;
-        if (group_leader_online == nullptr)
-            return 0;
-
-        PUSH_UNIT(L, group_leader_online);
-    }
-    return 1;
 }
 
 int LuaGameObject::GetDungeonDifficulty(lua_State* L, GameObject* ptr)
@@ -893,16 +1003,16 @@ int LuaGameObject::GetDungeonDifficulty(lua_State* L, GameObject* ptr)
     MySQLStructure::MapInfo const* pMapinfo = sMySQLStore.getWorldMapInfo(ptr->GetMapId());
     if (pMapinfo) //this block = IsInInstace()
     {
-        if (pMapinfo->type != INSTANCE_NULL)
+        if (!pMapinfo->isNonInstanceMap())
         {
             lua_pushboolean(L, 0);
             return 1;
         }
     }
-    Instance* pInstance = sInstanceMgr.GetInstanceByIds(ptr->GetMapId(), ptr->GetInstanceID());
+    WorldMap* pInstance = sMapMgr.findWorldMap(ptr->GetMapId(), ptr->GetInstanceID());
     if (pInstance != nullptr)
     {
-        lua_pushnumber(L, pInstance->m_difficulty);
+        lua_pushnumber(L, pInstance->getDifficulty());
         return 1;
     }
     return 0;
@@ -914,16 +1024,16 @@ int LuaGameObject::SetDungeonDifficulty(lua_State* L, GameObject* ptr)
     MySQLStructure::MapInfo const* pMapinfo = sMySQLStore.getWorldMapInfo(ptr->GetMapId());
     if (pMapinfo) //this block = IsInInstace()
     {
-        if (pMapinfo->type != INSTANCE_NULL)
+        if (!pMapinfo->isNonInstanceMap())
         {
             lua_pushboolean(L, 0);
             return 1;
         }
     }
-    Instance* pInstance = sInstanceMgr.GetInstanceByIds(ptr->GetMapId(), ptr->GetInstanceID());
+    WorldMap* pInstance = sMapMgr.findWorldMap(ptr->GetMapId(), ptr->GetInstanceID());
     if (pInstance != nullptr)
     {
-        pInstance->m_difficulty = difficulty;
+        pInstance->setSpawnMode(difficulty);
         lua_pushboolean(L, 1);
         return 1;
     }
@@ -932,7 +1042,12 @@ int LuaGameObject::SetDungeonDifficulty(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::HasFlag(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     /*uint16_t index = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     uint32_t flag = static_cast<uint32_t>(luaL_checkinteger(L, 2));
     lua_pushboolean(L, ptr->HasFlag(index, flag) ? 1 : 0);*/
@@ -941,7 +1056,12 @@ int LuaGameObject::HasFlag(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::IsInPhase(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     uint32_t phase = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     lua_pushboolean(L, ((ptr->m_phase & phase) != 0) ? 1 : 0);
     return 1;
@@ -949,14 +1069,22 @@ int LuaGameObject::IsInPhase(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetSpawnId(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->m_spawn != NULL ? ptr->m_spawn->id : 0);
     return 1;
 }
 
 int LuaGameObject::GetAreaId(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
 
     auto area = ptr->GetArea();
     lua_pushnumber(L, area ? area->id : 0);
@@ -965,9 +1093,14 @@ int LuaGameObject::GetAreaId(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::SetPosition(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
-    MapMgr* mapMgr = ptr->GetMapMgr();
-    uint32_t NewGuid = mapMgr->GenerateGameobjectGuid();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto* mapMgr = ptr->getWorldMap();
+    uint32_t NewGuid = mapMgr->generateGameobjectGuid();
     ptr->RemoveFromWorld(true);
     ptr->SetNewGuid(NewGuid);
     float x = CHECK_FLOAT(L, 1);
@@ -978,27 +1111,36 @@ int LuaGameObject::SetPosition(lua_State* L, GameObject* ptr)
     ptr->SetPosition(x, y, z, o);
     ptr->PushToWorld(mapMgr);
     if (save)
-        ptr->SaveToDB();
+        ptr->saveToDB();
     RET_BOOL(true)
 }
 
 int LuaGameObject::GetObjectType(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     RET_STRING("GameObject");
 }
 
 int LuaGameObject::ChangeScale(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     float nScale = CHECK_FLOAT(L, 1);
     bool updateNow = CHECK_BOOL(L, 2);
     nScale = (nScale <= 0) ? 1 : nScale;
     ptr->setScale(nScale);
     if (updateNow)
     {
-        MapMgr* mapMgr = ptr->GetMapMgr();
-        uint32_t nguid = mapMgr->GenerateGameobjectGuid();
+        auto* mapMgr = ptr->getWorldMap();
+        uint32_t nguid = mapMgr->generateGameobjectGuid();
         ptr->RemoveFromWorld(true);
         ptr->SetNewGuid(nguid);
         ptr->PushToWorld(mapMgr);
@@ -1008,7 +1150,11 @@ int LuaGameObject::ChangeScale(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetByte(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     /*    uint16_t index = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     uint8_t index2 = static_cast<uint8_t>(luaL_checkinteger(L, 2));
     uint8_t value = ptr->getByteValue(index, index2);
@@ -1018,7 +1164,12 @@ int LuaGameObject::GetByte(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::SetByte(lua_State* L, GameObject* ptr)
 {
-    TEST_GO_RET();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
     /*uint16_t index = static_cast<uint16_t>(luaL_checkinteger(L, 1));
     uint8_t index2 = static_cast<uint8_t>(luaL_checkinteger(L, 2));
     uint8_t value = static_cast<uint8_t>(luaL_checkinteger(L, 3));
@@ -1028,7 +1179,11 @@ int LuaGameObject::SetByte(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::FullCastSpellOnTarget(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
         uint32_t sp = CHECK_ULONG(L, 1);
     Object* target = CHECK_OBJECT(L, 2);
     if (sp && target != NULL)
@@ -1042,7 +1197,11 @@ int LuaGameObject::FullCastSpellOnTarget(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::FullCastSpell(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint32_t sp = CHECK_ULONG(L, 1);
     if (sp)
     {
@@ -1055,7 +1214,11 @@ int LuaGameObject::FullCastSpell(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::CustomAnimate(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint32_t aindex = CHECK_ULONG(L, 1);
     if (aindex < 2 && ptr != NULL)
     {
@@ -1067,7 +1230,10 @@ int LuaGameObject::CustomAnimate(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetLocation(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
 
     lua_pushnumber(L, ptr->GetPositionX());
     lua_pushnumber(L, ptr->GetPositionY());
@@ -1078,7 +1244,11 @@ int LuaGameObject::GetLocation(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetSpawnLocation(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->GetPositionX());
     lua_pushnumber(L, ptr->GetPositionY());
     lua_pushnumber(L, ptr->GetPositionZ());
@@ -1088,9 +1258,13 @@ int LuaGameObject::GetSpawnLocation(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetWoWObject(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     uint64_t guid = CHECK_GUID(L, 1);
-    Object* obj = ptr->GetMapMgr()->_GetObject(guid);
+    Object* obj = ptr->getWorldMap()->getObject(guid);
     if (obj != NULL && obj->isCreatureOrPlayer())
     PUSH_UNIT(L, obj);
     else if (obj != NULL && obj->isGameObject())
@@ -1102,7 +1276,11 @@ int LuaGameObject::GetWoWObject(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::RegisterEvent(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     const char* typeName = luaL_typename(L, 1);
     int delay = static_cast<int>(luaL_checkinteger(L, 2));
     int repeats = static_cast<int>(luaL_checkinteger(L, 3));
@@ -1138,7 +1316,11 @@ int LuaGameObject::RegisterEvent(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::RemoveEvents(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     sEventMgr.RemoveEvents(ptr, EVENT_LUA_GAMEOBJ_EVENTS);
     std::map<uint64_t, std::set<int>>& objRefs = LuaGlobal::instance()->luaEngine()->getObjectFunctionRefs();
     std::map<uint64_t, std::set<int>>::iterator itr = objRefs.find(ptr->getGuid());
@@ -1154,7 +1336,11 @@ int LuaGameObject::RemoveEvents(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::SetScale(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     float scale = static_cast<float>(luaL_checknumber(L, 1));
     if (scale > 0)
         ptr->setScale(scale);
@@ -1163,14 +1349,22 @@ int LuaGameObject::SetScale(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetScale(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     lua_pushnumber(L, ptr->getScale());
     return 1;
 }
 
 int LuaGameObject::GetClosestUnit(lua_State* L, GameObject* ptr)
 {
-    TEST_GO()
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
+
     float closest_dist = 99999.99f;
     float current_dist = 0;
     Unit* ret = nullptr;
@@ -1192,7 +1386,10 @@ int LuaGameObject::GetClosestUnit(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::Damage(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
 
     if (ptr->GetGameObjectProperties()->type != GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING)
         return 0;
@@ -1212,7 +1409,10 @@ int LuaGameObject::Damage(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::Rebuild(lua_State* /*L*/, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
 
     if (ptr->GetGameObjectProperties()->type != GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING)
         return 0;
@@ -1225,7 +1425,10 @@ int LuaGameObject::Rebuild(lua_State* /*L*/, GameObject* ptr)
 
 int LuaGameObject::GetHP(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
 
     if (ptr->GetGameObjectProperties()->type != GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING)
         return 0;
@@ -1239,7 +1442,10 @@ int LuaGameObject::GetHP(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetMaxHP(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
 
     if (ptr->GetGameObjectProperties()->type != GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING)
         return 0;
@@ -1253,27 +1459,32 @@ int LuaGameObject::GetMaxHP(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::GetWorldStateForZone(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
 
     if (lua_gettop(L) != 1)
         return 0;
 
     uint32_t field = static_cast<uint32_t>(luaL_checkinteger(L, 1));
 
-    auto a = ptr->GetMapMgr()->GetArea(ptr->GetPositionX(), ptr->GetPositionY(), ptr->GetPositionZ());
-    if (a == NULL)
-        return 0;
+    uint32_t zoneId;
+    uint32_t areaId;
+    uint32_t entry = 0;
 
-    uint32_t zone = a->zone;
+   ptr->getWorldMap()->getZoneAndAreaId(ptr->GetPhase(), zoneId, areaId, ptr->GetPosition());
 
-    if (zone == 0)
-        zone = a->id;
+   if (zoneId == 0)
+       entry = areaId;
+   else
+       entry = zoneId;
 
-    if (zone == 0)
+    if (entry == 0)
         return 0;
 
     uint32_t value
-            = ptr->GetMapMgr()->GetWorldStatesHandler().GetWorldStateForZone(zone, 0, field);
+            = ptr->getWorldMap()->getWorldStatesHandler().GetWorldStateForZone(entry, 0, field);
 
     lua_pushinteger(L, value);
 
@@ -1282,7 +1493,10 @@ int LuaGameObject::GetWorldStateForZone(lua_State* L, GameObject* ptr)
 
 int LuaGameObject::SetWorldStateForZone(lua_State* L, GameObject* ptr)
 {
-    TEST_GO();
+    if (ptr == nullptr || !ptr->IsInWorld() || !ptr->isGameObject())
+    {
+        return 0;
+    }
 
     if (lua_gettop(L) != 2)
         return 0;
@@ -1290,19 +1504,21 @@ int LuaGameObject::SetWorldStateForZone(lua_State* L, GameObject* ptr)
     uint32_t field = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     uint32_t value = static_cast<uint32_t>(luaL_checkinteger(L, 2));
 
-    auto a = ptr->GetMapMgr()->GetArea(ptr->GetPositionX(), ptr->GetPositionY(), ptr->GetPositionZ());
-    if (a == NULL)
+    uint32_t zoneId;
+    uint32_t areaId;
+    uint32_t entry = 0;
+
+    ptr->getWorldMap()->getZoneAndAreaId(ptr->GetPhase(), zoneId, areaId, ptr->GetPosition());
+
+    if (zoneId == 0)
+        entry = areaId;
+    else
+        entry = zoneId;
+
+    if (entry == 0)
         return 0;
 
-    uint32_t zone = a->zone;
-
-    if (zone == 0)
-        zone = a->id;
-
-    if (zone == 0)
-        return 0;
-
-    ptr->GetMapMgr()->GetWorldStatesHandler().SetWorldStateForZone(zone, 0, field, value);
+    ptr->getWorldMap()->getWorldStatesHandler().SetWorldStateForZone(entry, 0, field, value);
 
     return 0;
 }

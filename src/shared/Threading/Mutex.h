@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,13 +21,6 @@
 #define _THREADING_MUTEX_H
 
 #include "CommonTypes.hpp"
-
-#ifndef WIN32
-#include <pthread.h>
-#else
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
 
 class SERVER_DECL Mutex
 {
@@ -79,7 +72,7 @@ class SERVER_DECL FastMutex
 
         FastMutex() : m_lock(0), m_recursiveCount(0) {}
 
-        ~FastMutex() {}
+        ~FastMutex() = default;
 
         bool AttemptAcquire();
         void Acquire();

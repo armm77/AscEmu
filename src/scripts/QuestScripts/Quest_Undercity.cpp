@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -24,10 +24,9 @@
 class Quest_JourneytoUndercity : public QuestScript
 {
 public:
-
     void OnQuestComplete(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
-        if (Creature* creat = mTarget->GetMapMgr()->GetSqlIdCreature(19175))
+        if (Creature* creat = mTarget->getWorldMap()->getSqlIdCreature(19175))
         {
             SpawnHighborneLamenter(mTarget, 21628, 1295.222656f, 314.253998f, -57.320854f, 2.365611f);
             SpawnHighborneLamenter(mTarget, 21628, 1293.403931f, 311.264465f, -57.320854f, 1.939140f);
@@ -50,14 +49,14 @@ public:
         if (p == nullptr)
             return;
 
-        Creature* creature = pThis->GetMapMgr()->CreateCreature(entry);
+        Creature* creature = pThis->getWorldMap()->createCreature(entry);
         creature->m_spawn = nullptr;
         creature->Load(p, posX, posY, posZ);
         creature->SetOrientation(posO);
-        creature->GetAIInterface()->setCombatDisabled(true);
-        creature->GetAIInterface()->setMeleeDisabled(true);
-        creature->GetAIInterface()->setTargetingDisabled(true);
-        creature->PushToWorld(pThis->GetMapMgr());
+        creature->getAIInterface()->setCombatDisabled(true);
+        creature->getAIInterface()->setMeleeDisabled(true);
+        creature->getAIInterface()->setTargetingDisabled(true);
+        creature->PushToWorld(pThis->getWorldMap());
         creature->Despawn(180000, 0);
         creature->setFactionTemplate(35);
         creature->setServersideFaction();

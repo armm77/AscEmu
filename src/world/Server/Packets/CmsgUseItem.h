@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -42,17 +42,17 @@ namespace AscEmu::Packets
             ManagedPacket(CMSG_USE_ITEM, 12),
             containerIndex(containerIndex),
             inventorySlot(inventorySlot),
-            spellIndex(spellIndex),
             castCount(castCount),
-            itemGuid(itemGuid)
+            itemGuid(itemGuid),
+            spellIndex(spellIndex)
 #else
             uint8_t castCount, uint32_t spellId, uint64_t itemGuid, uint32_t glyphIndex, uint8_t castFlags) :
             ManagedPacket(CMSG_USE_ITEM, 20),
             containerIndex(containerIndex),
             inventorySlot(inventorySlot),
             castCount(castCount),
-            spellId(spellId),
             itemGuid(itemGuid),
+            spellId(spellId),
             glyphIndex(glyphIndex),
             castFlags(castFlags)
 #endif

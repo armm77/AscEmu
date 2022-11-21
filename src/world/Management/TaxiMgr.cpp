@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,10 +19,10 @@
  *
  */
 
-#include "StdAfx.h"
+
 #include "Management/TaxiMgr.h"
 #include "Server/Opcodes.hpp"
-#include "Units/Players/Player.h"
+#include "Objects/Units/Players/Player.hpp"
 
 void TaxiPath::ComputeLen()
 {
@@ -372,7 +372,7 @@ bool TaxiMgr::GetGlobalTaxiNodeMask(uint32_t /*curloc*/, uint32_t* mask)
     {
         /*if (itr->second->from == curloc)
         {*/
-        auto field = static_cast<uint32_t>((taxiPath.second->m_to - 1) / 32);
+        auto field = (taxiPath.second->m_to - 1) / 32;
         if (field >= DBC_TAXI_MASK_SIZE) // The DBC can contain negative TO values??? That'll be 255 here (because we store everything unsigned), skip them!
             continue;
         mask[field] |= 1 << ((taxiPath.second->m_to - 1) % 32);

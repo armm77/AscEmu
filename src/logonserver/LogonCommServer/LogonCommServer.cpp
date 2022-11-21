@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,9 +17,18 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "LogonStdAfx.h"
+#include "LogonCommServer.h"
 #include "LogonCommDefines.h"
-
+#include <Log.hpp>
+#include <Logging/Logger.hpp>
+#include <Realm/RealmManager.hpp>
+#include <Server/Master.hpp>
+#include <Network/Socket.h>
+#include <WorldPacket.h>
+#include <Server/AccountMgr.h>
+#include <Auth/Sha1.h>
+#include <Util/Strings.hpp>
+#include <Server/IpBanMgr.h>
 
 LogonCommServerSocket::LogonCommServerSocket(SOCKET fd) : Socket(fd, 65536, 524288)
 {
@@ -48,9 +57,9 @@ void LogonCommServerSocket::OnDisconnect()
     if (!removed)
     {
         for (auto itr : server_ids)
-            sRealmsMgr.setRealmOffline(itr);
+            sRealmManager.setRealmOffline(itr);
 
-        sRealmsMgr.removeServerSocket(this);
+        sRealmManager.removeServerSocket(this);
     }
 }
 
@@ -63,7 +72,7 @@ void LogonCommServerSocket::OnConnect()
         return;
     }
 
-    sRealmsMgr.addServerSocket(this);
+    sRealmManager.addServerSocket(this);
     removed = false;
 }
 
@@ -173,7 +182,7 @@ void LogonCommServerSocket::HandleRegister(WorldPacket & recvData)
     sLogger.info("Registering realm `%s` with ID %u.", realmName.c_str(), realmId);
 
     // check Realms if realmId is valid! Otherwise send back error.
-    auto realm = sRealmsMgr.getRealmById(realmId);
+    auto realm = sRealmManager.getRealmById(realmId);
     if (realm == nullptr)
     {
         WorldPacket data(LRSMSG_REALM_REGISTER_RESULT, 4);
@@ -195,7 +204,7 @@ void LogonCommServerSocket::HandleRegister(WorldPacket & recvData)
     recvData >> realm->lock;
     recvData >> realm->gameBuild;
 
-    sRealmsMgr.setStatusForRealm(realmId, 1);
+    sRealmManager.setStatusForRealm(realmId, 1);
 
     WorldPacket data(LRSMSG_REALM_REGISTER_RESULT, 4);
     data << uint32(0);              // 0 = everything ok - success
@@ -222,7 +231,7 @@ void LogonCommServerSocket::HandleSessionRequest(WorldPacket & recvData)
     // get sessionkey!
     uint32 error = 0;
     std::shared_ptr<Account> acct = sAccountMgr.getAccountByName(account_name);
-    if (acct == NULL || acct->SessionKey == NULL)
+    if (acct == nullptr || acct->SessionKey == NULL)
         error = 1;          // Unauthorized user.
 
     // build response packet
@@ -258,7 +267,7 @@ void LogonCommServerSocket::HandlePing(WorldPacket & recvData)
     SendPacket(&data);
     last_ping = static_cast<uint32>(time(nullptr));
 
-    sRealmsMgr.setLastPing(realmId);
+    sRealmManager.setLastPing(realmId);
 }
 
 void LogonCommServerSocket::SendPacket(WorldPacket* data)
@@ -270,14 +279,8 @@ void LogonCommServerSocket::SendPacket(WorldPacket* data)
     header.opcode = data->GetOpcode();
     //header.size   = ntohl((u_long)data->size());
     header.size = (uint32)data->size();
-#ifdef _MSC_VER
-#   pragma warning (push)
-#   pragma warning (disable : 4366)
-#endif
+
     byteSwapUInt32(&header.size);
-#ifdef _MSC_VER
-#pragma warning (pop)
-#endif
 
     if (use_crypto)
         sendCrypto.Process((unsigned char*)&header, (unsigned char*)&header, 6);
@@ -304,7 +307,7 @@ void LogonCommServerSocket::HandleAuthChallenge(WorldPacket & recvData)
     recvData.read(key, 20);
     recvData >> realmId;
 
-    const auto realm = sRealmsMgr.getRealmById(realmId);
+    const auto realm = sRealmManager.getRealmById(realmId);
     if (realm == nullptr)
     {
         sLogger.failure("Realm %u is missing in  table realms. Please add the server to your realms table.", static_cast<uint32_t>(realmId));
@@ -370,11 +373,11 @@ void LogonCommServerSocket::HandleMappingReply(WorldPacket & recvData)
     uint32 count;
     uint32 realm_id;
     buf >> realm_id;
-    auto realm = sRealmsMgr.getRealmById(realm_id);
+    auto realm = sRealmManager.getRealmById(realm_id);
     if (!realm)
         return;
 
-    sRealmsMgr.getRealmLock().Acquire();
+    sRealmManager.getRealmLock().Acquire();
 
     std::unordered_map<uint32, uint8>::iterator itr;
     buf >> count;
@@ -389,7 +392,7 @@ void LogonCommServerSocket::HandleMappingReply(WorldPacket & recvData)
             realm->_characterMap.insert(std::make_pair(account_id, number_of_characters));
     }
 
-    sRealmsMgr.getRealmLock().Release();
+    sRealmManager.getRealmLock().Release();
 }
 
 void LogonCommServerSocket::HandleUpdateMapping(WorldPacket & recvData)
@@ -399,11 +402,11 @@ void LogonCommServerSocket::HandleUpdateMapping(WorldPacket & recvData)
     uint8 chars_to_add;
     recvData >> realm_id;
 
-    auto realm = sRealmsMgr.getRealmById(realm_id);
+    auto realm = sRealmManager.getRealmById(realm_id);
     if (!realm)
         return;
 
-    sRealmsMgr.getRealmLock().Acquire();
+    sRealmManager.getRealmLock().Acquire();
     recvData >> account_id;
     recvData >> chars_to_add;
 
@@ -413,7 +416,7 @@ void LogonCommServerSocket::HandleUpdateMapping(WorldPacket & recvData)
     else
         realm->_characterMap.insert(std::make_pair(account_id, chars_to_add));
 
-    sRealmsMgr.getRealmLock().Release();
+    sRealmManager.getRealmLock().Release();
 }
 
 void LogonCommServerSocket::HandleTestConsoleLogin(WorldPacket & recvData)
@@ -430,7 +433,7 @@ void LogonCommServerSocket::HandleTestConsoleLogin(WorldPacket & recvData)
     data << request;
 
     std::shared_ptr<Account> pAccount = sAccountMgr.getAccountByName(accountname);
-    if (pAccount == NULL)
+    if (pAccount == nullptr)
     {
         data << uint32(0);
         SendPacket(&data);
@@ -472,10 +475,10 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
             recvData >> banreason;
 
             // remember we expect this in uppercase
-            Util::StringToUpperCase(account);
+            AscEmu::Util::Strings::toUpperCase(account);
 
             std::shared_ptr<Account> pAccount = sAccountMgr.getAccountByName(account);
-            if (pAccount == NULL)
+            if (pAccount == nullptr)
                 return;
 
             pAccount->Banned = duration;
@@ -494,7 +497,7 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
             //recvData >> gm;
 
             //// remember we expect this in uppercase
-            //Util::StringToUpperCase(account);
+            //AscEmu::Util::Strings::toUpperCase(account);
 
             //Account* pAccount = sAccountMgr.getAccountByName(account);
             //if (pAccount == NULL)
@@ -516,10 +519,10 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
             recvData >> duration;
 
             // remember we expect this in uppercase
-            Util::StringToUpperCase(account);
+            AscEmu::Util::Strings::toUpperCase(account);
 
             std::shared_ptr<Account> pAccount = sAccountMgr.getAccountByName(account);
-            if (pAccount == NULL)
+            if (pAccount == nullptr)
                 return;
 
             pAccount->Muted = duration;
@@ -623,7 +626,7 @@ void LogonCommServerSocket::HandleDatabaseModify(WorldPacket & recvData)
             std::string name_save = name;  // save original name to check
 
             // remember we expect this in uppercase
-            Util::StringToUpperCase(name);
+            AscEmu::Util::Strings::toUpperCase(name);
 
             auto account_check = sAccountMgr.getAccountByName(name);
 
@@ -687,7 +690,7 @@ void LogonCommServerSocket::HandleRequestCheckAccount(WorldPacket & recvData)
             std::string account_name_save = account_name;  // save original account_name to check
 
             // remember we expect this in uppercase
-            Util::StringToUpperCase(account_name);
+            AscEmu::Util::Strings::toUpperCase(account_name);
 
             std::shared_ptr<Account> account_check = sAccountMgr.getAccountByName(account_name);
             if (account_check == nullptr)
@@ -722,7 +725,7 @@ void LogonCommServerSocket::HandleRequestCheckAccount(WorldPacket & recvData)
             std::string account_name_save = account_name;  // save original account_name to check
 
             // remember we expect this in uppercase
-            Util::StringToUpperCase(account_name);
+            AscEmu::Util::Strings::toUpperCase(account_name);
 
             std::shared_ptr<Account> account_check = sAccountMgr.getAccountByName(account_name);
             if (account_check == nullptr)
@@ -776,7 +779,7 @@ void LogonCommServerSocket::HandlePopulationRespond(WorldPacket & recvData)
     float population;
     uint32 realmId;
     recvData >> realmId >> population;
-    sRealmsMgr.updateRealmPop(realmId, population);
+    sRealmManager.setRealmPopulation(realmId, population);
 }
 
 void LogonCommServerSocket::RefreshRealmsPop()

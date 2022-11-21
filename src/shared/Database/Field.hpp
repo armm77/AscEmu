@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -20,11 +20,11 @@ public:
     inline float GetFloat() { return mValue ? static_cast<float>(atof(mValue)) : 0; }
     inline bool GetBool() { return mValue ? atoi(mValue) > 0 : false; }
 
-    inline uint8_t GetUInt8() { return mValue ? static_cast<uint8_t>(atol(mValue)) : 0; }
+    inline uint8_t GetUInt8() { return mValue ? static_cast<uint8_t>(atol(mValue)) : 0U; }
     inline int8_t GetInt8() { return mValue ? static_cast<int8_t>(atol(mValue)) : 0; }
-    inline uint16_t GetUInt16() { return mValue ? static_cast<uint16_t>(atol(mValue)) : 0; }
+    inline uint16_t GetUInt16() { return mValue ? static_cast<uint16_t>(atol(mValue)) : 0U; }
     inline int16_t GetInt16() { return mValue ? static_cast<int16_t>(atol(mValue)) : 0; }
-    inline uint32_t GetUInt32() { return mValue ? static_cast<uint32_t>(atol(mValue)) : 0; }
+    inline uint32_t GetUInt32() { return mValue ? static_cast<uint32_t>(atol(mValue)) : 0U; }
     inline int32_t GetInt32() { return mValue ? static_cast<int32_t>(atol(mValue)) : 0; }
 
     uint64_t GetUInt64()

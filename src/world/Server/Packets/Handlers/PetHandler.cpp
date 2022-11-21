@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/Packets/CmsgDismissCritter.h"
 #include "Server/Packets/CmsgPetLearnTalent.h"
 #include "Server/Packets/CmsgPetCancelAura.h"
@@ -19,13 +19,16 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/SmsgPetNameQuery.h"
 #include "Server/Packets/SmsgPetActionSound.h"
 #include "Server/WorldSession.h"
-#include "Units/Creatures/Pet.h"
-#include "Map/MapMgr.h"
+#include "Objects/Units/Creatures/Pet.h"
+#include "Map/Management/MapMgr.hpp"
+#include "Movement/MovementDefines.h"
+#include "Movement/MovementManager.h"
 #include "Server/MainServerDefines.h"
-#include "Units/Creatures/Vehicle.h"
-#include "Objects/Faction.h"
-#include "Spell/Definitions/SpellFailure.h"
+#include "Objects/Units/Creatures/Vehicle.h"
+#include "Management/Faction.h"
+#include "Spell/Definitions/SpellFailure.hpp"
 #include "Server/Packets/SmsgPetLearnedSpell.h"
+#include "Objects/Units/ThreatHandler.h"
 
 using namespace AscEmu::Packets;
 
@@ -37,7 +40,7 @@ void WorldSession::handlePetAction(WorldPacket& recvPacket)
 
     if (srlPacket.guid.isUnit())
     {
-        const auto creature = _player->GetMapMgr()->GetCreature(srlPacket.guid.getGuidLowPart());
+        const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
         if (creature == nullptr)
             return;
 
@@ -53,8 +56,8 @@ void WorldSession::handlePetAction(WorldPacket& recvPacket)
                         if (timer == 0)
                             timer = 2000;
 
-                        sEventMgr.AddEvent(_player, &Player::_EventCharmAttack, EVENT_PLAYER_CHARM_ATTACK, timer, 0, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
-                        _player->_EventCharmAttack();
+                        sEventMgr.AddEvent(_player, &Player::eventCharmAttack, EVENT_PLAYER_CHARM_ATTACK, timer, 0, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+                        _player->eventCharmAttack();
                     }
                 } break;
                 default:
@@ -64,19 +67,19 @@ void WorldSession::handlePetAction(WorldPacket& recvPacket)
         return;
     }
 
-    const auto pet = _player->GetMapMgr()->GetPet(srlPacket.guid.getGuidLowPart());
+    const auto pet = _player->getWorldMap()->getPet(srlPacket.guid.getGuidLowPart());
     if (pet == nullptr)
         return;
 
     Unit* unitTarget = nullptr;
     if (srlPacket.action == PET_ACTION_SPELL || srlPacket.action == PET_ACTION_SPELL_1 || srlPacket.action == PET_ACTION_SPELL_2 || (srlPacket.action == PET_ACTION_ACTION && srlPacket.misc == PET_ACTION_ATTACK))
     {
-        unitTarget = _player->GetMapMgr()->GetUnit(srlPacket.targetguid);
+        unitTarget = _player->getWorldMap()->getUnit(srlPacket.targetguid);
         if (unitTarget == nullptr)
             unitTarget = pet;
     }
 
-    std::list<Pet*> summons = _player->GetSummons();
+    std::list<Pet*> summons = _player->getSummons();
     bool alive_summon = false;
     for (auto itr = summons.begin(); itr != summons.end();)
     {
@@ -103,31 +106,24 @@ void WorldSession::handlePetAction(WorldPacket& recvPacket)
                             return;
                         }
 
-                        summonedPet->GetAIInterface()->WipeTargetList();
-                        summonedPet->GetAIInterface()->WipeHateList();
-
-                        if (summonedPet->GetAIInterface()->getUnitToFollow() == nullptr)
-                            summonedPet->GetAIInterface()->SetUnitToFollow(_player);
-
-                        summonedPet->GetAIInterface()->setAiState(AI_STATE_ATTACKING);
-                        summonedPet->GetAIInterface()->AttackReaction(unitTarget, 1, 0);
+                        summonedPet->getAIInterface()->setPetOwner(_player);
+                        summonedPet->getMovementManager()->remove(FOLLOW_MOTION_TYPE);
+                        summonedPet->getAIInterface()->onHostileAction(unitTarget, nullptr, true);
                     }
                     break;
                     case PET_ACTION_FOLLOW:
                     {
-                        summonedPet->GetAIInterface()->WipeTargetList();
-                        summonedPet->GetAIInterface()->WipeHateList();
+                        if (summonedPet->hasUnitStateFlag(UNIT_STATE_CHASING))
+                            summonedPet->getMovementManager()->remove(CHASE_MOTION_TYPE);
 
-                        summonedPet->GetAIInterface()->SetUnitToFollow(_player);
-                        summonedPet->GetAIInterface()->HandleEvent(EVENT_FOLLOWOWNER, summonedPet, 0);
+                        summonedPet->getAIInterface()->setPetOwner(_player);
+                        summonedPet->getAIInterface()->setCurrentTarget(nullptr);
+                        summonedPet->getAIInterface()->handleEvent(EVENT_FOLLOWOWNER, summonedPet, 0);
                     }
                     break;
                     case PET_ACTION_STAY:
                     {
-                        summonedPet->GetAIInterface()->WipeTargetList();
-                        summonedPet->GetAIInterface()->WipeHateList();
-
-                        summonedPet->GetAIInterface()->ResetUnitToFollow();
+                        summonedPet->getMovementManager()->remove(FOLLOW_MOTION_TYPE);
                     }
                     break;
                     case PET_ACTION_DISMISS:
@@ -175,11 +171,10 @@ void WorldSession::handlePetAction(WorldPacket& recvPacket)
                         }
                         else
                         {
-                            summonedPet->GetAIInterface()->WipeTargetList();
-                            summonedPet->GetAIInterface()->WipeHateList();
+                            summonedPet->getThreatManager().clearAllThreat();
+                            summonedPet->getThreatManager().removeMeFromThreatLists();
 
-                            summonedPet->GetAIInterface()->AttackReaction(unitTarget, 1, 0);
-                            summonedPet->GetAIInterface()->SetNextSpell(aiSpell);
+                            summonedPet->getAIInterface()->onHostileAction(unitTarget, aiSpell->spell, true);
                         }
                     }
                 }
@@ -189,12 +184,13 @@ void WorldSession::handlePetAction(WorldPacket& recvPacket)
             {
                 if (srlPacket.misc == PET_ACTION_STAY) 
                 {
-                    summonedPet->GetAIInterface()->WipeTargetList();
-                    summonedPet->GetAIInterface()->WipeHateList();
-                    summonedPet->GetAIInterface()->SetUnitToFollow(_player);
-                    summonedPet->GetAIInterface()->HandleEvent(EVENT_FOLLOWOWNER, summonedPet, 0);
+                    summonedPet->getThreatManager().clearAllThreat();
+                    summonedPet->getThreatManager().removeMeFromThreatLists();
+
+                    summonedPet->getAIInterface()->setPetOwner(_player);
+                    summonedPet->getAIInterface()->handleEvent(EVENT_FOLLOWOWNER, summonedPet, 0);
                 }
-                summonedPet->SetPetState(srlPacket.misc);
+                summonedPet->getAIInterface()->setReactState(ReactStates(srlPacket.misc));
 
             }
             break;
@@ -216,7 +212,7 @@ void WorldSession::handlePetNameQuery(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto pet = _player->GetMapMgr()->GetPet(srlPacket.guid.getGuidLowPart());
+    const auto pet = _player->getWorldMap()->getPet(srlPacket.guid.getGuidLowPart());
     if (pet == nullptr)
         return;
 
@@ -237,11 +233,11 @@ namespace PetStableResult
 
 void WorldSession::handleStablePet(WorldPacket& /*recvPacket*/)
 {
-    const auto pet = _player->GetSummon();
+    const auto pet = _player->getFirstPetFromSummons();
     if (pet != nullptr && pet->IsSummonedPet())
         return;
 
-    const auto playerPet = _player->GetPlayerPet(_player->GetUnstabledPetNumber());
+    const auto playerPet = _player->getPlayerPet(_player->getUnstabledPetNumber());
     if (playerPet == nullptr)
         return;
 
@@ -259,7 +255,7 @@ void WorldSession::handleUnstablePet(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto playerPet = _player->GetPlayerPet(srlPacket.petNumber);
+    const auto playerPet = _player->getPlayerPet(srlPacket.petNumber);
     if (playerPet == nullptr)
     {
         sLogger.failure("PET SYSTEM: Player " I64FMT " tried to unstable non-existent pet %u", _player->getGuid(), srlPacket.petNumber);
@@ -267,7 +263,7 @@ void WorldSession::handleUnstablePet(WorldPacket& recvPacket)
     }
 
     if (playerPet->alive)
-        _player->SpawnPet(srlPacket.petNumber);
+        _player->spawnPet(srlPacket.petNumber);
 
     playerPet->stablestate = STABLE_STATE_ACTIVE;
 
@@ -280,18 +276,18 @@ void WorldSession::handleStableSwapPet(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto playerPet = _player->GetPlayerPet(srlPacket.petNumber);
+    const auto playerPet = _player->getPlayerPet(srlPacket.petNumber);
     if (playerPet == nullptr)
     {
         sLogger.failure("PET SYSTEM: Player " I64FMT " tried to unstable non-existent pet %u", _player->getGuid(), srlPacket.petNumber);
         return;
     }
 
-    const auto pet = _player->GetSummon();
+    const auto pet = _player->getFirstPetFromSummons();
     if (pet != nullptr && pet->IsSummonedPet())
         return;
 
-    const auto playerPet2 = _player->GetPlayerPet(_player->GetUnstabledPetNumber());
+    const auto playerPet2 = _player->getPlayerPet(_player->getUnstabledPetNumber());
     if (playerPet2 == nullptr)
         return;
 
@@ -301,7 +297,7 @@ void WorldSession::handleStableSwapPet(WorldPacket& recvPacket)
     playerPet2->stablestate = STABLE_STATE_PASSIVE;
 
     if (playerPet->alive)
-        _player->SpawnPet(srlPacket.petNumber);
+        _player->spawnPet(srlPacket.petNumber);
 
     playerPet->stablestate = STABLE_STATE_ACTIVE;
 
@@ -313,7 +309,7 @@ void WorldSession::handleBuyStableSlot(WorldPacket& /*recvPacket*/)
     uint32_t stable_cost = 0;
 
 #if VERSION_STRING < Cata
-    const auto stableSlotPrices = sStableSlotPricesStore.LookupEntry(_player->GetStableSlotCount() + 1);
+    const auto stableSlotPrices = sStableSlotPricesStore.LookupEntry(_player->getStableSlotCount() + 1);
 
     if (stableSlotPrices != nullptr)
         stable_cost = stableSlotPrices->Price;
@@ -329,7 +325,7 @@ void WorldSession::handleBuyStableSlot(WorldPacket& /*recvPacket*/)
 
     SendPacket(SmsgStableResult(PetStableResult::BuySuccess).serialise().get());
 
-    _player->m_StableSlotCount++;
+    _player->m_stableSlotCount++;
 }
 
 void WorldSession::handlePetSetActionOpcode(WorldPacket& recvPacket)
@@ -338,10 +334,10 @@ void WorldSession::handlePetSetActionOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    if (!_player->GetSummon())
+    if (!_player->getFirstPetFromSummons())
         return;
 
-    const auto pet = _player->GetSummon();
+    const auto pet = _player->getFirstPetFromSummons();
     const auto spellInfo = sSpellMgr.getSpellInfo(srlPacket.spell);
     if (spellInfo == nullptr)
         return;
@@ -361,7 +357,7 @@ void WorldSession::handlePetRename(WorldPacket& recvPacket)
         return;
 
     Pet* pet = nullptr;
-    std::list<Pet*> summons = _player->GetSummons();
+    std::list<Pet*> summons = _player->getSummons();
     for (auto summon : summons)
     {
         if (summon->getGuid() == srlPacket.guid.getRawGuid())
@@ -381,27 +377,28 @@ void WorldSession::handlePetRename(WorldPacket& recvPacket)
     pet->setSheathType(SHEATH_STATE_MELEE);
     pet->setPetFlags(PET_RENAME_NOT_ALLOWED);
 
-    ARCEMU_ASSERT(pet->getPlayerOwner() != nullptr);
+    if (pet->getPlayerOwner() != nullptr)
+    {
+        if (pet->getPlayerOwner()->isPvpFlagSet())
+            pet->setPvpFlag();
+        else
+            pet->removePvpFlag();
 
-    if (pet->getPlayerOwner()->isPvpFlagSet())
-        pet->setPvpFlag();
-    else
-        pet->removePvpFlag();
+        if (pet->getPlayerOwner()->isFfaPvpFlagSet())
+            pet->setFfaPvpFlag();
+        else
+            pet->removeFfaPvpFlag();
 
-    if (pet->getPlayerOwner()->isFfaPvpFlagSet())
-        pet->setFfaPvpFlag();
-    else
-        pet->removeFfaPvpFlag();
-
-    if (pet->getPlayerOwner()->isSanctuaryFlagSet())
-        pet->setSanctuaryFlag();
-    else
-        pet->removeSanctuaryFlag();
+        if (pet->getPlayerOwner()->isSanctuaryFlagSet())
+            pet->setSanctuaryFlag();
+        else
+            pet->removeSanctuaryFlag();
+    }
 }
 
 void WorldSession::handlePetAbandon(WorldPacket& /*recvPacket*/)
 {
-    const auto pet = _player->GetSummon();
+    const auto pet = _player->getFirstPetFromSummons();
     if (pet == nullptr)
         return;
 
@@ -414,7 +411,7 @@ void WorldSession::handlePetUnlearn(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto pet = _player->GetSummon();
+    const auto pet = _player->getFirstPetFromSummons();
     if (pet == nullptr || pet->getGuid() != srlPacket.guid.getRawGuid())
         return;
 
@@ -441,7 +438,7 @@ void WorldSession::handlePetSpellAutocast(WorldPacket& recvPacket)
     if (spellInfo == nullptr)
         return;
 
-    std::list<Pet*> summons = _player->GetSummons();
+    std::list<Pet*> summons = _player->getSummons();
     for (auto summon : summons)
     {
         const auto petSpell = summon->GetSpells()->find(spellInfo);
@@ -461,9 +458,14 @@ void WorldSession::handlePetCancelAura(WorldPacket& recvPacket)
     if (spellInfo != nullptr && spellInfo->getAttributes() & static_cast<uint32_t>(ATTRIBUTES_CANT_CANCEL))
         return;
 
-    const auto creature = _player->GetMapMgr()->GetCreature(srlPacket.guid.getGuidLow());
-    if (creature != nullptr && (creature->getPlayerOwner() == _player || _player->getCurrentVehicle() && _player->getCurrentVehicle()->IsControler(_player)))
-        creature->RemoveAura(srlPacket.spellId);
+    const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLow());
+#ifdef FT_VEHICLES
+    if (creature != nullptr && (creature->getPlayerOwner() == _player  || _player->getVehicleKit() && _player->getVehicleKit()->isControler(_player)))
+        creature->removeAllAurasById(srlPacket.spellId);
+#else
+    if (creature != nullptr && (creature->getPlayerOwner() == _player))
+        creature->removeAllAurasById(srlPacket.spellId);
+#endif
 }
 
 #if VERSION_STRING < Cata
@@ -474,7 +476,7 @@ void WorldSession::handlePetLearnTalent(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto pet = _player->GetSummon();
+    const auto pet = _player->getFirstPetFromSummons();
     if (pet == nullptr)
         return;
 
@@ -528,11 +530,12 @@ void WorldSession::handlePetLearnTalent(WorldPacket& recvPacket)
 #else
 void WorldSession::handlePetLearnTalent(WorldPacket& recvPacket)
 {
+#if VERSION_STRING < Mop
     CmsgPetLearnTalent srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto pet = _player->GetSummon();
+    const auto pet = _player->getFirstPetFromSummons();
     if (pet == nullptr)
         return;
 
@@ -582,6 +585,7 @@ void WorldSession::handlePetLearnTalent(WorldPacket& recvPacket)
     }
 
     pet->SendTalentsToOwner();
+#endif
 }
 #endif
 
@@ -604,7 +608,7 @@ void WorldSession::handleDismissCritter(WorldPacket& recvPacket)
         return;
     }
 
-    const auto unit = _player->GetMapMgr()->GetUnit(srlPacket.guid.getRawGuid());
+    const auto unit = _player->getWorldMap()->getUnit(srlPacket.guid.getRawGuid());
     if (unit != nullptr)
         unit->Delete();
 

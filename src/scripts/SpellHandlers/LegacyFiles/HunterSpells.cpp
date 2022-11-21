@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -20,16 +20,16 @@
 #include "Setup.h"
 #include "Spell/SpellAuras.h"
 #include "Server/Script/ScriptMgr.h"
-#include <Spell/Definitions/SpellMechanics.h>
-#include <Units/Creatures/Pet.h>
+#include <Spell/Definitions/SpellMechanics.hpp>
+#include <Objects/Units/Creatures/Pet.h>
 
 bool Refocus(uint8_t /*effectIndex*/, Spell* pSpell)
 {
     Player* playerTarget = pSpell->GetPlayerTarget();
     if (playerTarget == 0) return true;
 
-    SpellSet::const_iterator itr = playerTarget->mSpells.begin();
-    for (; itr != playerTarget->mSpells.end(); ++itr)
+    SpellSet::const_iterator itr = playerTarget->m_spells.begin();
+    for (; itr != playerTarget->m_spells.end(); ++itr)
     {
         if ((*itr) == 24531)       // skip calling spell.. otherwise spammies! :D
             continue;
@@ -47,9 +47,9 @@ bool Readiness(uint8_t /*effectIndex*/, Spell* pSpell)
 {
     if (!pSpell->getPlayerCaster())
         return true;
-    pSpell->getPlayerCaster()->ClearCooldownsOnLine(50, pSpell->getSpellInfo()->getId());//Beast Mastery
-    pSpell->getPlayerCaster()->ClearCooldownsOnLine(163, pSpell->getSpellInfo()->getId());//Marksmanship
-    pSpell->getPlayerCaster()->ClearCooldownsOnLine(51, pSpell->getSpellInfo()->getId());//Survival
+    pSpell->getPlayerCaster()->clearCooldownsOnLine(50, pSpell->getSpellInfo()->getId());//Beast Mastery
+    pSpell->getPlayerCaster()->clearCooldownsOnLine(163, pSpell->getSpellInfo()->getId());//Marksmanship
+    pSpell->getPlayerCaster()->clearCooldownsOnLine(51, pSpell->getSpellInfo()->getId());//Survival
     return true;
 }
 
@@ -60,7 +60,7 @@ bool MastersCall(uint8_t effectIndex, Spell* pSpell)
     if (caster == NULL)
         return true;
 
-    Pet* Summon = caster->GetSummon();
+    Pet* Summon = caster->getFirstPetFromSummons();
     if (Summon == NULL || Summon->isDead())
         return true;
 
@@ -81,22 +81,17 @@ bool TheBeastWithin(uint8_t /*effectIndex*/, Aura* a, bool apply)
 {
     Unit* m_target = a->getOwner();
 
-    uint32_t mechanics[15] = { MECHANIC_CHARMED, MECHANIC_DISORIENTED,    MECHANIC_DISTRACED, MECHANIC_FLEEING,
-                             MECHANIC_ROOTED, MECHANIC_ASLEEP, MECHANIC_ENSNARED, MECHANIC_STUNNED,
-                             MECHANIC_FROZEN, MECHANIC_INCAPACIPATED, MECHANIC_POLYMORPHED, MECHANIC_BANISHED,
-                             MECHANIC_SEDUCED, MECHANIC_HORRIFIED, MECHANIC_SAPPED
-    };
-
-    for (uint32_t x = 0; x < 15; x++)
+    const auto mechanics = sSpellMgr.getCrowdControlMechanicList(false);
+    for (int x = 0; mechanics[x] != MECHANIC_NONE; ++x)
     {
         if (apply)
-        {
-            m_target->MechanicsDispels[mechanics[x]]++;
-            m_target->RemoveAllAurasByMechanic(mechanics[x], 0, false);
-        }
+            m_target->m_mechanicsDispels[mechanics[x]]++;
         else
-            m_target->MechanicsDispels[mechanics[x]]--;
+            m_target->m_mechanicsDispels[mechanics[x]]--;
     }
+
+    if (apply)
+        m_target->removeAllAurasBySpellMechanic(mechanics);
 
     return true;
 }
@@ -106,22 +101,18 @@ bool BestialWrath(uint8_t /*effectIndex*/, Aura* a, bool apply)
 {
     Unit* m_target = a->getOwner();
 
-    uint32_t mechanics[15] = { MECHANIC_CHARMED, MECHANIC_DISORIENTED,    MECHANIC_DISTRACED, MECHANIC_FLEEING,
-                             MECHANIC_ROOTED, MECHANIC_ASLEEP, MECHANIC_ENSNARED, MECHANIC_STUNNED,
-                             MECHANIC_FROZEN, MECHANIC_INCAPACIPATED, MECHANIC_POLYMORPHED, MECHANIC_BANISHED,
-                             MECHANIC_SEDUCED, MECHANIC_HORRIFIED, MECHANIC_SAPPED
-    };
-
-    for (uint32_t x = 0; x < 15; x++)
+    const auto mechanics = sSpellMgr.getCrowdControlMechanicList(false);
+    for (int x = 0; mechanics[x] != MECHANIC_NONE; ++x)
     {
         if (apply)
-        {
-            m_target->MechanicsDispels[mechanics[x]]++;
-            m_target->RemoveAllAurasByMechanic(mechanics[x], 0, false);
-        }
+            m_target->m_mechanicsDispels[mechanics[x]]++;
         else
-            m_target->MechanicsDispels[mechanics[x]]--;
+            m_target->m_mechanicsDispels[mechanics[x]]--;
     }
+
+    if (apply)
+        m_target->removeAllAurasBySpellMechanic(mechanics);
+
     return true;
 }
 
@@ -133,7 +124,7 @@ bool Misdirection(uint8_t /*effectIndex*/, Aura* a, bool apply)
         return true;
 
     if (!apply)
-        sEventMgr.AddEvent(caster, &Player::SetMisdirectionTarget, (uint64_t)0, EVENT_UNK, 250, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+        sEventMgr.AddEvent(caster, &Player::setMisdirectionTarget, (uint64_t)0, EVENT_UNK, 250, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
 
     return true;
 }
@@ -188,7 +179,7 @@ public:
         if (caster == NULL)
             return;
 
-        a->refresh();
+        a->refreshOrModifyStack();
 
         switch (spellId)
         {
@@ -324,7 +315,7 @@ bool ChimeraShot(uint8_t /*effectIndex*/, Spell *spell)
     condition.AddSpellIdToCheck(67992);
     condition.AddSpellIdToCheck(67993);
 
-    target->AuraActionIf(&action, &condition);
+    target->auraActionIf(&action, &condition);
 
     return true;
 }

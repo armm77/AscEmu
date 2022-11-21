@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -20,19 +20,19 @@ namespace AscEmu::Packets
 
         struct AuraUpdate
         {
-            uint8_t visualSlot;
-            uint32_t spellId;
+            uint8_t visualSlot = 0;
+            uint32_t spellId = 0;
 #if VERSION_STRING < Cata
-            uint8_t flags;
+            uint8_t flags = 0;
 #else
-            uint16_t flags;
+            uint16_t flags = 0;
 #endif
-            uint8_t level;
-            uint8_t stackCount;
+            uint8_t level = 0;
+            uint8_t stackCount = 0;
             WoWGuid casterGuid;
-            uint32_t duration;
-            uint32_t timeLeft;
-            int32_t effAmount[5]; // 3 spell effects up till cata, 5 in mop
+            uint32_t duration = 0;
+            uint32_t timeLeft = 0;
+            int32_t effAmount[5] = {0}; // 3 spell effects up till cata, 5 in mop
         };
 
         AuraUpdate aura_updates;
@@ -44,8 +44,8 @@ namespace AscEmu::Packets
         SmsgAuraUpdate(WoWGuid guid, AuraUpdate aura_updates, bool remove = false) :
             ManagedPacket(SMSG_AURA_UPDATE, 30),
             guid(guid),
-            aura_updates(aura_updates),
-            remove(remove)
+            remove(remove),
+            aura_updates(aura_updates)
         {
         }
 

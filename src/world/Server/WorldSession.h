@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -25,19 +25,19 @@
 #include "Server/Opcodes.hpp"
 #include "Management/Quest.h"
 #include "FastQueue.h"
-#include "World.Legacy.h"
-#include "Units/Unit.h"
 #include "Server/CharacterErrors.h"
-#include "Data/Flags.hpp"
-#include "Units/Players/PlayerDefines.hpp"
+#include "Objects/Units/Players/PlayerDefines.hpp"
+#include "Management/ItemInterface.h"
 #if VERSION_STRING >= Cata
     #include "Management/AddonMgr.h"
-    #include "Units/Players/Player.h"
+    #include "Objects/Units/Players/Player.hpp"
     struct AddonEntry;
 #endif
 
-#include <stddef.h>
 #include <string>
+#include "Objects/MovementInfo.h"
+#include "Logging/Logger.hpp"
+#include "CallBack.h"
 
 class Player;
 class WorldPacket;
@@ -46,6 +46,7 @@ class WorldSession;
 class MapMgr;
 class Creature;
 struct TrainerSpell;
+class InstanceSaved;
 
 template<class T, class LOCK>
 
@@ -59,8 +60,10 @@ struct LfgProposal;
 struct LfgReward;
 struct LfgRoleCheck;
 struct AddonEntry;
-
-#define CHECK_INWORLD_RETURN if (_player == NULL || !_player->IsInWorld()) { return; }
+struct Loot;
+class WoWGuid;
+class Query;
+class QueryResult;
 
 // Worldsocket related
 #define WORLDSOCKET_TIMEOUT 120
@@ -219,8 +222,13 @@ class SERVER_DECL WorldSession
 
         AccountDataEntry* GetAccountData(uint32 index)
         {
-            ARCEMU_ASSERT(index < 8)
-            return &sAccountData[index];
+            if (index < 8)
+            {
+                return &sAccountData[index];
+            }
+
+            sLogger.failure("GetAccountData tried to get invalid index %u", index);
+            return nullptr;
         }
 
         void SetLogoutTimer(uint32 ms)
@@ -350,7 +358,12 @@ class SERVER_DECL WorldSession
         void handleCalendarEventRemoveInvite(WorldPacket& recvPacket);
         void handleCalendarEventStatus(WorldPacket& recvPacket);
         void handleCalendarEventModeratorStatus(WorldPacket& recvPacket);
+
+public:
+        void sendCalendarRaidLockout(InstanceSaved const* save, bool add);
+        void sendCalendarRaidLockoutUpdated(InstanceSaved const* save);
 #endif
+protected:
         //////////////////////////////////////////////////////////////////////////////////////////
         // ChannelHandler.cpp
         void handleChannelJoin(WorldPacket& recvPacket);
@@ -567,6 +580,22 @@ class SERVER_DECL WorldSession
         void sendBuyFailed(uint64_t guid, uint32_t itemid, uint8_t error);
         void sendSellItem(uint64_t vendorguid, uint64_t itemid, uint8_t error);
 
+#if VERSION_STRING >= Cata
+        // Void Storage
+        void handleVoidStorageUnlock(WorldPacket& recvData);
+        void handleVoidStorageQuery(WorldPacket& recvData);
+        void handleVoidStorageTransfer(WorldPacket& recvData);
+        void handleVoidSwapItem(WorldPacket& recvData);
+        void sendVoidStorageTransferResult(VoidTransferError result);
+
+        // Transmogrification
+        void handleTransmogrifyItems(WorldPacket& recvData);
+
+        // Reforge
+        void handleReforgeItemOpcode(WorldPacket& recvData);
+        void sendReforgeResult(bool success);
+#endif
+
 #if VERSION_STRING >= WotLK
         void sendRefundInfo(uint64_t guid);
 
@@ -593,7 +622,9 @@ class SERVER_DECL WorldSession
         void handleAutoBankItemOpcode(WorldPacket& recvPacket);
         void handleAutoStoreBankItemOpcode(WorldPacket& recvPacket);
         void handleCancelTemporaryEnchantmentOpcode(WorldPacket& recvPacket);
+#if VERSION_STRING > Classic
         void handleInsertGemOpcode(WorldPacket& recvPacket);
+#endif
         void handleWrapItemOpcode(WorldPacket& recvPacket);
 #if VERSION_STRING > TBC
         void handleEquipmentSetUse(WorldPacket& recvPacket);
@@ -649,6 +680,8 @@ class SERVER_DECL WorldSession
         void handleLootReleaseOpcode(WorldPacket& recvPacket);
         void handleLootMasterGiveOpcode(WorldPacket& recvPacket);
 
+        void doLootRelease(WoWGuid lguid);
+
         //////////////////////////////////////////////////////////////////////////////////////////
         // MailHandler.cpp
         void handleGetMailOpcode(WorldPacket& /*recvPacket*/);
@@ -691,6 +724,7 @@ class SERVER_DECL WorldSession
         void handleGameobjReportUseOpCode(WorldPacket& recvPacket);
         void handleDungeonDifficultyOpcode(WorldPacket& recvPacket);
         void handleRaidDifficultyOpcode(WorldPacket& recvPacket);
+        void handleInstanceLockResponse(WorldPacket& recvPacket);
         void handleSetAutoLootPassOpcode(WorldPacket& recvPacket);
         void handleSetActionBarTogglesOpcode(WorldPacket& recvPacket);
         void handleLootRollOpcode(WorldPacket& recvPacket);
@@ -768,6 +802,7 @@ class SERVER_DECL WorldSession
 
         void handleMovementOpcodes(WorldPacket& recvPacket);
         void handleAcknowledgementOpcodes(WorldPacket& recvPacket);
+        void handleForceSpeedChangeAck(WorldPacket& recvPacket);
         void handleWorldTeleportOpcode(WorldPacket& recvPacket);
         void handleMountSpecialAnimOpcode(WorldPacket& /*recvPacket*/);
         void handleMoveWorldportAckOpcode(WorldPacket& /*recvPacket*/);
@@ -785,11 +820,8 @@ class SERVER_DECL WorldSession
         void sendInnkeeperBind(Creature* creature);
         void sendTrainerList(Creature* creature);
         void sendStabledPetList(uint64_t npcguid);
-#if VERSION_STRING < Cata
-        uint8_t trainerGetSpellStatus(TrainerSpell* trainerSpell);
-#else
-        TrainerSpellState trainerGetSpellStatus(TrainerSpell* trainerSpell);
-#endif
+
+        TrainerSpellState trainerGetSpellStatus(TrainerSpell const* trainerSpell) const;
 
     protected:
         void handleTabardVendorActivateOpcode(WorldPacket& recvPacket);
@@ -964,15 +996,14 @@ class SERVER_DECL WorldSession
         uint32 _accountId;
         uint32 _accountFlags;
         std::string _accountName;
-
+#if VERSION_STRING > TBC
         bool has_level_55_char; // death knights
         bool has_dk;
-
-        //uint16 _TEMP_ERR_CREATE_CODE; // increments
-        int8 _side;
+#endif
+        // uint16 _TEMP_ERR_CREATE_CODE; // increments
+        uint8_t _side;
 
         WoWGuid m_MoverWoWGuid;
-        uint64 m_MoverGuid;
 
         uint32 _logoutTime; // time we received a logout request -- wait 20 seconds, and quit
 

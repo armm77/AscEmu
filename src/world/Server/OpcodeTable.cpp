@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -18,16 +18,20 @@ OpcodeTables& OpcodeTables::getInstance()
 
 void OpcodeTables::initialize()
 {
-    std::cout << "OpcodeTables preparing version specific tables." << std::endl;
+    std::cout << "OpcodeTables preparing version specific tables." << "\n";
 
+    uint32_t valueCount = 0;
     // fill vector
     for (const auto opcodeStore : multiversionOpcodeStore)
     {   
         for (auto hexIndex = 0; hexIndex < MAX_VERSION_INDEX; ++hexIndex)
+        {
             _versionHexTable[hexIndex].emplace_back(opcodeStore.second.hexValues[hexIndex], opcodeStore.first);
+            ++valueCount;
+        }
     }
 
-    sizeOfHexTables();
+    std::cout << "OpcodeTables prepared " << valueCount << " hexvalues for 5 version" << "\n";
 }
 
 void OpcodeTables::finalize()

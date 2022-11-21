@@ -1,43 +1,48 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 
 #include "WorldConf.h"
 #include "Management/AddonMgr.h"
 #include "Management/AuctionMgr.h"
-#include "Management/CalendarMgr.h"
-#include "Management/Item.h"
+#include "Management/CalendarMgr.hpp"
+#include "Objects/Item.hpp"
 #include "Management/LFG/LFGMgr.hpp"
 #include "Management/WordFilter.h"
-#include "Management/WeatherMgr.h"
+#include "Management/WeatherMgr.hpp"
 #include "Management/TaxiMgr.h"
 #include "Management/ItemInterface.h"
-#include "Management/Channel.h"
-#include "Management/ChannelMgr.h"
+#include "Chat/Channel.hpp"
+#include "Chat/ChannelMgr.hpp"
 #include "WorldSocket.h"
 #include "Storage/MySQLDataStore.hpp"
 #include <CrashHandler.h>
 #include "Server/MainServerDefines.h"
 //#include "Config/Config.h"
-//#include "Map/MapCell.h"
-#include "Map/WorldCreator.h"
+//#include "Map/MapCell.hpp"
 #include "Storage/DayWatcherThread.h"
 #include "BroadcastMgr.h"
-#include "World.Legacy.h"
-#include "Spell/SpellMgr.h"
+#include "Spell/SpellMgr.hpp"
 #include "Management/Guild/GuildMgr.hpp"
 #include "Packets/SmsgPlaySound.h"
 #include "Packets/SmsgAreaTriggerMessage.h"
 #include "Packets/SmsgZoneUnderAttack.h"
 #include "OpcodeTable.hpp"
+#include "Chat/ChatHandler.hpp"
+#include "Management/GameEventMgr.h"
+#include "Objects/Units/Creatures/CreatureGroups.h"
+#include "Movement/WaypointManager.h"
+#include "Packets/SmsgMessageChat.h"
+#include "Map/Management/MapMgr.hpp"
 
-#if VERSION_STRING == Cata
-#include "GameCata/Management/GuildFinderMgr.h"
-#elif VERSION_STRING == Mop
-#include "GameMop/Management/GuildFinderMgr.h"
+#include "VMapFactory.h"
+#include "VMapManager2.h"
+
+#if VERSION_STRING >= Cata
+#include "Management/Guild/GuildFinderMgr.hpp"
 #endif
 
 std::unique_ptr<DayWatcherThread> dw = nullptr;
@@ -120,11 +125,14 @@ void World::finalize()
     sGuildMgr.finalize();
 #endif
 
-    sLogger.info("InstanceMgr : ~InstanceMgr()");
-    sInstanceMgr.Shutdown();
+    sLogger.info("MapMgr : ~MapMgr()");
+    sMapMgr.shutdown();
 
     sLogger.info("WordFilter : ~WordFilter()");
     delete g_chatFilter;
+
+    sLogger.info("SpellMgr : ~SpellMgr()");
+    sSpellMgr.finalize();
 
     sLogger.info("MySQLDataStore : ~MySQLDataStore()");
     sMySQLStore.finalize();
@@ -195,7 +203,7 @@ uint32_t World::getWorldUptime()
 
 std::string World::getWorldUptimeString()
 {
-    time_t pTime = static_cast<time_t>(UNIXTIME) - mStartTime;
+    time_t pTime = UNIXTIME - mStartTime;
     tm* tmv = gmtime(&pTime);
 
     std::stringstream uptimeStream;
@@ -222,7 +230,7 @@ void World::updateAllTrafficTotals()
 
     for (auto playerStorage = sObjectMgr._players.begin(); playerStorage != sObjectMgr._players.end(); ++playerStorage)
     {
-        WorldSocket* socket = playerStorage->second->GetSession()->GetSocket();
+        WorldSocket* socket = playerStorage->second->getSession()->GetSocket();
         if (!socket || !socket->IsConnected() || socket->IsDeleted())
             continue;
 
@@ -268,18 +276,19 @@ float World::getRAMUsage()
 // Session functions
 void World::addSession(WorldSession* worldSession)
 {
-    ARCEMU_ASSERT(worldSession != NULL);
+    if (worldSession)
+    {
+        std::lock_guard<std::mutex> guard(mSessionLock);
 
-    std::lock_guard<std::mutex> guard(mSessionLock);
+        mActiveSessionMapStore[worldSession->GetAccountId()] = worldSession;
 
-    mActiveSessionMapStore[worldSession->GetAccountId()] = worldSession;
-
-    if (static_cast<uint32_t>(mActiveSessionMapStore.size()) > getPeakSessionCount())
-        setNewPeakSessionCount(static_cast<uint32_t>(mActiveSessionMapStore.size()));
+        if (static_cast<uint32_t>(mActiveSessionMapStore.size()) > getPeakSessionCount())
+            setNewPeakSessionCount(static_cast<uint32_t>(mActiveSessionMapStore.size()));
 
 #ifndef AE_TBC
-    worldSession->sendAccountDataTimes(GLOBAL_CACHE_MASK);
+        worldSession->sendAccountDataTimes(GLOBAL_CACHE_MASK);
 #endif
+    }
 }
 
 WorldSession* World::getSessionByAccountId(uint32_t accountId)
@@ -443,11 +452,12 @@ void World::disconnectSessionByPlayerName(const std::string& playerName, WorldSe
 // GlobalSession functions - not used?
 void World::addGlobalSession(WorldSession* worldSession)
 {
-    ARCEMU_ASSERT(worldSession != NULL);
-
-    globalSessionMutex.Acquire();
-    globalSessionSet.insert(worldSession);
-    globalSessionMutex.Release();
+    if (worldSession)
+    {
+        globalSessionMutex.Acquire();
+        globalSessionSet.insert(worldSession);
+        globalSessionMutex.Release();
+    }
 }
 
 void World::updateGlobalSession(uint32_t /*diff*/)
@@ -596,14 +606,14 @@ void World::sendAreaTriggerMessage(const std::string& message, WorldSession* sen
     sendGlobalMessage(AscEmu::Packets::SmsgAreaTriggerMessage(0, message.c_str(), 0).serialise().get(), sendToSelf);
 }
 
-void World::sendGlobalMessage(WorldPacket* worldPacket, WorldSession* sendToSelf /*nullptr*/, int32_t team /*-1*/)
+void World::sendGlobalMessage(WorldPacket* worldPacket, WorldSession* sendToSelf /*nullptr*/, uint32_t team /*3*/)
 {
     std::lock_guard<std::mutex> guard(mSessionLock);
 
     for (auto activeSessions = mActiveSessionMapStore.begin(); activeSessions != mActiveSessionMapStore.end(); ++activeSessions)
     {
         if (activeSessions->second->GetPlayer() && activeSessions->second->GetPlayer()->IsInWorld()
-            && activeSessions->second != sendToSelf && (team == -1 || activeSessions->second->GetPlayer()->GetTeam() == static_cast<uint32_t>(team)))
+            && activeSessions->second != sendToSelf && (team == 3 || activeSessions->second->GetPlayer()->GetTeam() == team))
             activeSessions->second->SendPacket(worldPacket);
     }
 }
@@ -674,12 +684,25 @@ bool World::setInitialWorldSettings()
 {
     auto startTime = Util::TimeNow();
 
-    Player::InitVisibleUpdateBits();
+    (new IdleMovementFactory())->registerSelf();
+    (new RandomMovementFactory())->registerSelf();
+    (new WaypointMovementFactory())->registerSelf();
+
+    Player::initVisibleUpdateBits();
 
     resetCharacterLoginBannState();
 
     if (!loadDbcDb2Stores())
         return false;
+
+#if VERSION_STRING < Cata
+    loadDbcLocaleLanguage();
+    auto localeString = Util::getLanguagesStringFromId(mDbcLocaleId);
+    if (mDbcLocaleId == 0)
+        localeString.append("/enUS");
+
+    sLogger.info("World : Using %s DBC locale", localeString.c_str());
+#endif
 
     sTaxiMgr.initialize();
     sChatHandler.initialize();
@@ -689,7 +712,7 @@ bool World::setInitialWorldSettings()
     sWorldPacketLog.initWorldPacketLog(worldConfig.logger.enableWorldPacketLog);
 
     sLogger.info("World : Loading SpellInfo data...");
-    sSpellMgr.startSpellMgr();
+    sSpellMgr.initialize();
 
     if (worldConfig.terrainCollision.isCollisionEnabled)
     {
@@ -698,13 +721,22 @@ bool World::setInitialWorldSettings()
         LoadGameObjectModelList(vmapPath);
     }
 
+    // Initialize Vmaps Liquid
+    VMAP::VMapManager2* vmmgr2 = VMAP::VMapFactory::createOrGetVMapManager();
+    vmmgr2->GetLiquidFlagsPtr = &getLiquidFlags;
+
+    sObjectMgr.initialize();
+    sInstanceMgr.loadInstances();
     loadMySQLStores();
 
     sLogger.info("World : Loading loot data...");
     sLootMgr.initialize();
-    sLootMgr.LoadLoot();
+    sLootMgr.loadLoot();
 
     loadMySQLTablesByTask();
+
+    sMapMgr.initialize();
+
     logEntitySize();
 
     sSpellMgr.loadSpellDataFromDatabase();
@@ -750,10 +782,6 @@ bool World::setInitialWorldSettings()
 
     broadcastMgr = std::move(std::make_unique<BroadcastMgr>());
 
-    ThreadPool.ExecuteTask(new CharacterLoaderThread());
-
-    sEventMgr.AddEvent(this, &World::checkForExpiredInstances, EVENT_WORLD_UPDATEAUCTIONS, 120000, 0, 0);
-
     sLogger.info("World: init in %u ms", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
 
     return true;
@@ -781,12 +809,41 @@ bool World::loadDbcDb2Stores()
     return true;
 }
 
+#if VERSION_STRING < Cata
+void World::loadDbcLocaleLanguage()
+{
+    // Read names from warrior class in ChrClasses DBC file to get used locale language
+    const auto warr = sChrClassesStore.LookupEntry(1);
+#if VERSION_STRING == Classic
+    for (uint8_t i = 0; i < 8; ++i)
+#else
+    for (uint8_t i = 0; i < 16; ++i)
+#endif
+    {
+        std::string name(warr->name[i]);
+        if (!name.empty())
+        {
+            mDbcLocaleId = i;
+            break;
+        }
+    }
+}
+
+uint8_t World::getDbcLocaleLanguageId() const
+{
+    return mDbcLocaleId;
+}
+#endif
+
 void World::loadMySQLStores()
 {
+    auto startTime = Util::TimeNow();
+
     sMySQLStore.loadAdditionalTableConfig();
 
     sMySQLStore.loadItemPagesTable();
     sMySQLStore.loadItemPropertiesTable();
+    sMySQLStore.loadCreaturePropertiesMovementTable();
     sMySQLStore.loadCreaturePropertiesTable();
     sMySQLStore.loadGameObjectPropertiesTable();
     sMySQLStore.loadQuestPropertiesTable();
@@ -815,9 +872,13 @@ void World::loadMySQLStores()
     sMySQLStore.loadCreatureInitialEquipmentTable();
 
     sMySQLStore.loadPlayerCreateInfoTable();
-    sMySQLStore.loadPlayerCreateInfoSkillsTable();
-    sMySQLStore.loadPlayerCreateInfoSpellsTable();
-    sMySQLStore.loadPlayerCreateInfoItemsTable();
+    sMySQLStore.loadPlayerCreateInfoBars();
+    sMySQLStore.loadPlayerCreateInfoItems();
+    sMySQLStore.loadPlayerCreateInfoSkills();
+    sMySQLStore.loadPlayerCreateInfoSpellLearn();
+    sMySQLStore.loadPlayerCreateInfoSpellCast();
+    sMySQLStore.loadPlayerCreateInfoLevelstats();
+    sMySQLStore.loadPlayerCreateInfoClassLevelstats();
     sMySQLStore.loadPlayerXpToLevelTable();
 
     sMySQLStore.loadSpellOverrideTable();
@@ -829,14 +890,12 @@ void World::loadMySQLStores()
     sMySQLStore.loadAreaTriggerTable();
     sMySQLStore.loadWordFilterCharacterNames();
     sMySQLStore.loadWordFilterChat();
-    sMySQLStore.loadCreatureFormationsTable();
 
     sMySQLStore.loadLocalesCreature();
     sMySQLStore.loadLocalesGameobject();
     sMySQLStore.loadLocalesGossipMenuOption();
     sMySQLStore.loadLocalesItem();
     sMySQLStore.loadLocalesItemPages();
-    sMySQLStore.loadLocalesNPCMonstersay();
     sMySQLStore.loadLocalesNpcScriptText();
     sMySQLStore.loadLocalesNpcText();
     sMySQLStore.loadLocalesQuest();
@@ -844,7 +903,6 @@ void World::loadMySQLStores()
     sMySQLStore.loadLocalesWorldmapInfo();
     sMySQLStore.loadLocalesWorldStringTable();
 
-    sMySQLStore.loadNpcMonstersayTable();
     //sMySQLStore.loadDefaultPetSpellsTable();      Zyres 2017/07/16 not used
     sMySQLStore.loadProfessionDiscoveriesTable();
 
@@ -852,83 +910,71 @@ void World::loadMySQLStores()
     sMySQLStore.loadTransportEntrys();
     sMySQLStore.loadGossipMenuItemsTable();
     sMySQLStore.loadRecallTable();
+    sMySQLStore.loadCreatureAIScriptsTable();
+    sMySQLStore.loadSpawnGroupIds();
+
+    sLogger.info("Done. MySQLStore loaded in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+
+    sFormationMgr->loadCreatureFormations();
+    sWaypointMgr->load();
+    sWaypointMgr->loadCustomWaypoints();
+    sObjectMgr.loadCreatureMovementOverrides();
 }
 
 void World::loadMySQLTablesByTask()
 {
     auto startTime = Util::TimeNow();
 
-    sObjectMgr.initialize();
     sAddonMgr.initialize();
     sTicketMgr.initialize();
     sGameEventMgr.initialize();
 
-#define MAKE_TASK(sp, ptr) tl.AddTask(new Task(new CallbackP0<sp>(&sp::getInstance(), &sp::ptr)))
-#define MAKE_TASK2(sp, ptr, value) tl.AddTask(new Task(new CallbackP1<sp, uint8_t>(&sp::getInstance(), &sp::ptr, value)))
-    // Fill the task list with jobs to do.
-    TaskList tl;
 
-    // spawn worker threads (2 * number of cpus)
-    tl.spawn();
+    sObjectMgr.GenerateLevelUpInfo();
+    sObjectMgr.LoadPlayersInfo();
 
-    // storage stuff has to be loaded first
-    tl.wait();
+    sMySQLStore.loadCreatureSpawns();
+    sMySQLStore.loadGameobjectSpawns();
+    sMySQLStore.loadGameObjectSpawnsExtraTable();
+    sMySQLStore.loadGameObjectSpawnsOverrideTable();
 
-    MAKE_TASK(ObjectMgr, GenerateLevelUpInfo);
-    MAKE_TASK(ObjectMgr, LoadPlayersInfo);
-    tl.wait();
+    sMySQLStore.loadCreatureGroupSpawns();
 
-    MAKE_TASK(MySQLDataStore, loadCreatureSpawns);
-    MAKE_TASK(MySQLDataStore, loadGameobjectSpawns);
-
-    MAKE_TASK(ObjectMgr, LoadInstanceEncounters);
-
-    MAKE_TASK(ObjectMgr, LoadCreatureWaypoints);
-    MAKE_TASK(ObjectMgr, LoadCreatureTimedEmotes);
-    MAKE_TASK(ObjectMgr, LoadTrainers);
-    MAKE_TASK(ObjectMgr, LoadSpellSkills);
-    MAKE_TASK(ObjectMgr, LoadVendors);
-    MAKE_TASK(ObjectMgr, LoadSpellTargetConstraints);
-#if VERSION_STRING >= Cata
-    MAKE_TASK(ObjectMgr, LoadSpellRequired);
-    MAKE_TASK(ObjectMgr, LoadSkillLineAbilityMap);
+    sObjectMgr.LoadInstanceEncounters();
+    sObjectMgr.LoadCreatureTimedEmotes();
+    sObjectMgr.LoadVendors();
+    sObjectMgr.loadTrainers();
+    sObjectMgr.LoadPetSpellCooldowns();
+    sObjectMgr.LoadGuildCharters();
+    sTicketMgr.loadGMTickets();
+    sObjectMgr.SetHighestGuids();
+    sObjectMgr.LoadReputationModifiers();
+    sObjectMgr.LoadGroups();
+    sObjectMgr.loadGroupInstances();
+    sObjectMgr.LoadArenaTeams();
+#ifdef FT_VEHICLES
+    sObjectMgr.LoadVehicleAccessories();
+    sObjectMgr.loadVehicleSeatAddon();
 #endif
-    MAKE_TASK(ObjectMgr, LoadPetSpellCooldowns);
-    MAKE_TASK(ObjectMgr, LoadGuildCharters);
-    MAKE_TASK(TicketMgr, loadGMTickets);
-    MAKE_TASK(ObjectMgr, SetHighestGuids);
-    MAKE_TASK(ObjectMgr, LoadReputationModifiers);
-    MAKE_TASK(ObjectMgr, LoadGroups);
-    MAKE_TASK(ObjectMgr, LoadCreatureAIAgents);
-    MAKE_TASK(ObjectMgr, LoadArenaTeams);
-    MAKE_TASK(ObjectMgr, LoadVehicleAccessories);
-    MAKE_TASK(ObjectMgr, LoadWorldStateTemplates);
+    sObjectMgr.LoadWorldStateTemplates();
 
 #if VERSION_STRING > TBC
-    MAKE_TASK(ObjectMgr, LoadAchievementRewards);
+    sObjectMgr.LoadAchievementRewards();
 #endif
 
-    tl.wait();
+    sLootMgr.loadAndGenerateLoot(0);
+    sLootMgr.loadAndGenerateLoot(1);
+    sLootMgr.loadAndGenerateLoot(2);
+    sLootMgr.loadAndGenerateLoot(3);
+    sLootMgr.loadAndGenerateLoot(4);
+    sLootMgr.loadAndGenerateLoot(5);
 
-    MAKE_TASK2(LootMgr, loadAndGenerateLoot, 0);
-    MAKE_TASK2(LootMgr, loadAndGenerateLoot, 1);
-    MAKE_TASK2(LootMgr, loadAndGenerateLoot, 2);
-    MAKE_TASK2(LootMgr, loadAndGenerateLoot, 3);
-    MAKE_TASK2(LootMgr, loadAndGenerateLoot, 4);
-    MAKE_TASK2(LootMgr, loadAndGenerateLoot, 5);
-
-    MAKE_TASK(QuestMgr, LoadExtraQuestStuff);
-    MAKE_TASK(ObjectMgr, LoadEventScripts);
-    MAKE_TASK(WeatherMgr, LoadFromDB);
-    MAKE_TASK(AddonMgr, LoadFromDB);
-    MAKE_TASK(GameEventMgr, LoadFromDB);
-    MAKE_TASK(CalendarMgr, LoadFromDB);
-
-#undef MAKE_TASK
-#undef MAKE_TASK2
-
-    // wait for tasks above
-    tl.wait();
+    sQuestMgr.LoadExtraQuestStuff();
+    sObjectMgr.LoadEventScripts();
+    sWeatherMgr.loadFromDB();
+    sAddonMgr.LoadFromDB();
+    sGameEventMgr.LoadFromDB();
+    sCalendarMgr.loadFromDB();
 
     sCommandTableStorage.Load();
     sLogger.info("WordFilter : Loading...");
@@ -936,16 +982,6 @@ void World::loadMySQLTablesByTask()
     g_chatFilter = new WordFilter();
 
     sLogger.info("Done. Database loaded in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
-
-    // calling this puts all maps into our task list.
-    sInstanceMgr.Load();
-
-    // wait for the events to complete.
-    tl.wait();
-
-    // wait for them to exit, now.
-    tl.kill();
-    tl.waitForThreadsToExit();
 }
 
 void World::logEntitySize()
@@ -963,7 +999,8 @@ void World::Update(unsigned long timePassed)
     mEventableObjectHolder->Update(static_cast<uint32_t>(timePassed));
     sAuctionMgr.Update();
     updateQueuedSessions(static_cast<uint32_t>(timePassed));
-
+    sMapMgr.update();
+    sInstanceMgr.update();
     sGuildMgr.update(static_cast<uint32>(timePassed));
 }
 
@@ -977,11 +1014,12 @@ void World::saveAllPlayersToDb()
 
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
-        if (itr->second->GetSession())
+        auto player = itr->second;
+        if (player->getSession())
         {
-            auto startTime = Util::TimeNow();
-            itr->second->SaveToDB(false);
-            sLogger.info("Saved player `%s` (level %u) in %u ms.", itr->second->getName().c_str(), itr->second->getLevel(), static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+            const auto startTime = Util::TimeNow();
+            player->saveToDB(false);
+            sLogger.info("Saved player `%s` (level %u) in %u ms.", player->getName().c_str(), player->getLevel(), static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
             ++count;
         }
     }
@@ -1015,11 +1053,6 @@ void World::logoutAllPlayers()
         ++i;
         deleteSession(worldSession);
     }
-}
-
-void World::checkForExpiredInstances()
-{
-    sInstanceMgr.CheckForExpiredInstances();
 }
 
 void World::deleteObject(Object* object)

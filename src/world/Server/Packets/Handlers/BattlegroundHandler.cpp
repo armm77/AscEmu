@@ -1,10 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
-#include "Server/Packets/MsgInspectArenaTeams.h"
+
 #include "Server/Packets/MsgInspectHonorStats.h"
 #include "Server/Packets/CmsgBattlemasterJoinArena.h"
 #include "Server/Packets/CmsgBattlefieldPort.h"
@@ -15,22 +14,25 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgAreaSpiritHealerQuery.h"
 #include "Server/Packets/SmsgAreaSpiritHealerTime.h"
 #include "Server/WorldSession.h"
-#include "Units/Players/Player.h"
-#include "Management/Battleground/Battleground.h"
-#include "Map/MapMgr.h"
-#include "Objects/ObjectMgr.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Management/Battleground/Battleground.hpp"
+#include "Map/Management/MapMgr.hpp"
+#include "Management/ObjectMgr.h"
 #include "Storage/MySQLDataStore.hpp"
+
+#if VERSION_STRING >= Cata
 #include "Server/Packets/CmsgRequestRatedBgInfo.h"
+#include "Server/Packets/SmsgPvpOptionsEnabled.h"
 #include "Server/Packets/SmsgRatedBgInfo.h"
 #include "Server/Packets/SmsgRatedBgStats.h"
-#include "Server/Packets/SmsgPvpOptionsEnabled.h"
+#endif
 
 using namespace AscEmu::Packets;
 
 void WorldSession::handlePVPLogDataOpcode(WorldPacket& /*recvPacket*/)
 {
     if (_player->m_bg != nullptr)
-        _player->m_bg->SendPVPData(_player);
+        _player->m_bg->sendPVPData(_player);
 }
 
 void WorldSession::handleInspectHonorStatsOpcode(WorldPacket& recvPacket)
@@ -39,9 +41,9 @@ void WorldSession::handleInspectHonorStatsOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received MSG_INSPECT_HONOR_STATS: %u (guidLow)", srlPacket.guid.getGuidLow());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_INSPECT_HONOR_STATS: %u (guidLow)", srlPacket.guid.getGuidLow());
 
-    const auto player = _player->GetMapMgr()->GetPlayer(srlPacket.guid.getGuidLow());
+    const auto player = _player->getWorldMap()->getPlayer(srlPacket.guid.getGuidLow());
     if (player == nullptr)
         return;
 
@@ -78,8 +80,8 @@ void WorldSession::handleArenaJoinOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (_player->m_bgIsQueued)
-        sBattlegroundManager.RemovePlayerFromQueues(_player);
+    if (_player->m_isQueuedForBg)
+        sBattlegroundManager.removePlayerFromQueues(_player);
 
     CmsgBattlemasterJoinArena srlPacket;
     if (!srlPacket.deserialise(recvPacket))
@@ -90,22 +92,22 @@ void WorldSession::handleArenaJoinOpcode(WorldPacket& recvPacket)
     switch (srlPacket.category)
     {
         case 0:
-            battlegroundType = BATTLEGROUND_ARENA_2V2;
+            battlegroundType = BattlegroundDef::TYPE_ARENA_2V2;
             break;
         case 1:
-            battlegroundType = BATTLEGROUND_ARENA_3V3;
+            battlegroundType = BattlegroundDef::TYPE_ARENA_3V3;
             break;
         case 2:
-            battlegroundType = BATTLEGROUND_ARENA_5V5;
+            battlegroundType = BattlegroundDef::TYPE_ARENA_5V5;
             break;
         default:
-            sLogger.debug("Received CMSG_BATTLEMASTER_JOIN_ARENA: with invalid category (%u)", srlPacket.category);
+            sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEMASTER_JOIN_ARENA: with invalid category (%u)", srlPacket.category);
             battlegroundType = 0;
             break;
     }
 
     if (battlegroundType != 0)
-        sBattlegroundManager.HandleArenaJoin(this, battlegroundType, srlPacket.asGroup, srlPacket.ratedMatch);
+        sBattlegroundManager.handleArenaJoin(this, battlegroundType, srlPacket.asGroup, srlPacket.ratedMatch);
 }
 
 void WorldSession::handleBattlefieldPortOpcode(WorldPacket& recvPacket)
@@ -117,18 +119,18 @@ void WorldSession::handleBattlefieldPortOpcode(WorldPacket& recvPacket)
     if (srlPacket.action != 0)
     {
         if (_player->m_pendingBattleground)
-            _player->m_pendingBattleground->PortPlayer(_player);
+            _player->m_pendingBattleground->portPlayer(_player);
     }
     else
     {
-        sBattlegroundManager.RemovePlayerFromQueues(_player);
+        sBattlegroundManager.removePlayerFromQueues(_player);
     }
 }
 
 void WorldSession::handleLeaveBattlefieldOpcode(WorldPacket& /*recvPacket*/)
 {
     if (_player->m_bg && _player->IsInWorld())
-        _player->m_bg->RemovePlayer(_player, false);
+        _player->m_bg->removePlayer(_player, false);
 }
 
 void WorldSession::handleBattlefieldListOpcode(WorldPacket& recvPacket)
@@ -137,9 +139,9 @@ void WorldSession::handleBattlefieldListOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_BATTLEFIELD_LIST: %u (bgType), %u (fromType)", srlPacket.bgType, srlPacket.fromType);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEFIELD_LIST: %u (bgType), %u (fromType)", srlPacket.bgType, srlPacket.fromType);
 
-    sBattlegroundManager.HandleBattlegroundListPacket(this, srlPacket.bgType, srlPacket.fromType);
+    sBattlegroundManager.handleBattlegroundListPacket(this, srlPacket.bgType, srlPacket.fromType);
 }
 
 void WorldSession::handleBattleMasterHelloOpcode(WorldPacket& recvPacket)
@@ -148,9 +150,9 @@ void WorldSession::handleBattleMasterHelloOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_BATTLEMASTER_HELLO: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEMASTER_HELLO: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
-    const auto creature = _player->GetMapMgr()->GetCreature(srlPacket.guid.getGuidLowPart());
+    const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr || !creature->isBattleMaster())
         return;
 
@@ -159,17 +161,17 @@ void WorldSession::handleBattleMasterHelloOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleBattlegroundPlayerPositionsOpcode(WorldPacket& /*recvPacket*/)
 {
-    const auto cBattleground = _player->m_bg;
-    if (cBattleground == nullptr)
+    const auto Battleground = _player->m_bg;
+    if (Battleground == nullptr)
         return;
 
     uint32_t flagHolders = 0;
 
-    const auto alliancePlayer = sObjectMgr.GetPlayer(static_cast<uint32_t>(cBattleground->GetFlagHolderGUID(TEAM_ALLIANCE)));
+    const auto alliancePlayer = sObjectMgr.GetPlayer(static_cast<uint32_t>(Battleground->GetFlagHolderGUID(TEAM_ALLIANCE)));
     if (alliancePlayer)
         ++flagHolders;
 
-    const auto hordePlayer = sObjectMgr.GetPlayer(static_cast<uint32_t>(cBattleground->GetFlagHolderGUID(TEAM_HORDE)));
+    const auto hordePlayer = sObjectMgr.GetPlayer(static_cast<uint32_t>(Battleground->GetFlagHolderGUID(TEAM_HORDE)));
     if (hordePlayer)
         ++flagHolders;
 
@@ -178,41 +180,41 @@ void WorldSession::handleBattlegroundPlayerPositionsOpcode(WorldPacket& /*recvPa
 
 void WorldSession::handleAreaSpiritHealerQueueOpcode(WorldPacket& recvPacket)
 {
-    const auto cBattleground = _player->m_bg;
-    if (cBattleground == nullptr)
+    const auto Battleground = _player->m_bg;
+    if (Battleground == nullptr)
         return;
 
     CmsgAreaSpiritHealerQueue srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_AREA_SPIRIT_HEALER_QUEUE: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREA_SPIRIT_HEALER_QUEUE: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
-    const auto spiritHealer = _player->GetMapMgr()->GetCreature(srlPacket.guid.getGuidLowPart());
+    const auto spiritHealer = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (spiritHealer == nullptr)
         return;
 
-    cBattleground->QueuePlayerForResurrect(_player, spiritHealer);
+    Battleground->queuePlayerForResurrect(_player, spiritHealer);
     _player->castSpell(_player, 2584, true);
 }
 
 void WorldSession::handleAreaSpiritHealerQueryOpcode(WorldPacket& recvPacket)
 {
-    const auto cBattleground = _player->m_bg;
-    if (cBattleground == nullptr)
+    const auto Battleground = _player->m_bg;
+    if (Battleground == nullptr)
         return;
 
     CmsgAreaSpiritHealerQuery srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_AREA_SPIRIT_HEALER_QUEUE: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREA_SPIRIT_HEALER_QUEUE: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
-    const auto spiritHealer = _player->GetMapMgr()->GetCreature(srlPacket.guid.getGuidLowPart());
+    const auto spiritHealer = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (spiritHealer == nullptr)
         return;
 
-    uint32_t restTime = cBattleground->GetLastResurrect() + 30;
+    uint32_t restTime = Battleground->getLastResurrect() + 30;
     if (static_cast<uint32_t>(UNIXTIME) > restTime)
         restTime = 1000;
     else
@@ -224,23 +226,23 @@ void WorldSession::handleAreaSpiritHealerQueryOpcode(WorldPacket& recvPacket)
 void WorldSession::handleBattlefieldStatusOpcode(WorldPacket& /*recvPacket*/)
 {
     const auto pendingBattleground = _player->m_pendingBattleground;
-    const auto cBattleground = _player->m_bg;
+    const auto Battleground = _player->m_bg;
 
-    if (cBattleground)
-        sBattlegroundManager.SendBattlefieldStatus(_player, BGSTATUS_TIME, cBattleground->GetType(), cBattleground->GetId(), static_cast<uint32_t>(UNIXTIME) - cBattleground->GetStartTime(), _player->GetMapId(), cBattleground->Rated());
+    if (Battleground)
+        sBattlegroundManager.sendBattlefieldStatus(_player, BattlegroundDef::STATUS_TIME, Battleground->getType(), Battleground->getId(), static_cast<uint32_t>(UNIXTIME) - Battleground->getStartTime(), _player->GetMapId(), Battleground->Rated());
     else if (pendingBattleground)
-        sBattlegroundManager.SendBattlefieldStatus(_player, BGSTATUS_READY, pendingBattleground->GetType(), pendingBattleground->GetId(), 120000, 0, pendingBattleground->Rated());
+        sBattlegroundManager.sendBattlefieldStatus(_player, BattlegroundDef::STATUS_READY, pendingBattleground->getType(), pendingBattleground->getId(), 120000, 0, pendingBattleground->Rated());
     else
-        sBattlegroundManager.SendBattlefieldStatus(_player, BGSTATUS_NOFLAGS, 0, 0, 0, 0, 0);
+        sBattlegroundManager.sendBattlefieldStatus(_player, BattlegroundDef::STATUS_NOFLAGS, 0, 0, 0, 0, 0);
 }
 
 void WorldSession::handleBattleMasterJoinOpcode(WorldPacket& recvPacket)
 {
-    if (_player->HasAura(BG_DESERTER))
+    if (_player->hasAurasWithId(BattlegroundDef::DESERTER))
     {
         WorldPacket data(SMSG_GROUP_JOINED_BATTLEGROUND, 4);
         data << uint32_t(0xFFFFFFFE);
-        _player->GetSession()->SendPacket(&data);
+        _player->getSession()->SendPacket(&data);
         return;
     }
 
@@ -250,11 +252,11 @@ void WorldSession::handleBattleMasterJoinOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (_player->m_bgIsQueued)
-        sBattlegroundManager.RemovePlayerFromQueues(_player);
+    if (_player->m_isQueuedForBg)
+        sBattlegroundManager.removePlayerFromQueues(_player);
 
     if (_player->IsInWorld())
-        sBattlegroundManager.HandleBattlegroundJoin(this, recvPacket);
+        sBattlegroundManager.handleBattlegroundJoin(this, recvPacket);
 }
 
 void WorldSession::sendBattlegroundList(Creature* creature, uint32_t mapId)
@@ -262,12 +264,12 @@ void WorldSession::sendBattlegroundList(Creature* creature, uint32_t mapId)
     if (creature == nullptr)
         return;
 
-    uint32_t battlegroundType = BATTLEGROUND_WARSONG_GULCH;
+    uint32_t battlegroundType = BattlegroundDef::TYPE_WARSONG_GULCH;
     if (mapId == 0)
     {
         if (creature->GetCreatureProperties()->SubName != "Arena")
         {
-            battlegroundType = BATTLEGROUND_ARENA_2V2;
+            battlegroundType = BattlegroundDef::TYPE_ARENA_2V2;
         }
         else
         {
@@ -280,7 +282,7 @@ void WorldSession::sendBattlegroundList(Creature* creature, uint32_t mapId)
         battlegroundType = mapId;
     }
 
-    sBattlegroundManager.HandleBattlegroundListPacket(this, battlegroundType);
+    sBattlegroundManager.handleBattlegroundListPacket(this, battlegroundType);
 }
 
 #if VERSION_STRING >= Cata
@@ -290,21 +292,21 @@ void WorldSession::handleRequestRatedBgInfoOpcode(WorldPacket & recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_REQUEST_RATED_BG_INFO received with unk_type = %u", srlPacket.type);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_RATED_BG_INFO received with unk_type = %u", srlPacket.type);
 
     SendPacket(SmsgRatedBgInfo(0).serialise().get());
 }
 
 void WorldSession::handleRequestRatedBgStatsOpcode(WorldPacket& /*recvPacket*/)
 {
-    sLogger.debug("Received CMSG_REQUEST_RATED_BG_STATS received");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_RATED_BG_STATS received");
 
     SendPacket(SmsgRatedBgStats(3).serialise().get());
 }
 
 void WorldSession::handleRequestPvPRewardsOpcode(WorldPacket& /*recvPacket*/)
 {
-    sLogger.debug("Received CMSG_REQUEST_RATED_BG_STATS received");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_RATED_BG_STATS received");
 
     WorldPacket packet(SMSG_REQUEST_PVP_REWARDS_RESPONSE, 24);
     packet << uint32_t(0);    // unknown currency week cap conquest points
@@ -319,7 +321,7 @@ void WorldSession::handleRequestPvPRewardsOpcode(WorldPacket& /*recvPacket*/)
 
 void WorldSession::handleRequestPvpOptionsOpcode(WorldPacket& /*recvPacket*/)
 {
-    sLogger.debug("Received CMSG_REQUEST_RATED_BG_STATS received");
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_RATED_BG_STATS received");
 
     SendPacket(SmsgPvpOptionsEnabled(true, true, true).serialise().get());
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -23,52 +23,48 @@
 class LokensFury : public GameObjectAIScript
 {
 public:
-
     explicit LokensFury(GameObject* goinstance) : GameObjectAIScript(goinstance) {};
     static GameObjectAIScript* Create(GameObject* GO) { return new LokensFury(GO); };
 
-    void OnActivate(Player* pPlayer)
+    void OnActivate(Player* pPlayer) override
     {
-        pPlayer->AddQuestKill(12965, 0, 0);
+        pPlayer->addQuestKill(12965, 0, 0);
     }
 };
 
 class LokensPower : public GameObjectAIScript
 {
 public:
-
     explicit LokensPower(GameObject* goinstance) : GameObjectAIScript(goinstance) {};
     static GameObjectAIScript* Create(GameObject* GO) { return new LokensPower(GO); };
 
-    void OnActivate(Player* pPlayer)
+    void OnActivate(Player* pPlayer) override
     {
-        pPlayer->AddQuestKill(12965, 1, 0);
+        pPlayer->addQuestKill(12965, 1, 0);
     }
 };
 
 class LokensFavor : public GameObjectAIScript
 {
 public:
-
     explicit LokensFavor(GameObject* goinstance) : GameObjectAIScript(goinstance) {};
     static GameObjectAIScript* Create(GameObject* GO) { return new LokensFavor(GO); };
 
-    void OnActivate(Player* pPlayer)
+    void OnActivate(Player* pPlayer) override
     {
-        pPlayer->AddQuestKill(12965, 2, 0);
+        pPlayer->addQuestKill(12965, 2, 0);
     }
 };
 
 class MissingScout_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (plr->hasQuestInQuestLog(12864))
         {
-            GossipMenu menu(pObject->getGuid(), 13612, plr->GetSession()->language);
-            menu.addItem(GOSSIP_ICON_CHAT, 499, 1);     // Are you okay? I've come to take you back to Frosthold if you can stand.
+            GossipMenu menu(pObject->getGuid(), 13612, plr->getSession()->language);
+            menu.addItem(GOSSIP_ICON_CHAT, 499, 1); // Are you okay? I've come to take you back to Frosthold if you can stand.
             menu.sendGossipPacket(plr);
         }
     }
@@ -79,25 +75,24 @@ public:
         {
             case 1:
             {
-                GossipMenu menu(pObject->getGuid(), 13612, plr->GetSession()->language);
-                menu.addItem(GOSSIP_ICON_CHAT, 500, 2);     // I'm sorry that I didn't get here sooner. What happened?
+                GossipMenu menu(pObject->getGuid(), 13612, plr->getSession()->language);
+                menu.addItem(GOSSIP_ICON_CHAT, 500, 2); // I'm sorry that I didn't get here sooner. What happened?
                 menu.sendGossipPacket(plr);
             } break;
             case 2:
             {
-                GossipMenu menu(pObject->getGuid(), 13613, plr->GetSession()->language);
-                menu.addItem(GOSSIP_ICON_CHAT, 501, 3);     // I'll go get some help. Hang in there.
+                GossipMenu menu(pObject->getGuid(), 13613, plr->getSession()->language);
+                menu.addItem(GOSSIP_ICON_CHAT, 501, 3); // I'll go get some help. Hang in there.
                 menu.sendGossipPacket(plr);
             } break;
             case 3:
             {
                 GossipMenu::sendSimpleMenu(pObject->getGuid(), 13614, plr);
 
-                plr->AddQuestKill(12864, 0, 0);
+                plr->addQuestKill(12864, 0, 0);
             } break;
         }
     }
-
 };
 
 void SetupTheStormPeaks(ScriptMgr* mgr)

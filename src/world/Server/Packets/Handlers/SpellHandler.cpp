@@ -1,26 +1,22 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
-#include "Management/Item.h"
+
+#include "Chat/ChatHandler.hpp"
+#include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
-#include "Management/Battleground/Battleground.h"
-#include "Map/MapMgr.h"
+#include "Management/Battleground/Battleground.hpp"
+#include "Map/Management/MapMgr.hpp"
 #include "Server/MainServerDefines.h"
-#include "Spell/Definitions/AuraInterruptFlags.h"
-#include "Spell/Definitions/SpellCastTargetFlags.h"
-#include "Spell/Definitions/SpellRanged.h"
-#include "Spell/Definitions/SpellState.h"
-#include "Spell/SpellMgr.h"
+#include "Spell/SpellMgr.hpp"
 #include "Spell/SpellAuras.h"
 #include "Storage/MySQLDataStore.hpp"
-#include "Units/Creatures/Pet.h"
-#include "Units/Summons/TotemSummon.h"
-#include "Units/UnitDefines.hpp"
-#include "Objects/Faction.h"
-#include "Data/WoWItem.hpp"
+#include "Objects/Units/Creatures/Pet.h"
+#include "Objects/Units/Creatures/Summons/Summon.h"
+#include "Objects/Units/UnitDefines.hpp"
+#include "Management/Faction.h"
 #include "Server/Packets/CmsgCastSpell.h"
 #include "Server/Packets/CmsgPetCastSpell.h"
 
@@ -28,8 +24,6 @@ using namespace AscEmu::Packets;
 
 void WorldSession::handleSpellClick(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     if (!_player->isAlive())
         return;
 
@@ -37,22 +31,14 @@ void WorldSession::handleSpellClick(WorldPacket& recvPacket)
     uint64_t unitGuid;
     recvPacket >> unitGuid;
 
-    Unit* unitTarget = _player->GetMapMgr()->GetUnit(unitGuid);
+    Unit* unitTarget = _player->getWorldMap()->getUnit(unitGuid);
     if (!unitTarget || !unitTarget->IsInWorld() || !unitTarget->isCreature())
         return;
 
-    auto creatureTarget = dynamic_cast<Creature*>(unitTarget);
-    if (!_player->isInRange(creatureTarget, MAX_INTERACTION_RANGE))
+    if (!_player->isInRange(unitTarget, MAX_INTERACTION_RANGE))
         return;
 
-    // TODO: investigate vehicles more, is this necessary? vehicle enter is handled in ::HandleEnterVehicle() anyway... -Appled
-    if (creatureTarget->isVehicle())
-    {
-        if (creatureTarget->getVehicleComponent() != nullptr)
-            creatureTarget->getVehicleComponent()->AddPassenger(_player);
-
-        return;
-    }
+    unitTarget->handleSpellClick(_player);
 
     // TODO: move this Lightwell 'script' to SpellScript or CreatureScript...
     // For future reference; seems like the Lightwell npc should actually cast spell 60123 on click
@@ -60,7 +46,7 @@ void WorldSession::handleSpellClick(WorldPacket& recvPacket)
 
     // Commented this out for now, it's not even working -Appled
     /*const uint32_t lightWellCharges = 59907;
-    if (creatureTarget->RemoveAura(lightWellCharges))
+    if (creatureTarget->removeAllAurasById(lightWellCharges))
     {
         uint32_t lightWellRenew[] =
         {
@@ -86,45 +72,17 @@ void WorldSession::handleSpellClick(WorldPacket& recvPacket)
                 return;
             }
 
-            if (!creatureTarget->HasAura(lightWellCharges))
+            if (!creatureTarget->hasAurasWithId(lightWellCharges))
             {
                 creatureTarget->Despawn(0, 0);
             }
             return;
         }
     }*/
-
-    SpellClickSpell const* spellClickData = sMySQLStore.getSpellClickSpell(creatureTarget->getEntry());
-    if (spellClickData != nullptr)
-    {
-        // TODO: there are spellclick spells which are friendly only, raid only and party only
-        if (!isFriendly(_player, creatureTarget))
-            return;
-
-        const auto spellInfo = sSpellMgr.getSpellInfo(spellClickData->SpellID);
-        if (spellInfo == nullptr)
-        {
-            sLogger.failure("NPC ID %u has spell associated on SpellClick but spell id %u cannot be found.", creatureTarget->getEntry(), spellClickData->SpellID);
-            return;
-        }
-
-        // TODO: there are spellclick spells which should be casted on player by npc (i.e. Lightwell spell) but also vice versa
-        Spell* spell = sSpellMgr.newSpell(_player, spellInfo, false, nullptr);
-        SpellCastTargets targets(unitGuid);
-        spell->prepare(&targets);
-    }
-    else
-    {
-        sChatHandler.BlueSystemMessage(this, "NPC ID %u (%s) has no spellclick spell associated with it.", creatureTarget->GetCreatureProperties()->Id, creatureTarget->GetCreatureProperties()->Name.c_str());
-        sLogger.failure("SpellClick packet received for creature %u but there is no spell associated with it.", creatureTarget->getEntry());
-        return;
-    }
 }
 
 void WorldSession::handleCastSpellOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgCastSpell srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -137,7 +95,7 @@ void WorldSession::handleCastSpellOpcode(WorldPacket& recvPacket)
     }
 
     // Check does player have the spell
-    if (!_player->HasSpell(srlPacket.spell_id))
+    if (!_player->hasSpell(srlPacket.spell_id))
     {
         sCheatLog.writefromsession(this, "WORLD: Player %u tried to cast spell %u but player does not have it.", _player->getGuidLow(), srlPacket.spell_id);
         sLogger.info("WORLD: Player %u tried to cast spell %u but player does not have it.", _player->getGuidLow(), srlPacket.spell_id);
@@ -213,8 +171,6 @@ void WorldSession::handleCastSpellOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleCancelCastOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     uint32_t spellId;
 #if VERSION_STRING > TBC
     recvPacket.read_skip<uint8_t>(); // Increments with every HandleCancelCast packet, unused
@@ -229,8 +185,6 @@ void WorldSession::handleCancelCastOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleCancelAuraOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     uint32_t spellId;
     recvPacket >> spellId;
 
@@ -265,13 +219,11 @@ void WorldSession::handleCancelAuraOpcode(WorldPacket& recvPacket)
     if (spellAura->isNegative())
         return;
 
-    _player->removeAllAurasById(spellId);
+    spellAura->removeAura();
 }
 
 void WorldSession::handleCancelChannellingOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     recvPacket.read_skip<uint32_t>(); // Spell Id, unused
 
     _player->interruptSpellWithSpellType(CURRENT_CHANNELED_SPELL);
@@ -279,15 +231,11 @@ void WorldSession::handleCancelChannellingOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleCancelAutoRepeatSpellOpcode(WorldPacket& /*recvPacket*/)
 {
-    CHECK_INWORLD_RETURN
-
     _player->interruptSpellWithSpellType(CURRENT_AUTOREPEAT_SPELL);
 }
 
 void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgPetCastSpell srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -296,13 +244,13 @@ void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
     if (spellInfo == nullptr)
         return;
 
-    if (_player->GetSummon() == nullptr && _player->getCharmGuid() == 0)
+    if (_player->getFirstPetFromSummons() == nullptr && _player->getCharmGuid() == 0)
     {
         sLogger.failure("Received opcode but player %u has no pet.", _player->getGuidLow());
         return;
     }
 
-    Unit* petUnit = _player->GetMapMgr()->GetUnit(srlPacket.petGuid);
+    Unit* petUnit = _player->getWorldMap()->getUnit(srlPacket.petGuid);
     if (petUnit == nullptr)
     {
         sLogger.failure("Pet entity cannot be found for player %u.", _player->getGuidLow());
@@ -313,7 +261,7 @@ void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
         return;
 
     // If pet is summoned by player
-    if (_player->GetSummon() == petUnit)
+    if (_player->getFirstPetFromSummons() == petUnit)
     {
         // Check does the pet have the spell
         if (!dynamic_cast<Pet*>(petUnit)->HasSpell(srlPacket.spellId))
@@ -323,7 +271,7 @@ void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
     else if (_player->getCharmGuid() == srlPacket.petGuid)
     {
         bool found = false;
-        for (auto aiSpell : petUnit->GetAIInterface()->m_spells)
+        for (auto aiSpell : petUnit->getAIInterface()->m_spells)
         {
             if (aiSpell->spell->getId() == srlPacket.spellId)
             {
@@ -410,26 +358,22 @@ void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
 
 void WorldSession::handleCancelTotem(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     uint8_t totemSlot;
     recvPacket >> totemSlot;
 
-    if (totemSlot >= MAX_TOTEM_SLOT)
+    if (totemSlot >= SUMMON_SLOT_MINIPET)
     {
         sLogger.failure("Player %u tried to cancel totem from out of range slot %u, ignored.", _player->getGuidLow(), totemSlot);
         return;
     }
 
-    const auto totem = _player->getTotem(TotemSlots(totemSlot));
+    const auto totem = _player->getTotem(SummonSlot(totemSlot + 1));
     if (totem != nullptr)
         totem->unSummon();
 }
 
 void WorldSession::handleUpdateProjectilePosition(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     uint64_t casterGuid;
     uint32_t spellId;
     uint8_t castCount;
@@ -437,7 +381,7 @@ void WorldSession::handleUpdateProjectilePosition(WorldPacket& recvPacket)
 
     recvPacket >> casterGuid >> spellId >> castCount >> x >> y >> z;
 
-    Unit* caster = _player->GetMapMgr()->GetUnit(casterGuid);
+    Unit* caster = _player->getWorldMap()->getUnit(casterGuid);
     if (caster == nullptr)
         return;
 
@@ -455,6 +399,6 @@ void WorldSession::handleUpdateProjectilePosition(WorldPacket& recvPacket)
     data << float(x);
     data << float(y);
     data << float(z);
-    caster->SendMessageToSet(&data, true);
+    caster->sendMessageToSet(&data, true);
 #endif
 }

@@ -1,18 +1,17 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+#include "Server/World.h"
 #include "Server/WorldSession.h"
 #include "Server/Packets/ManagedPacket.h"
 #include "Server/Packets/CmsgUnlearnSkill.h"
 #include "Server/Packets/CmsgLearnTalent.h"
 #include "Server/Packets/CmsgLearnTalentMultiple.h"
-#include "Units/Players/Player.h"
+#include "Objects/Units/Players/Player.hpp"
 
 using namespace AscEmu::Packets;
-
 
 void WorldSession::handleUnlearnSkillOpcode(WorldPacket& recvPacket)
 {
@@ -20,19 +19,7 @@ void WorldSession::handleUnlearnSkillOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    _player->RemoveSpellsFromLine(srlPacket.skillLineId);
-    _player->_RemoveSkillLine(srlPacket.skillLineId);
-
-    uint32_t remainingPoints = _player->getFreePrimaryProfessionPoints();
-    if (remainingPoints == _player->getFreePrimaryProfessionPoints())
-    {
-        const auto skillLineEntry = sSkillLineStore.LookupEntry(srlPacket.skillLineId);
-        if (!skillLineEntry)
-            return;
-
-        if (skillLineEntry->type == SKILL_TYPE_PROFESSION && remainingPoints < 2)
-            _player->setFreePrimaryProfessionPoints(remainingPoints + 1);
-    }
+    _player->removeSkillLine(static_cast<uint16_t>(srlPacket.skillLineId));
 }
 
 void WorldSession::handleLearnTalentOpcode(WorldPacket& recvPacket)
@@ -47,11 +34,11 @@ void WorldSession::handleLearnTalentOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleUnlearnTalents(WorldPacket& /*recvPacket*/)
 {
-    const uint32_t resetPrice = _player->CalcTalentResetCost(_player->GetTalentResetTimes());
+    const uint32_t resetPrice = _player->calcTalentResetCost(_player->getTalentResetsCount());
     if (!_player->hasEnoughCoinage(resetPrice))
         return;
 
-    _player->SetTalentResetTimes(_player->GetTalentResetTimes() + 1);
+    _player->setTalentResetsCount(_player->getTalentResetsCount() + 1);
     _player->modCoinage(-static_cast<int32_t>(resetPrice));
     _player->resetTalents();
 }

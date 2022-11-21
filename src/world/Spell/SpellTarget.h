@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -20,8 +20,6 @@
 
 #ifndef SPELLTARGET_H
 #define SPELLTARGET_H
-
-#include <cstdint>
 
 enum SpellImplicitTargetType
 {
@@ -46,7 +44,14 @@ enum SpellImplicitTargetType
     SPELL_TARGET_AREA_RAID                  = 0x00040000,
     SPELL_TARGET_NOT_IMPLEMENTED            = 0x00080000,
     SPELL_TARGET_NO_OBJECT                  = 0x00100000,
-    SPELL_TARGET_ANY_OBJECT                 = 0x00200000
+    SPELL_TARGET_ANY_OBJECT                 = 0x00200000,
+
+    // Helpers
+    SPELL_TARGET_REQUIRE_UNIT               = SPELL_TARGET_REQUIRE_ATTACKABLE | SPELL_TARGET_REQUIRE_FRIENDLY,
+
+    SPELL_TARGET_AREA_MASK                  = SPELL_TARGET_AREA | SPELL_TARGET_AREA_SELF | SPELL_TARGET_AREA_CONE |
+        SPELL_TARGET_AREA_CHAIN | SPELL_TARGET_AREA_CURTARGET | SPELL_TARGET_AREA_RANDOM |
+        SPELL_TARGET_AREA_PARTY | SPELL_TARGET_AREA_RAID
 };
 
 #endif // _SPELLTARGET_H

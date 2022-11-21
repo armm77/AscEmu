@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -11,15 +11,13 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Management/Guild/GuildDefinitions.hpp"
 #include "GuildEmblemInfo.hpp"
 #include "GuildBankRightsAndSlots.hpp"
-#include "GuildLog.hpp"
-#include "GuildEventLog.hpp"
-#include "GuildNewsLog.hpp"
-#include "GuildBankEventLog.hpp"
 #include "GuildLogHolder.hpp"
 #include "GuildRankInfo.hpp"
 #include "GuildBankTab.hpp"
 
 #include <string>
+
+#include "Macros/GuildMacros.hpp"
 
 
 class Player;

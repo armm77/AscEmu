@@ -1,21 +1,19 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 
-#include "Spell/Definitions/SpellFamily.h"
+#include "Spell/Definitions/SpellFamily.hpp"
 
 enum RogueSpells
 {
     SPELL_CUT_TO_THE_CHASE_R1       = 51664,
     SPELL_CUT_TO_THE_CHASE_R2       = 51665,
     SPELL_CUT_TO_THE_CHASE_R3       = 51667,
-#if VERSION_STRING == WotLK
     SPELL_CUT_TO_THE_CHASE_R4       = 51668,
     SPELL_CUT_TO_THE_CHASE_R5       = 51669,
-#endif
     SPELL_CRIPPLING_POISON          = 3409,
     SPELL_DEADLY_BREW_R1            = 51625,
     SPELL_DEADLY_BREW_R2            = 51626,
@@ -44,9 +42,10 @@ public:
     bool canProc(SpellProc* spellProc, Unit* /*victim*/, SpellInfo const* /*castingSpell*/, DamageInfo /*damageInfo*/) override
     {
         // Find Slice and Dice aura
-        for (const auto& aur : spellProc->getProcOwner()->m_auras)
+        for (const auto& aurEff : spellProc->getProcOwner()->getAuraEffectList(SPELL_AURA_MOD_HASTE))
         {
-            if (aur == nullptr || aur->getCasterGuid() != spellProc->getCasterGuid())
+            auto* const aur = aurEff->getAura();
+            if (aur->getCasterGuid() != spellProc->getCasterGuid())
                 continue;
 
             const auto spinfo = aur->getSpellInfo();
@@ -63,10 +62,7 @@ public:
             }
         }
 
-        if (sliceAura == nullptr)
-            return false;
-
-        return true;
+        return sliceAura != nullptr;
     }
 
     SpellScriptExecuteState onDoProcEffect(SpellProc* /*spellProc*/, Unit* victim, SpellInfo const* /*castingSpell*/, DamageInfo /*damageInfo*/) override
@@ -81,8 +77,7 @@ public:
             maxDuration = durEntry->Duration3;
 
         // Override the original duration and refresh aura
-        sliceAura->setOriginalDuration(maxDuration);
-        sliceAura->refresh();
+        sliceAura->setNewMaxDuration(maxDuration);
 
         sliceAura = nullptr;
         return SpellScriptExecuteState::EXECUTE_PREVENT;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -20,8 +20,8 @@
 #ifndef ITEMFUNCTIONS_H
 #define ITEMFUNCTIONS_H
 
-#include "Management/Item.h"
-#include "Management/Container.h"
+#include "Objects/Item.hpp"
+#include "Objects/Container.h"
 #include "Management/ItemInterface.h"
 #include "Server/MainServerDefines.h"
 
@@ -149,15 +149,11 @@ namespace luaItem
     int AddEnchantment(lua_State* L, Item* ptr)
     {
         uint32_t entry = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-        uint32_t duration = static_cast<uint32_t>(luaL_checkinteger(L, 2));
-        bool permanent = (duration == 0) ? true : false;
-        bool temp = (luaL_checkinteger(L, 3) == 1) ? true : false;
+        auto slot = static_cast<EnchantmentSlot>(luaL_checkinteger(L, 2));
+        uint32_t duration = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+        bool temp = (luaL_checkinteger(L, 4) == 1) ? true : false;
 
-        auto spell_item_enchant = sSpellItemEnchantmentStore.LookupEntry(entry);
-        if (spell_item_enchant == nullptr)
-            return 0;
-
-        lua_pushinteger(L, ptr->AddEnchantment(spell_item_enchant, duration, permanent, true, temp)); //Return the enchantment Slot back to LUA
+        lua_pushinteger(L, ptr->addEnchantment(entry, slot, duration, temp));
         return 1;
     }
 
@@ -173,13 +169,13 @@ namespace luaItem
         bool temp = CHECK_BOOL(L, 2);
 
         if (slot == -1)
-            ptr->RemoveAllEnchantments(temp);
+            ptr->removeAllEnchantments(temp);
         else if (slot == -2)
-            ptr->RemoveProfessionEnchant();
+            ptr->removeEnchantment(PERM_ENCHANTMENT_SLOT);
         else if (slot == -3)
-            ptr->RemoveSocketBonusEnchant();
+            ptr->removeSocketBonusEnchant();
         else if (slot >= 0)
-            ptr->RemoveEnchantment(slot);
+            ptr->removeEnchantment(static_cast<EnchantmentSlot>(slot));
 
         return 0;
     }
@@ -240,22 +236,28 @@ namespace luaItem
 
     int AddLoot(lua_State* L, Item* ptr)
     {
-        //TEST_UNIT()
+        //if(ptr == nullptr || !ptr->IsInWorld() || !ptr->isCreature()) { return 0; }
         if ((lua_gettop(L) != 3) || (lua_gettop(L) != 5))
             return 0;
         uint32_t itemid = static_cast<uint32_t>(luaL_checkinteger(L, 1));
         uint32_t mincount = static_cast<uint32_t>(luaL_checkinteger(L, 2));
         uint32_t maxcount = static_cast<uint32_t>(luaL_checkinteger(L, 3));
+        std::vector<float> ichance;
+
+        float chance = CHECK_FLOAT(L, 5);
+
+        for (uint8_t i = 0; i == 3; i++)
+            ichance.push_back(chance);
+
         bool perm = ((luaL_optinteger(L, 4, 0) == 1) ? true : false);
         if (perm)
         {
-            float chance = CHECK_FLOAT(L, 5);
             QueryResult* result = WorldDatabase.Query("SELECT * FROM loot_items WHERE entryid = %u, itemid = %u", ptr->getEntry(), itemid);
             if (!result)
                 WorldDatabase.Execute("REPLACE INTO loot_items VALUES (%u, %u, %f, 0, 0, 0, %u, %u )", ptr->getEntry(), itemid, chance, mincount, maxcount);
             delete result;
         }
-        sLootMgr.AddLoot(ptr->loot, itemid, mincount, maxcount);
+        sLootMgr.addLoot(ptr->m_loot, itemid, ichance, mincount, maxcount, ptr->getWorldMap()->getDifficulty());
         return 1;
     }
 
@@ -265,10 +267,10 @@ namespace luaItem
             return 0;
 
         uint32_t lang = static_cast<uint32_t>(luaL_optinteger(L, 1, LANG_UNIVERSAL));
-        lua_pushstring(L, ptr->GetItemLink(lang).c_str());
+        lua_pushstring(L, sMySQLStore.getItemLinkByProto(ptr->getItemProperties(), lang).c_str());
         return 1;
     }
-    int SetByteValue(lua_State* L, Item* ptr)
+    int SetByteValue(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t index = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         uint8_t index1 = static_cast<uint8_t>(luaL_checkinteger(L, 2));
@@ -277,7 +279,7 @@ namespace luaItem
         return 1;
     }
 
-    int GetByteValue(lua_State* L, Item* ptr)
+    int GetByteValue(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t index = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         uint8_t index1 = static_cast<uint8_t>(luaL_checkinteger(L, 2));
@@ -337,7 +339,7 @@ namespace luaItem
     {
         if (!ptr)
             return 0;
-        if (ptr->HasEnchantments())
+        if (ptr->hasEnchantments())
             lua_pushboolean(L, 1);
         else
             lua_pushboolean(L, 0);
@@ -349,10 +351,10 @@ namespace luaItem
         if (ptr == nullptr)
             return 0;
 
-        uint32_t slot = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+        auto slot = static_cast<EnchantmentSlot>(luaL_checkinteger(L, 1));
         uint32_t duration = static_cast<uint32_t>(luaL_checkinteger(L, 2));
 
-        ptr->ModifyEnchantmentTime(slot, duration);
+        ptr->modifyEnchantmentTime(slot, duration);
         return 1;
     }
 
@@ -368,7 +370,7 @@ namespace luaItem
         return 1;
     }
 
-    int HasFlag(lua_State* L, Item* ptr)
+    int HasFlag(lua_State* /*L*/, Item* ptr)
     {
         if (ptr == nullptr)
             return 0;
@@ -409,7 +411,7 @@ namespace luaItem
             Item* item = pCont->GetItem(i);
             if (item)
             {
-                if (item->getEntry() == itemid && item->wrapped_item_id == 0)
+                if (item->getEntry() == itemid && item->m_wrappedItemId == 0)
                 {
                     cnt += item->getStackCount() ? item->getStackCount() : 1;
                 }
@@ -439,7 +441,7 @@ namespace luaItem
         {
             return 0;
         }
-        ptr->RemoveFromWorld();
+        ptr->removeFromWorld();
         return 0;
     }
 
@@ -449,14 +451,17 @@ namespace luaItem
         uint32_t stackcount = CHECK_ULONG(L, 2);
         Item* pItem = sObjectMgr.CreateItem(id, NULL);
         if (!pItem)
-            RET_NIL();
+        {
+            lua_pushnil(L);
+            return 1;
+        }
         pItem->setStackCount(stackcount);
-        pItem->SaveToDB(0, 0, true, NULL);
+        pItem->saveToDB(0, 0, true, NULL);
         PUSH_ITEM(L, pItem);
         return 1;
     }
 
-    int ModUInt32Value(lua_State* L, Item* ptr)
+    int ModUInt32Value(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         int32_t value = static_cast<int32_t>(luaL_checkinteger(L, 2));
@@ -465,7 +470,7 @@ namespace luaItem
         return 0;
     }
 
-    int ModFloatValue(lua_State* L, Item* ptr)
+    int ModFloatValue(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         float value = CHECK_FLOAT(L, 2);
@@ -474,7 +479,7 @@ namespace luaItem
         return 0;
     }
 
-    int SetUInt32Value(lua_State* L, Item* ptr)
+    int SetUInt32Value(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         uint8_t value = static_cast<uint8_t>(luaL_checkinteger(L, 2));
@@ -483,7 +488,7 @@ namespace luaItem
         return 0;
     }
 
-    int SetUInt64Value(lua_State* L, Item* ptr)
+    int SetUInt64Value(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(CHECK_ULONG(L, 1));
         uint64_t guid = static_cast<uint64_t>(CHECK_GUID(L, 2));
@@ -492,7 +497,7 @@ namespace luaItem
         return 0;
     }
 
-    int RemoveFlag(lua_State* L, Item* ptr)
+    int RemoveFlag(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         uint32_t value = static_cast<uint32_t>(luaL_checkinteger(L, 2));
@@ -501,7 +506,7 @@ namespace luaItem
         return 0;
     }
 
-    int SetFlag(lua_State* L, Item* ptr)
+    int SetFlag(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         uint32_t value = static_cast<uint32_t>(luaL_checkinteger(L, 2));
@@ -510,7 +515,7 @@ namespace luaItem
         return 0;
     }
 
-    int SetFloatValue(lua_State* L, Item* ptr)
+    int SetFloatValue(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         float value = CHECK_FLOAT(L, 2);
@@ -519,7 +524,7 @@ namespace luaItem
         return 0;
     }
 
-    int GetUInt32Value(lua_State* L, Item* ptr)
+    int GetUInt32Value(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         if (ptr)
@@ -527,7 +532,7 @@ namespace luaItem
         return 1;
     }
 
-    int GetUInt64Value(lua_State* L, Item* ptr)
+    int GetUInt64Value(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         if (ptr)
@@ -535,7 +540,7 @@ namespace luaItem
         return 1;
     }
 
-    int GetFloatValue(lua_State* L, Item* ptr)
+    int GetFloatValue(lua_State* /*L*/, Item* /*ptr*/)
     {
         /*uint16_t field = static_cast<uint16_t>(luaL_checkinteger(L, 1));
         if (ptr)

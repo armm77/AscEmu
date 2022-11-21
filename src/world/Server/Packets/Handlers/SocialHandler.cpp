@@ -1,12 +1,11 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/WorldSession.h"
-#include "Log.hpp"
-#include "Units/Players/Player.h"
+#include "Objects/Units/Players/Player.hpp"
 #include "Server/Packets/CmsgDelIgnore.h"
 #include "Server/Packets/CmsgAddIgnore.h"
 #include "Server/Packets/CmsgDelFriend.h"

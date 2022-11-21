@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,12 +7,10 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "Chat/ChatDefines.hpp"
 #include "Chat/CommandTableStorage.hpp"
-#include "Management/ItemPrototype.h"
 #include "Management/SkillNameMgr.h"
-#include "Units/Creatures/Creature.h"
-#include "Units/Players/Player.h"
-#include "Units/Unit.h"
-#include "WorldPacket.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Objects/Units/Unit.hpp"
 
 class WorldSession;
 class Player;
@@ -166,7 +164,11 @@ public:
     bool HandleCharSetFactionChangeCommand(const char* args, WorldSession* m_session);
     bool HandleCharSetRaceChangeCommand(const char* args, WorldSession* m_session);
     bool HandleCharResetTalentsCommand(const char* /*args*/, WorldSession* m_session);
+
+#if VERSION_STRING >= TBC // support classic
     bool HandleCharResetSkillsCommand(const char* /*args*/, WorldSession* m_session);
+#endif
+
     bool HandleCharRemoveItemCommand(const char* args, WorldSession* m_session);
     bool HandleCharIncreaseWeaponSkill(const char* args, WorldSession* m_session);
     bool HandleCharResetReputationCommand(const char* /*args*/, WorldSession* m_session);
@@ -200,6 +202,7 @@ public:
 
     // old debugcmds.cpp
     //\todo Rewrite these commands
+    bool HandleMoveHardcodedScriptsToDBCommand(const char* args, WorldSession* session);
     bool HandleDoPercentDamageCommand(const char* args, WorldSession* session);
     bool HandleSetScriptPhaseCommand(const char* args, WorldSession* session);
     bool HandleAiChargeCommand(const char* /*args*/, WorldSession* session);
@@ -223,7 +226,7 @@ public:
     bool HandleKnockBackCommand(const char* args, WorldSession* m_session);
     bool HandleFadeCommand(const char* args, WorldSession* m_session);
     bool HandleThreatModCommand(const char* args, WorldSession* m_session);
-    bool HandleCalcThreatCommand(const char* args, WorldSession* m_session);
+    bool HandleMoveFallCommand(const char* args, WorldSession* m_session);
     bool HandleThreatListCommand(const char* args, WorldSession* m_session);
     bool HandlePlayMovie(const char* args, WorldSession* m_session);
     bool HandleSendItemPushResult(const char* args, WorldSession* m_session);
@@ -392,6 +395,7 @@ public:
     bool HandleNpcYellCommand(const char* args, WorldSession* m_session);
     bool HandleNpcVendorAddItemCommand(const char* args, WorldSession* m_session);
     bool HandleNpcVendorRemoveItemCommand(const char* args, WorldSession* m_session);
+    bool HandleNpcChangeEntry(const char* args, WorldSession* m_session);
     //Zyres: not only for selected creature... players too!
     bool HandlePossessCommand(const char* /*args*/, WorldSession* m_session);
     bool HandleUnPossessCommand(const char* /*args*/, WorldSession* m_session);
@@ -405,7 +409,6 @@ public:
     bool HandleNpcSetFormationMasterCommand(const char* /*args*/, WorldSession* m_session);
     bool HandleNpcSetFormationSlaveCommand(const char* args, WorldSession* m_session);
     bool HandleNpcSetFormationClearCommand(const char* args, WorldSession* m_session);
-    bool HandleNpcSetOnGOCommand(const char* args, WorldSession* m_session);
     bool HandleNpcSetPhaseCommand(const char* args, WorldSession* m_session);
     bool HandleNpcSetStandstateCommand(const char* arg, WorldSession* m_session);
 
@@ -524,30 +527,20 @@ public:
     bool HandleRecallPortPlayerCommand(const char* args, WorldSession* m_session);
     bool HandleRecallPortUsCommand(const char* args, WorldSession* m_session);
 
+#ifdef FT_VEHICLES
     // Vehicle
     bool HandleVehicleEjectPassengerCommand(const char* args, WorldSession* session);
     bool HandleVehicleEjectAllPassengersCommand(const char* /*args*/, WorldSession* session);
     bool HandleVehicleInstallAccessoriesCommand(const char* /*args*/, WorldSession* session);
-    bool HandleVehicleRemoveAccessoriesCommand(const char* /*args*/, WorldSession* session);
     bool HandleVehicleAddPassengerCommand(const char* args, WorldSession* session);
+#endif
 
     // Waypoint
     bool HandleWayPointAddCommand(const char* args, WorldSession* m_session);
-    bool HandleWayPointAddFlyCommand(const char* args, WorldSession* m_session);
-    bool HandleWayPointChangeNumberCommand(const char* args, WorldSession* m_session);
     bool HandleWayPointDeleteCommand(const char* /*args*/, WorldSession* m_session);
     bool HandleWayPointDeleteAllCommand(const char* /*args*/, WorldSession* m_session);
-    bool HandleWayPointEmoteCommand(const char* args, WorldSession* m_session);
-    bool HandleWayPointFlagsCommand(const char* args, WorldSession* m_session);
-    bool HandleWayPointGenerateCommand(const char* args, WorldSession* m_session);
     bool HandleWayPointHideCommand(const char* /*args*/, WorldSession* m_session);
-    bool HandleWayPointInfoCommand(const char* /*args*/, WorldSession* m_session);
-    bool HandleWayPpointMoveHereCommand(const char* /*args*/, WorldSession* m_session);
-    bool HandleWayPointMoveTypeCommand(const char* args, WorldSession* m_session);
-    bool HandleWayPointSaveCommand(const char* /*args*/, WorldSession* m_session);
     bool HandleWayPointShowCommand(const char* args, WorldSession* m_session);
-    bool HandleWayPointSkinCommand(const char* args, WorldSession* m_session);
-    bool HandleWayPointWaitCommand(const char* args, WorldSession* m_session);
 };
 
 #define sChatHandler ChatHandler::getInstance()

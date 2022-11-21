@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -24,8 +24,6 @@ extern "C" SCRIPT_DECL void _exp_script_register(ScriptMgr* mgr)    // Comment a
     SetupL70ETC(mgr);
     SetupWinterVeil(mgr);
     SetupHallowsEnd(mgr);
-
-    SetupVayrieTest(mgr);
 }
 
 #ifdef WIN32

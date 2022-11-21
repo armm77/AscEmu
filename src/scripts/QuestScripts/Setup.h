@@ -1,19 +1,21 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Units/Creatures/AIInterface.h"
-#include "Management/Item.h"
-#include "Map/MapMgr.h"
-#include "Management/ItemInterface.h"
-#include "Storage/MySQLDataStore.hpp"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Item.hpp"
 #include <Management/QuestLogEntry.hpp>
-#include "Map/MapScriptInterface.h"
-#include <Spell/SpellMgr.h>
-#include "Map/WorldCreatorDefines.hpp"
+#include "Map/Management/MapMgr.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Management/ItemInterface.h"
+#include "Movement/Spline/MoveSpline.h"
+#include "Server/Script/CreatureAIScript.h"
+#include "Storage/MySQLDataStore.hpp"
+#include <Spell/SpellMgr.hpp>
+#include "Movement/Spline/MoveSplineInit.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Classes Quests

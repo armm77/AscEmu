@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,6 +19,7 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 enum
 {
@@ -27,7 +28,8 @@ enum
 
 class BalosJackenQAI : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(BalosJackenQAI)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new BalosJackenQAI(c); }
     explicit BalosJackenQAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         friendlyTimer = BALOS_FRIENDLY_TIMER;
@@ -52,14 +54,14 @@ class BalosJackenQAI : public CreatureAIScript
         if (friendlyTimer == BALOS_FRIENDLY_TIMER)
         {
             // set Balos Jacken friendly and start friendlyTimer cooldown
-            getCreature()->RemoveNegativeAuras();
-            getCreature()->SetFaction(35);
-            getCreature()->SetHealthPct(100);
-            getCreature()->GetAIInterface()->WipeTargetList();
-            getCreature()->GetAIInterface()->WipeHateList();
-            getCreature()->GetAIInterface()->HandleEvent(EVENT_LEAVECOMBAT, getCreature(), 0);
+            getCreature()->removeAllNegativeAuras();
+            getCreature()->setFaction(35);
+            getCreature()->setHealthPct(100);
+            getCreature()->getThreatManager().clearAllThreat();
+            getCreature()->getThreatManager().removeMeFromThreatLists();
+            getCreature()->getAIInterface()->handleEvent(EVENT_LEAVECOMBAT, getCreature(), 0);
             _setMeleeDisabled(true);
-            getCreature()->GetAIInterface()->SetAllowedToEnterCombat(false);
+            getCreature()->getAIInterface()->setAllowedToEnterCombat(false);
             //remove not_selectable flag:
             getCreature()->removeUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
             // decrease timer
@@ -68,9 +70,9 @@ class BalosJackenQAI : public CreatureAIScript
         else if (friendlyTimer == 0)
         {
             // set Balos Jacken unfriendly and reset FriendlyTimer
-            getCreature()->SetFaction(14);
+            getCreature()->setFaction(14);
             _setMeleeDisabled(false);
-            getCreature()->GetAIInterface()->SetAllowedToEnterCombat(true);
+            getCreature()->getAIInterface()->setAllowedToEnterCombat(true);
             friendlyTimer = BALOS_FRIENDLY_TIMER;
             RemoveAIUpdateEvent();
         }
@@ -85,13 +87,15 @@ class BalosJackenQAI : public CreatureAIScript
     {
         RemoveAIUpdateEvent();
     }
+
 protected:
     short friendlyTimer;
 };
 
 class OverlordMokMorokk : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(OverlordMokMorokk)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new OverlordMokMorokk(c); }
     explicit OverlordMokMorokk(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnLoad() override
@@ -121,14 +125,14 @@ class OverlordMokMorokk : public CreatureAIScript
 
     void AIUpdate() override
     {
-        getCreature()->RemoveNegativeAuras();
-        getCreature()->SetFaction(29);
-        getCreature()->SetHealthPct(100);
-        getCreature()->GetAIInterface()->WipeTargetList();
-        getCreature()->GetAIInterface()->WipeHateList();
-        getCreature()->GetAIInterface()->HandleEvent(EVENT_LEAVECOMBAT, getCreature(), 0);
+        getCreature()->removeAllNegativeAuras();
+        getCreature()->setFaction(29);
+        getCreature()->setHealthPct(100);
+        getCreature()->getThreatManager().clearAllThreat();
+        getCreature()->getThreatManager().removeMeFromThreatLists();
+        getCreature()->getAIInterface()->handleEvent(EVENT_LEAVECOMBAT, getCreature(), 0);
         _setMeleeDisabled(true);
-        getCreature()->GetAIInterface()->SetAllowedToEnterCombat(false);
+        getCreature()->getAIInterface()->setAllowedToEnterCombat(false);
         getCreature()->removeUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
     }
 };
@@ -136,36 +140,36 @@ class OverlordMokMorokk : public CreatureAIScript
 class ChallengeOverlordMokMorokk : public QuestScript
 {
 public:
-
     void OnQuestStart(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
         float SSX = mTarget->GetPositionX();
         float SSY = mTarget->GetPositionY();
         float SSZ = mTarget->GetPositionZ();
 
-        Creature* Overlord = mTarget->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(SSX, SSY, SSZ, 4500);
+        Creature* Overlord = mTarget->getWorldMap()->getInterface()->getCreatureNearestCoords(SSX, SSY, SSZ, 4500);
 
-        if (Overlord == NULL)
+        if (Overlord == nullptr)
             return;
 
         std::string say = "Puny ";
         say += mTarget->getName();
         say += " wanna fight Overlord Mok'Morokk? Me beat you! Me boss here!";
-        Overlord->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, say.c_str());
-        Overlord->SetFaction(72);
-        Overlord->GetAIInterface()->setMeleeDisabled(false);
-        Overlord->GetAIInterface()->SetAllowedToEnterCombat(true);
+        Overlord->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, say.c_str());
+        Overlord->setFaction(72);
+        Overlord->getAIInterface()->setMeleeDisabled(false);
+        Overlord->getAIInterface()->setAllowedToEnterCombat(true);
     }
 };
 
 class PrivateHendel : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(PrivateHendel)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new PrivateHendel(c); }
     explicit PrivateHendel(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnLoad() override
     {
-        getCreature()->SetFaction(12);
+        getCreature()->setFaction(12);
         getCreature()->setStandState(STANDSTATE_STAND);
     }
 
@@ -187,14 +191,14 @@ class PrivateHendel : public CreatureAIScript
     void AIUpdate() override
     {
         getCreature()->emote(EMOTE_STATE_KNEEL);
-        getCreature()->RemoveNegativeAuras();
-        getCreature()->SetFaction(12);
-        getCreature()->SetHealthPct(100);
-        getCreature()->GetAIInterface()->WipeTargetList();
-        getCreature()->GetAIInterface()->WipeHateList();
-        getCreature()->GetAIInterface()->HandleEvent(EVENT_LEAVECOMBAT, getCreature(), 0);
+        getCreature()->removeAllNegativeAuras();
+        getCreature()->setFaction(12);
+        getCreature()->setHealthPct(100);
+        getCreature()->getThreatManager().clearAllThreat();
+        getCreature()->getThreatManager().removeMeFromThreatLists();
+        getCreature()->getAIInterface()->handleEvent(EVENT_LEAVECOMBAT, getCreature(), 0);
         _setMeleeDisabled(true);
-        getCreature()->GetAIInterface()->SetAllowedToEnterCombat(false);
+        getCreature()->getAIInterface()->setAllowedToEnterCombat(false);
         getCreature()->removeUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
     }
 };
@@ -202,21 +206,20 @@ class PrivateHendel : public CreatureAIScript
 class TheMissingDiplomat2 : public QuestScript
 {
 public:
-
     void OnQuestStart(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
         float SSX = mTarget->GetPositionX();
         float SSY = mTarget->GetPositionY();
         float SSZ = mTarget->GetPositionZ();
 
-        Creature* Dashel = mTarget->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(SSX, SSY, SSZ, 4966);
+        Creature* Dashel = mTarget->getWorldMap()->getInterface()->getCreatureNearestCoords(SSX, SSY, SSZ, 4966);
 
         if (Dashel == nullptr)
             return;
 
-        Dashel->SetFaction(72);
-        Dashel->GetAIInterface()->setMeleeDisabled(false);
-        Dashel->GetAIInterface()->SetAllowedToEnterCombat(true);
+        Dashel->setFaction(72);
+        Dashel->getAIInterface()->setMeleeDisabled(false);
+        Dashel->getAIInterface()->setAllowedToEnterCombat(true);
     }
 };
 

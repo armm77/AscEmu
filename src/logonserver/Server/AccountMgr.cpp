@@ -1,10 +1,15 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "LogonStdAfx.h"
 #include "AccountMgr.h"
+#include <Logging/Logger.hpp>
+#include <Log.hpp>
+#include <Auth/BigNumber.h>
+#include <Util/Strings.hpp>
+#include <Database/Database.h>
+#include "Master.hpp"
 
 AccountMgr& AccountMgr::getInstance()
 {
@@ -22,7 +27,7 @@ void AccountMgr::initialize(uint32_t reloadTime)
 
     sLogger.info("AccountMgr : loaded %u accounts.", static_cast<uint32_t>(getCount()));
 
-    m_reloadThread = std::make_unique<AscEmu::Threading::AEThread>("ReloadAccounts", [this](AscEmu::Threading::AEThread& thread) { this->reloadAccounts(false); }, std::chrono::seconds(m_reloadTime));
+    m_reloadThread = std::make_unique<AscEmu::Threading::AEThread>("ReloadAccounts", [this](AscEmu::Threading::AEThread& /*thread*/) { this->reloadAccounts(false); }, std::chrono::seconds(m_reloadTime));
 }
 
 void AccountMgr::finalize()
@@ -89,7 +94,7 @@ void AccountMgr::addAccount(Field* field)
         memset(account->SrpHash, 0, 20);
     }
 
-    Util::StringToUpperCase(accountName);
+    AscEmu::Util::Strings::toUpperCase(accountName);
 
     _accountMap[accountName] = account;
 }
@@ -112,7 +117,7 @@ void AccountMgr::updateAccount(std::shared_ptr<Account> account, Field* field)
 
     if (id != account->AccountId)
     {
-        sLogger.failure(" >> deleting duplicate account %u [%s]...", id, accountName.c_str());
+        sLogger.failure("AccountMgr : deleting duplicate account %u [%s]...", id, accountName.c_str());
         sLogonSQL->Execute("DELETE FROM accounts WHERE id = %u", id);
         return;
     }
@@ -183,7 +188,7 @@ void AccountMgr::reloadAccounts(bool silent)
             Field* field = result->Fetch();
             std::string accountName = field[1].GetString();
 
-            Util::StringToUpperCase(accountName);
+            AscEmu::Util::Strings::toUpperCase(accountName);
 
             const auto account = _getAccountByNameLockFree(accountName);
             if (account == nullptr)

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -8,14 +8,13 @@ This file is released under the MIT license. See README-MIT for more information
 class TyraliusPrison : public GameObjectAIScript
 {
 public:
-
     explicit TyraliusPrison(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new TyraliusPrison(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         LocationVector pos = player->GetPosition();
-        Creature* creature = player->GetMapMgr()->CreateAndSpawnCreature(20787, pos.x, pos.y, pos.z, pos.o);
+        Creature* creature = player->getWorldMap()->createAndSpawnCreature(20787, pos);
         if (creature != nullptr)
             creature->Despawn(2 * 60 * 1000, 0);
     }
@@ -24,87 +23,82 @@ public:
 class AndorhalTower1 : public GameObjectAIScript
 {
 public:
-
     explicit AndorhalTower1(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new AndorhalTower1(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->isTeamHorde())
-            player->AddQuestKill(5098, 0, 0);
+            player->addQuestKill(5098, 0, 0);
         else
-            player->AddQuestKill(5097, 0, 0);
+            player->addQuestKill(5097, 0, 0);
     }
 };
 
 class AndorhalTower2 : public GameObjectAIScript
 {
 public:
-
     explicit AndorhalTower2(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new AndorhalTower2(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->isTeamHorde())
-            player->AddQuestKill(5098, 1, 0);
+            player->addQuestKill(5098, 1, 0);
         else
-            player->AddQuestKill(5097, 1, 0);
+            player->addQuestKill(5097, 1, 0);
     }
 };
 
 class AndorhalTower3 : public GameObjectAIScript
 {
 public:
-
     explicit AndorhalTower3(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new AndorhalTower3(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->isTeamHorde())
-            player->AddQuestKill(5098, 2, 0);
+            player->addQuestKill(5098, 2, 0);
         else
-            player->AddQuestKill(5097, 2, 0);
+            player->addQuestKill(5097, 2, 0);
     }
 };
 
 class AndorhalTower4 : public GameObjectAIScript
 {
 public:
-
     explicit AndorhalTower4(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new AndorhalTower4(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->isTeamHorde())
-            player->AddQuestKill(5098, 3, 0);
+            player->addQuestKill(5098, 3, 0);
         else
-            player->AddQuestKill(5097, 3, 0);
+            player->addQuestKill(5097, 3, 0);
     }
 };
 
 class OrbOfCommand : public GameObjectAIScript
 {
 public:
-
     explicit OrbOfCommand(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new OrbOfCommand(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        if (player->HasFinishedQuest(7761) && player->getLevel() >= 58 && player->isInGroup())
+        if (player->hasQuestFinished(7761) && player->getLevel() >= 58 && player->isInGroup())
         {
-            player->SafeTeleport(469, 0, -7672.939941f, -1107.307617f, 396.649994f, 0.616532f);
+            player->safeTeleport(469, 0, LocationVector(-7672.939941f, -1107.307617f, 396.649994f, 0.616532f));
         }
-        else if (player->getLevel() <= 57 || player->HasFinishedQuest(7761) == false)
+        else if (player->getLevel() <= 57 || player->hasQuestFinished(7761) == false)
         {
-            player->BroadcastMessage("You need to be level 58 and have completed the quest : Blackhand's Command");
+            player->broadcastMessage("You need to be level 58 and have completed the quest : Blackhand's Command");
         }
-        else if (player->HasFinishedQuest(7761) == true && player->getLevel() >= 58 && !player->isInGroup())
+        else if (player->hasQuestFinished(7761) == true && player->getLevel() >= 58 && !player->isInGroup())
         {
-            player->BroadcastMessage("You need to be in a raid group to be able to enter this instance");
+            player->broadcastMessage("You need to be in a raid group to be able to enter this instance");
         }
     }
 };
@@ -112,14 +106,13 @@ public:
 class Blacksmithing_Plans_Use : public GameObjectAIScript
 {
 public:
-
     explicit Blacksmithing_Plans_Use(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new Blacksmithing_Plans_Use(GO); }
 
-    void OnLootTaken(Player* player, ItemProperties const* /*itemProperties*/)
+    void OnLootTaken(Player* player, ItemProperties const* /*itemProperties*/) override
     {
         LocationVector pos = player->GetPosition();
-        Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(11120, pos.x, pos.y, pos.z, pos.o, true, false, 0, 0);
+        Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(11120, pos, true, false, 0, 0);
         if (NewCreature != nullptr)
             NewCreature->Despawn(600000, 0);
     }
@@ -128,13 +121,12 @@ public:
 class GongOfBethekk : public GameObjectAIScript
 {
 public:
-
     explicit GongOfBethekk(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new GongOfBethekk(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(14515, -11556.3f, -1628.32f, 41.299f, 4.1f, true, false, 0, 0);
+        Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(14515, LocationVector(-11556.3f, -1628.32f, 41.299f, 4.1f), true, false, 0, 0);
         if (NewCreature != nullptr)
             NewCreature->Despawn(1200000, 0);
     }
@@ -143,22 +135,21 @@ public:
 class TerokksDownfall : public GameObjectAIScript
 {
 public:
-
     explicit TerokksDownfall(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new TerokksDownfall(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->hasQuestInQuestLog(11073) && player->getItemInterface()->GetItemCount(32720, 1))
         {
             LocationVector pos = player->GetPosition();
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(21838, pos.x, pos.y, pos.z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(21838, pos, true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(600000, 0);
         }
         else
         {
-            player->BroadcastMessage("You need to have item : Time-Lost Offering and to have quest : Terokk's Downfall");
+            player->broadcastMessage("You need to have item : Time-Lost Offering and to have quest : Terokk's Downfall");
         }
     }
 };
@@ -166,22 +157,21 @@ public:
 class VilebranchKidnapper : public GameObjectAIScript
 {
 public:
-
     explicit VilebranchKidnapper(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new VilebranchKidnapper(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         LocationVector pos = player->GetPosition();
-        Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(14748, pos.x, pos.y + 1, pos.z, pos.o, true, false, 0, 0);
+        Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(14748, LocationVector(pos.x, pos.y + 1, pos.z, pos.o), true, false, 0, 0);
         if (NewCreature != nullptr)
             NewCreature->Despawn(600000, 0);
 
-        NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(14748, pos.x, pos.y, pos.z, pos.o, true, false, 0, 0);
+        NewCreature = player->getWorldMap()->getInterface()->spawnCreature(14748, pos, true, false, 0, 0);
         if (NewCreature != nullptr)
             NewCreature->Despawn(600000, 0);
 
-        NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(14748, pos.x - 1, pos.y, pos.z, pos.o, true, false, 0, 0);
+        NewCreature = player->getWorldMap()->getInterface()->spawnCreature(14748, LocationVector(pos.x - 1, pos.y, pos.z, pos.o), true, false, 0, 0);
         if (NewCreature != nullptr)
             NewCreature->Despawn(600000, 0);
     }
@@ -190,22 +180,21 @@ public:
 class GongOfZulFarrak : public GameObjectAIScript
 {
 public:
-
     explicit GongOfZulFarrak(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new GongOfZulFarrak(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->getItemInterface()->GetItemCount(9240, 1))
         {
             LocationVector pos = player->GetPosition();
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(7273, pos.x, pos.y + 1, pos.z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(7273, LocationVector(pos.x, pos.y + 1, pos.z, pos.o), true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(1800000, 0);
         }
         else
         {
-            player->BroadcastMessage("Missing required item : Mallet of Zul'Farrak");
+            player->broadcastMessage("Missing required item : Mallet of Zul'Farrak");
         }
     }
 };
@@ -213,22 +202,21 @@ public:
 class Obsidias_Egg : public GameObjectAIScript
 {
 public:
-
     explicit Obsidias_Egg(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new Obsidias_Egg(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->hasQuestInQuestLog(11078))
         {
             LocationVector pos = player->GetPosition();
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(23282, pos.x, pos.y + 1, pos.z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(23282, LocationVector(pos.x, pos.y + 1, pos.z, pos.o), true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(600000, 0);
         }
         else
         {
-            player->BroadcastMessage("Missing required quest : To Rule The Skies");
+            player->broadcastMessage("Missing required quest : To Rule The Skies");
         }
     }
 };
@@ -236,22 +224,21 @@ public:
 class Rivendarks_Egg : public GameObjectAIScript
 {
 public:
-
     explicit Rivendarks_Egg(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new Rivendarks_Egg(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->hasQuestInQuestLog(11078))
         {
             LocationVector pos = player->GetPosition();
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(23061, pos.x, pos.y + 1, pos.z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(23061, LocationVector(pos.x, pos.y + 1, pos.z, pos.o), true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(600000, 0);
         }
         else
         {
-            player->BroadcastMessage("Missing required quest : To Rule The Skies");
+            player->broadcastMessage("Missing required quest : To Rule The Skies");
         }
     }
 };
@@ -259,22 +246,21 @@ public:
 class Furywings_Egg : public GameObjectAIScript
 {
 public:
-
     explicit Furywings_Egg(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new Furywings_Egg(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->hasQuestInQuestLog(11078))
         {
             LocationVector pos = player->GetPosition();
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(23261, pos.x, pos.y + 1, pos.z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(23261, LocationVector(pos.x, pos.y + 1, pos.z, pos.o), true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(600000, 0);
         }
         else
         {
-            player->BroadcastMessage("Missing required quest : To Rule The Skies");
+            player->broadcastMessage("Missing required quest : To Rule The Skies");
         }
     }
 };
@@ -282,22 +268,21 @@ public:
 class Insidions_Egg : public GameObjectAIScript
 {
 public:
-
     explicit Insidions_Egg(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new Insidions_Egg(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->hasQuestInQuestLog(11078))
         {
             LocationVector pos = player->GetPosition();
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(23281, pos.x, pos.y + 1, pos.z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(23281, LocationVector(pos.x, pos.y + 1, pos.z, pos.o), true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(600000, 0);
         }
         else
         {
-            player->BroadcastMessage("Missing required quest : To Rule The Skies");
+            player->broadcastMessage("Missing required quest : To Rule The Skies");
         }
     }
 };
@@ -305,22 +290,21 @@ public:
 class Corrupt_Minor_Manifestation_Water_Object : public GameObjectAIScript
 {
 public:
-
     explicit Corrupt_Minor_Manifestation_Water_Object(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new Corrupt_Minor_Manifestation_Water_Object(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->hasQuestInQuestLog(63))
         {
             LocationVector pos = player->GetPosition();
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(5894, pos.x, pos.y + 1, pos.z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(5894, LocationVector(pos.x, pos.y + 1, pos.z, pos.o), true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(600000, 0);
         }
         else
         {
-            player->BroadcastMessage("Missing required quest : Call of Water");
+            player->broadcastMessage("Missing required quest : Call of Water");
         }
     }
 };
@@ -328,22 +312,21 @@ public:
 class Telathion_the_Impure_Object : public GameObjectAIScript
 {
 public:
-
     explicit Telathion_the_Impure_Object(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new Telathion_the_Impure_Object(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->hasQuestInQuestLog(9508))
         {
             LocationVector pos = player->GetPosition();
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(17359, pos.x, pos.y + 1, pos.z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(17359, LocationVector(pos.x, pos.y + 1, pos.z, pos.o), true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(600000, 0);
         }
         else
         {
-            player->BroadcastMessage("Missing required quest : Call of Water");
+            player->broadcastMessage("Missing required quest : Call of Water");
         }
     }
 };
@@ -351,24 +334,23 @@ public:
 class UlagTheCleaver : public GameObjectAIScript
 {
 public:
-
     explicit UlagTheCleaver(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new UlagTheCleaver(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        Creature* Ulag = player->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(2390.101807f, 336.676788f, 40.015614f, 6390);
-        GameObject* pDoor = player->GetMapMgr()->GetInterface()->GetGameObjectNearestCoords(2388.480029f, 338.3901f, 40.092899f, 176594);
+        Creature* Ulag = player->getWorldMap()->getInterface()->getCreatureNearestCoords(2390.101807f, 336.676788f, 40.015614f, 6390);
+        GameObject* pDoor = player->getWorldMap()->getInterface()->getGameObjectNearestCoords(2388.480029f, 338.3901f, 40.092899f, 176594);
         QuestLogEntry* en = player->getQuestLogByQuestId(1819);
         if (en == nullptr || pDoor == nullptr || Ulag == nullptr)
             return;
 
-        Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(6390, 2390.101807f, 336.676788f, 40.015614f, 2.259590f, true, false, 0, 0);
+        Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(6390, LocationVector(2390.101807f, 336.676788f, 40.015614f, 2.259590f), true, false, 0, 0);
         if (NewCreature != nullptr)
         {
             NewCreature->Despawn(180000, 0);
-            NewCreature->GetAIInterface()->setNextTarget(player);
-            NewCreature->GetAIInterface()->AttackReaction(player, 1);
+            NewCreature->getAIInterface()->setCurrentTarget(player);
+            NewCreature->getAIInterface()->onHostileAction(player);
             pDoor->setFlags(GO_FLAG_NONSELECTABLE | GO_FLAG_NEVER_DESPAWN);
             pDoor->setState(GO_STATE_OPEN);
         };
@@ -378,37 +360,35 @@ public:
 class DustySpellbooks : public GameObjectAIScript
 {
 public:
-
     explicit DustySpellbooks(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new DustySpellbooks(GO); }
 
-    void OnLootTaken(Player* player, ItemProperties const* /*itemProperties*/)
+    void OnLootTaken(Player* player, ItemProperties const* /*itemProperties*/) override
     {
         QuestLogEntry* en = player->getQuestLogByQuestId(422);
         if (en == nullptr)
             return;
 
         LocationVector pos = player->GetPosition();
-        Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(1770, pos.x, pos.y, pos.z, pos.o, true, false, 0, 0);
+        Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(1770, pos, true, false, 0, 0);
         if (NewCreature != nullptr)
-            NewCreature->SendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "The Sons of Arugal will rise against all who challenge the power of the Moonrage!");
+            NewCreature->sendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "The Sons of Arugal will rise against all who challenge the power of the Moonrage!");
     }
 };
 
 class CatFigurine : public GameObjectAIScript
 {
 public:
-
     explicit CatFigurine(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new CatFigurine(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         uint32_t Chance = Util::getRandomUInt(100);
         if (Chance <= 10)
         {
             LocationVector pos = player->GetPosition();
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(3619, pos.x, pos.y + 1, pos.z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(3619, LocationVector(pos.x, pos.y + 1, pos.z, pos.o), true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(600000, 0);
         }
@@ -418,14 +398,13 @@ public:
 class EthereumTransponderZeta : public GameObjectAIScript
 {
 public:
-
     explicit EthereumTransponderZeta(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new EthereumTransponderZeta(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         LocationVector pos = player->GetPosition();
-        Creature* commander = player->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(pos.x, pos.y, pos.z, 20482);
+        Creature* commander = player->getWorldMap()->getInterface()->getCreatureNearestCoords(pos.x, pos.y, pos.z, 20482);
         if (commander)
             return;
 
@@ -434,7 +413,7 @@ public:
             float x = 4017.96f;
             float y = 2315.91f;
             float z = 116.418f;
-            Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(20482, x, y, z, pos.o, true, false, 0, 0);
+            Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(20482, LocationVector(x, y, z, pos.o), true, false, 0, 0);
             if (NewCreature != nullptr)
                 NewCreature->Despawn(1 * 60 * 1000, 0);
         }
@@ -444,17 +423,16 @@ public:
 class BringMetheEgg : public GameObjectAIScript
 {
 public:
-
     explicit BringMetheEgg(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new BringMetheEgg(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(10111);
         if (qle == nullptr)
             return;
 
-        if (!player->HasAura(33382))
+        if (!player->hasAurasWithId(33382))
             player->castSpell(player, 33382, true);
     }
 };
@@ -462,20 +440,19 @@ public:
 class MysteriousEgg : public GameObjectAIScript
 {
 public:
-
     explicit MysteriousEgg(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new MysteriousEgg(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        player->AddQuestKill(10111, 0, 0);
+        player->addQuestKill(10111, 0, 0);
 
         LocationVector pos = player->GetPosition();
-        Creature* bird = player->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(pos.x, pos.y, pos.z, 19055);
+        Creature* bird = player->getWorldMap()->getInterface()->getCreatureNearestCoords(pos.x, pos.y, pos.z, 19055);
         if (bird != nullptr)
             return;
 
-        bird = player->GetMapMgr()->CreateAndSpawnCreature(19055, pos.x, pos.y, pos.z, pos.o);
+        bird = player->getWorldMap()->createAndSpawnCreature(19055, pos);
         if (bird != nullptr)
             bird->Despawn(5 * 60 * 1000, 0);
     }
@@ -484,24 +461,22 @@ public:
 class AlterofTidalMastery : public GameObjectAIScript
 {
 public:
-
     explicit AlterofTidalMastery(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new AlterofTidalMastery(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        player->GetMapMgr()->GetInterface()->SpawnCreature(16292, 7934.343750f, -7637.020996f, 112.694130f, 3.098388f, true, false, 0, 0);
+        player->getWorldMap()->getInterface()->spawnCreature(16292, LocationVector(7934.343750f, -7637.020996f, 112.694130f, 3.098388f), true, false, 0, 0);
     }
 };
 
 class ShrineOfDathRemar : public GameObjectAIScript
 {
 public:
-
     explicit ShrineOfDathRemar(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new ShrineOfDathRemar(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(8345);
         if (qle != nullptr)
@@ -512,21 +487,19 @@ public:
 class APlagueUponThee : public GameObjectAIScript
 {
 public:
-
     explicit APlagueUponThee(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new APlagueUponThee(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->hasQuestInQuestLog(5902) || player->hasQuestInQuestLog(5904))
         {
-            LocationVector pos = player->GetPosition();
-            GameObject* go = player->GetMapMgr()->GetInterface()->GetGameObjectNearestCoords(pos.x, pos.y, pos.z, 177491);
+            GameObject* go = player->getWorldMap()->getInterface()->getGameObjectNearestCoords(player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), 177491);
             if (go == nullptr)
             {
-                GameObject* barel = player->GetMapMgr()->CreateAndSpawnGameObject(177491, 2449.51f, -1662.32f, 104.38f, 1.0f, 1);
+                GameObject* barel = player->getWorldMap()->createAndSpawnGameObject(177491, LocationVector(2449.51f, -1662.32f, 104.38f, 1.0f), 1);
                 if (barel != nullptr)
-                    barel->Despawn(2 * 60 * 1000, 0);
+                    barel->despawn(2 * 60 * 1000, 0);
             }
         }
     }
@@ -535,17 +508,16 @@ public:
 class SerpentStatue : public GameObjectAIScript
 {
 public:
-
     explicit SerpentStatue(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new SerpentStatue(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(6027);
         if (qle == nullptr)
             return;
 
-        Creature* naga = player->GetMapMgr()->CreateAndSpawnCreature(12369, 246.741f, 2953.3f, 5.8631f, 1.078f);
+        Creature* naga = player->getWorldMap()->createAndSpawnCreature(12369, LocationVector(246.741f, 2953.3f, 5.8631f, 1.078f));
         if (naga != nullptr)
             naga->Despawn(6 * 60 * 1000, 0);
     }
@@ -554,11 +526,10 @@ public:
 class CuregosGold : public GameObjectAIScript
 {
 public:
-
     explicit CuregosGold(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new CuregosGold(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(2882);
         if (qle == nullptr)
@@ -566,40 +537,39 @@ public:
 
         LocationVector pos = player->GetPosition();
 
-        Creature* pirate = player->GetMapMgr()->CreateAndSpawnCreature(7899, pos.x + Util::getRandomFloat(5.0f), pos.y + Util::getRandomFloat(5.0f), pos.z, pos.o);
+        Creature* pirate = player->getWorldMap()->createAndSpawnCreature(7899, LocationVector(pos.x + Util::getRandomFloat(5.0f), pos.y + Util::getRandomFloat(5.0f), pos.z, pos.o));
         if (pirate != nullptr)
             pirate->Despawn(6 * 60 * 1000, 0);
 
-        pirate = player->GetMapMgr()->CreateAndSpawnCreature(7899, pos.x - Util::getRandomFloat(5.0f), pos.y + Util::getRandomFloat(5.0f), pos.z, pos.o);
+        pirate = player->getWorldMap()->createAndSpawnCreature(7899, LocationVector(pos.x - Util::getRandomFloat(5.0f), pos.y + Util::getRandomFloat(5.0f), pos.z, pos.o));
         if (pirate != nullptr)
             pirate->Despawn(6 * 60 * 1000, 0);
 
-        pirate = player->GetMapMgr()->CreateAndSpawnCreature(7901, pos.x + Util::getRandomFloat(5.0f), pos.y - Util::getRandomFloat(5.0f), pos.z, pos.o);
+        pirate = player->getWorldMap()->createAndSpawnCreature(7901, LocationVector(pos.x + Util::getRandomFloat(5.0f), pos.y - Util::getRandomFloat(5.0f), pos.z, pos.o));
         if (pirate != nullptr)
             pirate->Despawn(6 * 60 * 1000, 0);
 
-        pirate = player->GetMapMgr()->CreateAndSpawnCreature(7901, pos.x + Util::getRandomFloat(5.0f), pos.y + Util::getRandomFloat(5.0f), pos.z, pos.o);
+        pirate = player->getWorldMap()->createAndSpawnCreature(7901, LocationVector(pos.x + Util::getRandomFloat(5.0f), pos.y + Util::getRandomFloat(5.0f), pos.z, pos.o));
         if (pirate != nullptr)
             pirate->Despawn(6 * 60 * 1000, 0);
 
-        pirate = player->GetMapMgr()->CreateAndSpawnCreature(7902, pos.x - Util::getRandomFloat(5.0f), pos.y - Util::getRandomFloat(5.0f), pos.z, pos.o);
+        pirate = player->getWorldMap()->createAndSpawnCreature(7902, LocationVector(pos.x - Util::getRandomFloat(5.0f), pos.y - Util::getRandomFloat(5.0f), pos.z, pos.o));
         if (pirate != nullptr)
             pirate->Despawn(6 * 60 * 1000, 0);
 
-        GameObject* gobj = player->GetMapMgr()->CreateAndSpawnGameObject(142194, pos.x + 5, pos.y, pos.z, pos.o, 1);
+        GameObject* gobj = player->getWorldMap()->createAndSpawnGameObject(142194, LocationVector(pos.x + 5, pos.y, pos.z, pos.o), 1);
         if (gobj != nullptr)
-            gobj->Despawn(10 * 60 * 1000, 0);
+            gobj->despawn(10 * 60 * 1000, 0);
     }
 };
 
 class DreadmaulRock : public GameObjectAIScript
 {
 public:
-
     explicit DreadmaulRock(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new DreadmaulRock(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(3821);
         if (qle == nullptr)
@@ -607,11 +577,11 @@ public:
 
         LocationVector pos = player->GetPosition();
 
-        Creature* shaghost = player->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(pos.x, pos.y, pos.z, 9136);
+        Creature* shaghost = player->getWorldMap()->getInterface()->getCreatureNearestCoords(pos.x, pos.y, pos.z, 9136);
         if (shaghost)
             return;
 
-        Creature* shaghostspawn = player->GetMapMgr()->CreateAndSpawnCreature(9136, pos.x, pos.y, pos.z, pos.o);
+        Creature* shaghostspawn = player->getWorldMap()->createAndSpawnCreature(9136, pos);
         if (shaghostspawn != nullptr)
             shaghostspawn->Despawn(2 * 60 * 1000, 0);
     }
@@ -620,17 +590,16 @@ public:
 class HandofIruxos : public GameObjectAIScript
 {
 public:
-
     explicit HandofIruxos(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new HandofIruxos(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(5381);
         if (qle == nullptr)
             return;
 
-        Creature* demon = player->GetMapMgr()->CreateAndSpawnCreature(11876, -348.231f, 1763.85f, 138.371f, 4.42728f);
+        Creature* demon = player->getWorldMap()->createAndSpawnCreature(11876, LocationVector(-348.231f, 1763.85f, 138.371f, 4.42728f));
         if (demon != nullptr)
             demon->Despawn(6 * 60 * 1000, 0);
     }
@@ -639,30 +608,28 @@ public:
 class LegionPortals : public GameObjectAIScript
 {
 public:
-
     explicit LegionPortals(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new LegionPortals(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        player->AddQuestKill(5581, 0, 0);
+        player->addQuestKill(5581, 0, 0);
     }
 };
 
 class ProphecyofAkida : public GameObjectAIScript
 {
 public:
-
     explicit ProphecyofAkida(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new ProphecyofAkida(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        player->AddQuestKill(9544, 0, 0);
+        player->addQuestKill(9544, 0, 0);
 
         LocationVector pos = player->GetPosition();
 
-        Creature* prisoner = player->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(pos.x, pos.y, pos.z, 17375);
+        Creature* prisoner = player->getWorldMap()->getInterface()->getCreatureNearestCoords(pos.x, pos.y, pos.z, 17375);
         if (prisoner != nullptr)
             prisoner->Despawn(1, 6 * 60 * 1000);
     }
@@ -671,17 +638,16 @@ public:
 class Razormaw : public GameObjectAIScript
 {
 public:
-
     explicit Razormaw(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new Razormaw(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(9689);
         if (qle == nullptr)
             return;
 
-        Creature* razormaw = player->GetMapMgr()->CreateAndSpawnCreature(17592, -1203.8f, -12424.7f, 95.36f, 4.7f);
+        Creature* razormaw = player->getWorldMap()->createAndSpawnCreature(17592, LocationVector(-1203.8f, -12424.7f, 95.36f, 4.7f));
         if (razormaw != nullptr)
             razormaw->Despawn(6 * 60 * 1000, 0);
     }
@@ -690,11 +656,10 @@ public:
 class TabletoftheSeven : public GameObjectAIScript
 {
 public:
-
     explicit TabletoftheSeven(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new TabletoftheSeven(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(4296);
         if (qle == nullptr)
@@ -708,11 +673,10 @@ public:
 class TestofEndurance : public GameObjectAIScript
 {
 public:
-
     explicit TestofEndurance(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new TestofEndurance(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(1150);
         if (qle == nullptr)
@@ -720,7 +684,7 @@ public:
 
         LocationVector pos = player->GetPosition();
 
-        Creature* grenka = player->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(pos.x, pos.y, pos.z, 4490);
+        Creature* grenka = player->getWorldMap()->getInterface()->getCreatureNearestCoords(pos.x, pos.y, pos.z, 4490);
         if (grenka != nullptr)
         {
             if (!grenka->isAlive())
@@ -729,7 +693,7 @@ public:
                 return;
         }
 
-        Creature* grenkaspawn = player->GetMapMgr()->CreateAndSpawnCreature(4490, pos.x, pos.y, pos.z, pos.o);
+        Creature* grenkaspawn = player->getWorldMap()->createAndSpawnCreature(4490, pos);
         if (grenkaspawn != nullptr)
             grenkaspawn->Despawn(6 * 60 * 1000, 0);
     }
@@ -738,17 +702,16 @@ public:
 class TheFallenExarch : public GameObjectAIScript
 {
 public:
-
     explicit TheFallenExarch(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new TheFallenExarch(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(10915);
         if (qle == nullptr)
             return;
 
-        Creature* exarch = player->GetMapMgr()->CreateAndSpawnCreature(22452, -3365.9f, 5143.19f, -9.00132f, 3.05f);
+        Creature* exarch = player->getWorldMap()->createAndSpawnCreature(22452, LocationVector(-3365.9f, 5143.19f, -9.00132f, 3.05f));
         if (exarch != nullptr)
             exarch->Despawn(6 * 60 * 1000, 0);
     }
@@ -757,24 +720,22 @@ public:
 class TheFinalCode : public GameObjectAIScript
 {
 public:
-
     explicit TheFinalCode(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new TheFinalCode(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        player->AddQuestKill(10447, 1, 0);
+        player->addQuestKill(10447, 1, 0);
     }
 };
 
 class TheRootofAllEvil : public GameObjectAIScript
 {
 public:
-
     explicit TheRootofAllEvil(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new TheRootofAllEvil(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(8481);
         if (qle == nullptr)
@@ -782,7 +743,7 @@ public:
 
         LocationVector pos = player->GetPosition();
 
-        Creature* xandivious = player->GetMapMgr()->CreateAndSpawnCreature(15623, pos.x + 5, pos.y, pos.z, pos.o);
+        Creature* xandivious = player->getWorldMap()->createAndSpawnCreature(15623, LocationVector(pos.x + 5, pos.y, pos.z, pos.o));
         if (xandivious != nullptr)
             xandivious->Despawn(6 * 60 * 1000, 0);
     }
@@ -791,23 +752,20 @@ public:
 class TheThunderspike : public GameObjectAIScript
 {
 public:
-
     explicit TheThunderspike(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new TheThunderspike(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (!player->hasQuestInQuestLog(10526))
             return;
 
-        LocationVector pos = player->GetPosition();
-
         // Wth is that ? To remove ?
-        GameObject* gobj = player->GetMapMgr()->GetInterface()->GetGameObjectNearestCoords(pos.x, pos.y, pos.z, 184729);
+        GameObject* gobj = player->getWorldMap()->getInterface()->getGameObjectNearestCoords(player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), 184729);
         if (gobj != nullptr)
-            gobj->Despawn(6 * 60 * 1000, 0);
+            gobj->despawn(6 * 60 * 1000, 0);
 
-        Creature* spike = player->GetMapMgr()->CreateAndSpawnCreature(21319, 1315.54f, 6688.33f, -18, 0.001f);
+        Creature* spike = player->getWorldMap()->createAndSpawnCreature(21319, LocationVector(1315.54f, 6688.33f, -18, 0.001f));
         if (spike != nullptr)
             spike->Despawn(5 * 60 * 1000, 0);
     }
@@ -816,11 +774,10 @@ public:
 class StrengthofOne : public GameObjectAIScript
 {
 public:
-
     explicit StrengthofOne(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new StrengthofOne(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         QuestLogEntry* qle = player->getQuestLogByQuestId(9582);
         if (qle == nullptr)
@@ -829,13 +786,13 @@ public:
         LocationVector pos = player->GetPosition();
 
         // What is this ? :O To remove ?
-        Creature* reaver = player->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(pos.x, pos.y, pos.z, 17556);
+        Creature* reaver = player->getWorldMap()->getInterface()->getCreatureNearestCoords(pos.x, pos.y, pos.z, 17556);
         if (reaver)
         {
             LocationVector pos2 = reaver->GetPosition();
             reaver->Despawn(1, 5 * 60 * 1000);
 
-            Creature* reaver2 = player->GetMapMgr()->GetInterface()->SpawnCreature(17556, pos2.x, pos2.y, pos2.z, pos2.o, true, false, 0, 0);
+            Creature* reaver2 = player->getWorldMap()->getInterface()->spawnCreature(17556, pos2, true, false, 0, 0);
             if (reaver2 != nullptr)
                 reaver2->Despawn(5 * 60 * 1000, 0);
         }
@@ -845,46 +802,43 @@ public:
 class HealingTheLake : public GameObjectAIScript
 {
 public:
-
     explicit HealingTheLake(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new HealingTheLake(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        player->AddQuestKill(181433, 0, 0);
+        player->addQuestKill(181433, 0, 0);
     }
 };
 
 class TheRavensClaw : public GameObjectAIScript
 {
 public:
-
     explicit TheRavensClaw(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new TheRavensClaw(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
-        if (player->GetMapMgr()->iInstanceMode == InstanceDifficulty::DUNGEON_HEROIC)
-            player->GetMapMgr()->CreateAndSpawnCreature(23035, -87.3546f, 288.006f, 26.4832f, 0);
+        if (player->getWorldMap()->getDifficulty() == InstanceDifficulty::DUNGEON_HEROIC)
+            player->getWorldMap()->createAndSpawnCreature(23035, LocationVector(-87.3546f, 288.006f, 26.4832f, 0));
     }
 };
 
 class DeathGate1 : public GameObjectAIScript
 {
 public:
-
     explicit DeathGate1(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new DeathGate1(GO); }
 
-    void OnSpawn()
+    void OnSpawn() override
     {
         RegisterAIUpdateEvent(500);
     }
 
-    void AIUpdate()
+    void AIUpdate() override
     {
         LocationVector pos = _gameobject->GetPosition();
-        Player* player = _gameobject->GetMapMgr()->GetInterface()->GetPlayerNearestCoords(pos.x, pos.y, pos.z);
+        Player* player = _gameobject->getWorldMap()->getInterface()->getPlayerNearestCoords(pos.x, pos.y, pos.z);
         if (player == nullptr)
             return;
 
@@ -898,19 +852,18 @@ public:
 class DeathGate2 : public GameObjectAIScript
 {
 public:
-
     explicit DeathGate2(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new DeathGate2(GO); }
 
-    void OnSpawn()
+    void OnSpawn() override
     {
         RegisterAIUpdateEvent(500);
     }
 
-    void AIUpdate()
+    void AIUpdate() override
     {
         LocationVector pos = _gameobject->GetPosition();
-        Player* player = _gameobject->GetMapMgr()->GetInterface()->GetPlayerNearestCoords(pos.x, pos.y, pos.z);
+        Player* player = _gameobject->getWorldMap()->getInterface()->getPlayerNearestCoords(pos.x, pos.y, pos.z);
         if (player == nullptr)
             return;
 
@@ -924,11 +877,10 @@ public:
 class DeathGate3 : public GameObjectAIScript
 {
 public:
-
     explicit DeathGate3(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new DeathGate3(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         if (player->getClass() == 6)
         {
@@ -943,14 +895,13 @@ public:
 class SacredFireofLife : public GameObjectAIScript
 {
 public:
-
     explicit SacredFireofLife(GameObject* goinstance) : GameObjectAIScript(goinstance) {}
     static GameObjectAIScript* Create(GameObject* GO) { return new SacredFireofLife(GO); }
 
-    void OnActivate(Player* player)
+    void OnActivate(Player* player) override
     {
         LocationVector pos = player->GetPosition();
-        Creature* NewCreature = player->GetMapMgr()->GetInterface()->SpawnCreature(10882, pos.x, pos.y, pos.y, pos.o, true, false, 0, 0);
+        Creature* NewCreature = player->getWorldMap()->getInterface()->spawnCreature(10882, pos, true, false, 0, 0);
         if (NewCreature != nullptr)
             NewCreature->Despawn(600000, 0);
     }

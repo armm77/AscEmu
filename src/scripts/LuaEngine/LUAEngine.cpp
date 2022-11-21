@@ -1,33 +1,30 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
-
-#include <StdAfx.h>
 
 #ifdef __APPLE__
 #undef check
 #endif
 
-#include "../../world/Objects/GameObject.h"
-#include "../../world/Management/Guild/Guild.hpp"
-#include "../../world/Spell/Spell.h"
-#include "../../world/Units/Creatures/Creature.h"
+#include <Objects/GameObject.h>
+#include <Management/Guild/Guild.hpp>
+#include <Spell/Spell.h>
+#include <Objects/Units/Creatures/Creature.h>
 #include "LUAEngine.h"
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Server/Script/ScriptSetup.h"
-#include "../../world/WorldConf.h"
+#include <WorldConf.h>
 
 #ifndef _WIN32
 #include <dirent.h>
 #endif
 #include "Management/QuestLogEntry.hpp"
-#include "Management/Item.h"
-#include "Management/ArenaTeam.h"
-#include "Map/WorldCreatorDefines.hpp"
-#include "Map/WorldCreator.h"
+#include "Objects/Item.hpp"
+#include "Management/ArenaTeam.hpp"
 #include "LuaMacros.h"
 #include "LuaHelpers.h"
+#include "Server/Script/CreatureAIScript.h"
 
 ScriptMgr* m_scriptMgr = nullptr;
 
@@ -750,13 +747,13 @@ static int RegisterTimedEvent(lua_State* L)  //in this case, L == lu
         free((void*)funcName);
         return luaL_error(L, "Error in RegisterTimedEvent! Failed to create a valid reference.");
     }
-   
+
     TimedEvent* te = TimedEvent::Allocate(LuaGlobal::instance()->luaEngine().get(), new CallbackP2<LuaEngine, const char*, int>(LuaGlobal::instance()->luaEngine().get(), &LuaEngine::HyperCallFunction, funcName, ref), EVENT_LUA_TIMED, delay, repeats);
     EventInfoHolder* ek = new EventInfoHolder;
     ek->funcName = funcName;
     ek->te = te;
     LuaGlobal::instance()->luaEngine()->m_registeredTimedEvents.insert(std::pair<int, EventInfoHolder*>(ref, ek));
-    sLuaEventMgr.event_AddEvent(te);
+    LuaGlobal::instance()->luaEngine()->LuaEventMgr.event_AddEvent(te);
     lua_settop(L, 0);
     lua_pushnumber(L, ref);
     delete ek;
@@ -766,7 +763,7 @@ static int RegisterTimedEvent(lua_State* L)  //in this case, L == lu
 
 static int RemoveTimedEvents(lua_State* /*L*/)  //in this case, L == lu
 {
-    sLuaEventMgr.RemoveEvents();
+    LuaGlobal::instance()->luaEngine()->LuaEventMgr.RemoveEvents();
     return 0;
 }
 
@@ -1392,7 +1389,6 @@ bool LuaOnDummySpell(uint8_t effectIndex, Spell* pSpell)
 class LuaCreature : public CreatureAIScript
 {
 public:
-
     LuaCreature(Creature* creature) : CreatureAIScript(creature), m_binding(nullptr) {}
     ~LuaCreature()
     {}
@@ -1634,7 +1630,7 @@ public:
 
         RELEASE_LOCK
         uint32_t iid = getCreature()->GetInstanceID();
-        if (getCreature()->GetMapMgr() == nullptr || getCreature()->GetMapMgr()->GetMapInfo()->type == INSTANCE_NULL)
+        if (getCreature()->getWorldMap() == nullptr || getCreature()->getWorldMap()->getBaseMap()->getMapInfo()->isNonInstanceMap())
             iid = 0;
 
         WoWGuid wowGuid;
@@ -1715,7 +1711,7 @@ public:
 
     void OnEnterVehicle()
     {
-        CHECK_BINDING_ACQUIRELOCK;
+        CHECK_BINDING_ACQUIRELOCK
 
         LuaGlobal::instance()->luaEngine()->BeginCall(m_binding->m_functionReferences[CREATURE_EVENT_ON_ENTER_VEHICLE]);
         LuaGlobal::instance()->luaEngine()->PushUnit(getCreature());
@@ -1726,7 +1722,7 @@ public:
 
     void OnExitVehicle()
     {
-        CHECK_BINDING_ACQUIRELOCK;
+        CHECK_BINDING_ACQUIRELOCK
 
         LuaGlobal::instance()->luaEngine()->BeginCall(m_binding->m_functionReferences[CREATURE_EVENT_ON_EXIT_VEHICLE]);
         LuaGlobal::instance()->luaEngine()->PushUnit(getCreature());
@@ -1737,7 +1733,7 @@ public:
 
     void OnFirstPassengerEntered(Unit* passenger)
     {
-        CHECK_BINDING_ACQUIRELOCK;
+        CHECK_BINDING_ACQUIRELOCK
 
         LuaGlobal::instance()->luaEngine()->BeginCall(m_binding->m_functionReferences[CREATURE_EVENT_ON_FIRST_PASSENGER_ENTERED]);
         LuaGlobal::instance()->luaEngine()->PushUnit(getCreature());
@@ -1749,7 +1745,7 @@ public:
 
     void OnVehicleFull()
     {
-        CHECK_BINDING_ACQUIRELOCK;
+        CHECK_BINDING_ACQUIRELOCK
 
         LuaGlobal::instance()->luaEngine()->BeginCall(m_binding->m_functionReferences[CREATURE_EVENT_ON_VEHICLE_FULL]);
         LuaGlobal::instance()->luaEngine()->PushUnit(getCreature());
@@ -1760,13 +1756,13 @@ public:
 
     void OnLastPassengerLeft(Unit* passenger)
     {
-        CHECK_BINDING_ACQUIRELOCK;
+        CHECK_BINDING_ACQUIRELOCK
 
         LuaGlobal::instance()->luaEngine()->BeginCall(m_binding->m_functionReferences[CREATURE_EVENT_ON_LAST_PASSENGER_LEFT]);
         LuaGlobal::instance()->luaEngine()->PushUnit(getCreature());
         LuaGlobal::instance()->luaEngine()->PushUnit(passenger);
         LuaGlobal::instance()->luaEngine()->ExecuteCall(2);
-        
+
         RELEASE_LOCK;
     }
 
@@ -1820,7 +1816,6 @@ public:
 class LuaGameObjectScript : public GameObjectAIScript
 {
 public:
-
     explicit LuaGameObjectScript(GameObject* go) : GameObjectAIScript(go), m_binding(nullptr) {}
     ~LuaGameObjectScript() {}
 
@@ -1902,7 +1897,7 @@ public:
 
     void OnDamaged(uint32_t damage)
     {
-        CHECK_BINDING_ACQUIRELOCK;
+        CHECK_BINDING_ACQUIRELOCK
 
         LuaGlobal::instance()->luaEngine()->BeginCall(m_binding->m_functionReferences[GAMEOBJECT_EVENT_ON_DAMAGED]);
         LuaGlobal::instance()->luaEngine()->PushGo(_gameobject);
@@ -1914,7 +1909,7 @@ public:
 
     void OnDestroyed()
     {
-        CHECK_BINDING_ACQUIRELOCK;
+        CHECK_BINDING_ACQUIRELOCK
 
         LuaGlobal::instance()->luaEngine()->BeginCall(m_binding->m_functionReferences[GAMEOBJECT_EVENT_ON_DESTROYED]);
         LuaGlobal::instance()->luaEngine()->PushGo(_gameobject);
@@ -1957,7 +1952,6 @@ public:
 class LuaGossip : public GossipScript
 {
 public:
-
     LuaGossip() : GossipScript(), m_unit_gossip_binding(nullptr), m_item_gossip_binding(nullptr), m_go_gossip_binding(nullptr) {}
     ~LuaGossip()
     {
@@ -2163,7 +2157,6 @@ public:
 class LuaQuest : public QuestScript
 {
 public:
-
     LuaQuest() : QuestScript()
     {
         m_binding = nullptr;
@@ -2276,8 +2269,7 @@ public:
 class LuaInstance : public InstanceScript
 {
 public:
-
-    explicit LuaInstance(MapMgr* pMapMgr) : InstanceScript(pMapMgr), m_instanceId(pMapMgr->GetInstanceID()), m_binding(nullptr) {}
+    explicit LuaInstance(WorldMap* pMapMgr) : InstanceScript(pMapMgr), m_instanceId(pMapMgr->getInstanceId()), m_binding(nullptr) {}
     ~LuaInstance() {}
 
     // Player
@@ -2488,10 +2480,10 @@ QuestScript* CreateLuaQuestScript(uint32_t id)
     return pLua;
 }
 
-InstanceScript* CreateLuaInstance(MapMgr* pMapMgr)
+InstanceScript* CreateLuaInstance(WorldMap* pMapMgr)
 {
     LuaInstance* pLua = nullptr;
-    uint32_t id = pMapMgr->GetMapId();
+    uint32_t id = pMapMgr->getBaseMap()->getMapId();
     LuaObjectBinding* pBinding = LuaGlobal::instance()->luaEngine()->getInstanceBinding(id);
     if (pBinding != nullptr)
     {
@@ -2595,7 +2587,7 @@ GossipScript* CreateLuaGOGossipScript(uint32_t id)
 
 void LuaEngine::Startup()
 {
-    DLLLogDetail("LuaEngineMgr : AscEmu Lua Engine ( ALE ) %s: Loaded", ARCH);
+    DLLLogDetail("LuaEngineMgr : Loaded ALE (AscEmu Lua Engine)");
     //Create a new global state that will server as the lua universe.
     lu = luaL_newstate();
 
@@ -3167,21 +3159,21 @@ void LuaEngine::Restart()
     for (auto itr = temp.begin(); itr != temp.end(); itr += 3)
     {
         //*itr = mapid; *(itr+1) = iid; *(itr+2) = lowguid
-        MapMgr* mgr = nullptr;
+        WorldMap* mgr = nullptr;
         if (*(itr + 1) == 0) //no instance
         {
-            mgr = sInstanceMgr.GetMapMgr(*itr);
+            mgr = sMapMgr.findWorldMap(*itr);
         }
         else
         {
-            Instance* inst = sInstanceMgr.GetInstanceByIds(*itr, *(itr + 1));
+            InstanceMap* inst = sMapMgr.findInstanceMap(*(itr + 1));
             if (inst != nullptr)
-                mgr = inst->m_mapMgr;
+                mgr = inst;
         }
 
         if (mgr != nullptr)
         {
-            Creature* unit = mgr->GetCreature(*(itr + 2));
+            Creature* unit = mgr->getCreature(*(itr + 2));
             if (unit != nullptr && unit->IsInWorld() && unit->GetScript() != nullptr)
                 unit->GetScript()->OnLoad();
         }
@@ -3208,7 +3200,7 @@ void LuaEngine::ResumeLuaThread(int ref)
         if (lua_rawequal(lu, -1, -2))
         {
             lua_pop(lu, 2);
-            int res = lua_resume(expectedThread, expectedThread, lua_gettop(expectedThread));
+            int res = lua_resume(expectedThread, expectedThread, lua_gettop(expectedThread), nullptr);
             if (res && res != LUA_YIELD)
                 report(expectedThread);
         }

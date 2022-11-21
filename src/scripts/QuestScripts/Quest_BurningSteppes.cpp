@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2009 WhyScripts Team <http://www.whydb.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,8 +21,7 @@
 class TabletOfTheSeven : public QuestScript
 {
 public:
-
-    void OnGameObjectActivate(uint32_t entry, Player* mTarget, QuestLogEntry* qLogEntry)
+    void OnGameObjectActivate(uint32_t entry, Player* mTarget, QuestLogEntry* qLogEntry) override
     {
         if (mTarget == nullptr || qLogEntry == nullptr || entry != 169294)
             return;

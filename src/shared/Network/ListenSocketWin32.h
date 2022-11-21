@@ -12,12 +12,10 @@
 
 #ifdef CONFIG_USE_IOCP
 
-#include "../Threading/LegacyThreadPool.h"
+#include <Threading/LegacyThreadPool.h>
 
-#ifdef _MSC_VER
-#   pragma warning (push)
-#   pragma warning (disable : 4996)
-#endif
+//ignore warning for deprecated function gethostbyname
+#pragma warning ( disable: 4996 )
 
 template<class T>
 class SERVER_DECL ListenSocket : public ThreadBase
@@ -114,10 +112,6 @@ class SERVER_DECL ListenSocket : public ThreadBase
         T* socket;
         HANDLE m_cp;
 };
-
-#ifdef _MSC_VER
-#pragma warning (pop)
-#endif
 
 #endif
 #endif      //LISTEN_SOCKET_WIN32_H

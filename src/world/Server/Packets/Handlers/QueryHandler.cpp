@@ -1,16 +1,16 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/Packets/CmsgNameQuery.h"
 #include "Server/Packets/CmsgGameobjectQuery.h"
 #include "Server/Packets/SmsgNameQueryResponse.h"
 #include "Server/Packets/SmsgGameobjectQueryResponse.h"
 #include "Server/Packets/SmsgQueryTimeResponse.h"
 #include "Log.hpp"
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 #include "Storage/MySQLDataStore.hpp"
 #include "Server/Packets/CmsgCreatureQuery.h"
 #include "Server/Packets/SmsgCreatureQueryResponse.h"
@@ -37,7 +37,7 @@ void WorldSession::handleNameQueryOpcode(WorldPacket& recvData)
     if (!info)
         return;
 
-    sLogger.debug("Received CMSG_NAME_QUERY for: %s", info->name);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_NAME_QUERY for: %s", info->name.c_str());
     SendPacket(SmsgNameQueryResponse(srlPacket.guid, info->name, info->race, info->gender, info->cl).serialise().get());
 }
 
@@ -58,7 +58,7 @@ void WorldSession::handleGameObjectQueryOpcode(WorldPacket& recvData)
     const auto name = loc ? loc->name : gameobject_info->name.c_str();
 
 
-    sLogger.debug("Received CMSG_GAMEOBJECT_QUERY for entry: %u", srlPacket.entry);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GAMEOBJECT_QUERY for entry: %u", srlPacket.entry);
     SendPacket(SmsgGameobjectQueryResponse(*gameobject_info, name).serialise().get());
 }
 
@@ -99,7 +99,12 @@ void WorldSession::handleAchievmentQueryOpcode(WorldPacket& recvPacket)
     if (player == nullptr)
         return;
 
-    player->GetAchievementMgr().SendAllAchievementData(_player);
+#if VERSION_STRING >= Cata
+    player->getAchievementMgr().sendRespondInspectAchievements(_player);
+#else
+    player->getAchievementMgr().sendAllAchievementData(_player);
+#endif
+
 #endif
 }
 
@@ -118,7 +123,11 @@ void WorldSession::handleInrangeQuestgiverQuery(WorldPacket& /*recvPacket*/)
             if (creature->isQuestGiver())
             {
                 temp.rawGuid = creature->getGuid();
-                temp.status = uint8_t(sQuestMgr.CalcStatus(creature, _player));
+#if VERSION_STRING < Cata
+                temp.status = static_cast<uint8_t>(sQuestMgr.CalcStatus(creature, _player));
+#else
+                temp.status = sQuestMgr.CalcStatus(creature, _player);
+#endif
                 questgiverSet.push_back(temp);
             }
         }
@@ -133,7 +142,7 @@ void WorldSession::handlePageTextQueryOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_PAGE_TEXT_QUERY: %u (pageId)", srlPacket.pageId);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_PAGE_TEXT_QUERY: %u (pageId)", srlPacket.pageId);
 
     uint32_t pageId = srlPacket.pageId;
     while (pageId)
@@ -157,7 +166,7 @@ void WorldSession::handleItemNameQueryOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_ITEM_NAME_QUERY: %u (itemEntry)", srlPacket.itemEntry);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_ITEM_NAME_QUERY: %u (itemEntry)", srlPacket.itemEntry);
 
     const auto itemProperties = sMySQLStore.getItemProperties(srlPacket.itemEntry);
     if (itemProperties == nullptr)
@@ -176,13 +185,13 @@ void WorldSession::handleCorpseQueryOpcode(WorldPacket& /*recvPacket*/)
         return;
 
     const auto mapInfo = sMySQLStore.getWorldMapInfo(corpse->GetMapId());
-    if (mapInfo == nullptr || mapInfo->type == INSTANCE_NULL || mapInfo->type == INSTANCE_BATTLEGROUND)
+    if (mapInfo == nullptr || mapInfo->isNonInstanceMap() || mapInfo->isBattleground())
     {
         SendPacket(MsgCorspeQuery(uint8_t(1), corpse->GetMapId(), corpse->GetPosition(), corpse->GetMapId(), uint32_t(0)).serialise().get());
     }
     else
     {
-        // type INSTANCE_RAID, INSTANCE_NONRAID, INSTANCE_MULTIMODE
+        // type INSTANCE_RAID, INSTANCE_DUNGEON, INSTANCE_MULTIMODE
         SendPacket(MsgCorspeQuery(uint8_t(1), mapInfo->repopmapid, 
             LocationVector(mapInfo->repopx, mapInfo->repopy, mapInfo->repopz), corpse->GetMapId(), uint32_t(0)).serialise().get());
     }

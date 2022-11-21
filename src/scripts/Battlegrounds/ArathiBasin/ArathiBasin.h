@@ -1,24 +1,21 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Management/Battleground/Battleground.h"
+#include "Management/Battleground/Battleground.hpp"
 #include "ArathiBasinDefinitions.h"
 
-
-class ArathiBasin : public CBattleground
+class ArathiBasin : public Battleground
 {
 public:
-
     GameObject* m_buffs[AB_NUM_BUFFS];
     GameObject* m_controlPoints[AB_NUM_CONTROL_POINTS];
     GameObject* m_controlPointAuras[AB_NUM_CONTROL_POINTS];
 
 protected:
-
     std::list<GameObject*> m_gates;
 
     uint32_t m_resources[2];
@@ -34,8 +31,7 @@ protected:
     bool DefFlag[AB_NUM_CONTROL_POINTS][2];
 
 public:
-
-    ArathiBasin(MapMgr* mgr, uint32_t id, uint32_t lgroup, uint32_t t);
+    ArathiBasin(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t);
     ~ArathiBasin();
 
     bool HandleFinishBattlegroundRewardCalculation(PlayerTeam winningTeam) override;
@@ -57,7 +53,7 @@ public:
     LocationVector GetStartingCoords(uint32_t Team) override;
     void HookOnFlagDrop(Player* plr) override;
 
-    static CBattleground* Create(MapMgr* m, uint32_t i, uint32_t l, uint32_t t) { return new ArathiBasin(m, i, l, t); }
+    static Battleground* Create(BattlegroundMap* m, uint32_t i, uint32_t l, uint32_t t) { return new ArathiBasin(m, i, l, t); }
 
     uint32_t GetNameID() override { return 40; }
     void OnStart() override;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,16 +19,16 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class SpiritScreeches : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (plr->hasQuestInQuestLog(3520))
         {
-            GossipMenu menu(pObject->getGuid(), 2039, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 2039, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 495, 1);     // Goodbye
             menu.sendGossipPacket(plr);
         }
@@ -39,13 +39,14 @@ public:
         Creature* spirit = static_cast<Creature*>(pObject);
         spirit->Despawn(1, 0);
 
-        plr->AddQuestKill(3520, 0, 0);
+        plr->addQuestKill(3520, 0, 0);
     }
 };
 
 class ScreecherSpirit : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(ScreecherSpirit)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new ScreecherSpirit(c); }
     explicit ScreecherSpirit(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     void OnLoad() override
@@ -53,7 +54,7 @@ class ScreecherSpirit : public CreatureAIScript
         if (!getCreature())
             return;
 
-        Creature* cialo = getCreature()->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(getCreature()->GetPositionX(), getCreature()->GetPositionY(), getCreature()->GetPositionZ(), 5307);
+        Creature* cialo = getCreature()->getWorldMap()->getInterface()->getCreatureNearestCoords(getCreature()->GetPositionX(), getCreature()->GetPositionY(), getCreature()->GetPositionZ(), 5307);
         if (!cialo)
             return;
 
@@ -67,12 +68,11 @@ class ScreecherSpirit : public CreatureAIScript
 class StewardOfTime : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
-        if (plr->hasQuestInQuestLog(10279) || plr->HasFinishedQuest(10279))
+        if (plr->hasQuestInQuestLog(10279) || plr->hasQuestFinished(10279))
         {
-            GossipMenu menu(pObject->getGuid(), 9978, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 9978, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 496, 1);     // Please take me to the Master's Lair
             menu.sendGossipPacket(plr);
         }

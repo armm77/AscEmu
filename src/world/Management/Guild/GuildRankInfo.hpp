@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -8,6 +8,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Management/Guild/GuildDefinitions.hpp"
 #include "GuildBankRightsAndSlots.hpp"
 #include "Database/Field.hpp"
+#include "Macros/GuildMacros.hpp"
 
 class Guild;
 
@@ -32,7 +33,7 @@ class GuildRankInfo
         uint32_t getRights() const;
         void setRights(uint32_t rights);
 
-        int32_t getBankMoneyPerDay() const;
+        uint32_t getBankMoneyPerDay() const;
         void setBankMoneyPerDay(uint32_t money);
 
         int8_t getBankTabRights(uint8_t tabId) const;

@@ -1,9 +1,11 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "GuildBankRightsAndSlots.hpp"
+
+#include "Macros/GuildMacros.hpp"
 
 
 GuildBankRightsAndSlots::GuildBankRightsAndSlots() : mTabId(UNDEFINED_GUILD_TAB), mRights(0), mSlots(0)

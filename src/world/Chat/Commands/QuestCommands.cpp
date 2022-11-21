@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,14 +19,14 @@
  *
  */
 
-#include "StdAfx.h"
-#include "Management/Item.h"
+
+#include "Chat/ChatHandler.hpp"
+#include "Objects/Item.hpp"
 #include "Management/QuestLogEntry.hpp"
 #include "Management/ItemInterface.h"
 #include "Storage/MySQLDataStore.hpp"
-#include "Storage/MySQLDataStore.hpp"
 #include "Server/MainServerDefines.h"
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 
 class ChatHandler;
 
@@ -50,7 +50,7 @@ std::string RemoveQuestFromPlayer(Player* plr, QuestProperties const* qst)
 
     if (plr->hasAnyQuestInQuestSlot())
     {
-        if (plr->HasFinishedQuest(qst->id))
+        if (plr->hasQuestFinished(qst->id))
         {
             recout += "Player has already completed that quest.\n\n";
         }
@@ -58,7 +58,9 @@ std::string RemoveQuestFromPlayer(Player* plr, QuestProperties const* qst)
         {
             if (auto* questLog = plr->getQuestLogByQuestId(qst->id))
             {
-                CALL_QUESTSCRIPT_EVENT(questLog, OnQuestCancel)(plr);
+                if (const auto questScript = questLog->getQuestScript())
+                    questScript->OnQuestCancel(plr);
+
                 questLog->finishAndRemove();
 
                 // Remove all items given by the questgiver at the beginning
@@ -68,7 +70,7 @@ std::string RemoveQuestFromPlayer(Player* plr, QuestProperties const* qst)
                         plr->getItemInterface()->RemoveItemAmt(itemId, 1);
                 }
 
-                plr->UpdateNearbyGameObjects();
+                plr->updateNearbyQuestGameObjects();
             }
             else
             {
@@ -105,7 +107,7 @@ bool ChatHandler::HandleQuestStatusCommand(const char* args, WorldSession* m_ses
 
     if (QuestProperties const* qst = sMySQLStore.getQuestProperties(quest_id))
     {
-        if (plr->HasFinishedQuest(quest_id))
+        if (plr->hasQuestFinished(quest_id))
         {
             recout += "Player has already completed that quest.";
         }
@@ -152,7 +154,7 @@ bool ChatHandler::HandleQuestStartCommand(const char* args, WorldSession* m_sess
     QuestProperties const* questProperties = sMySQLStore.getQuestProperties(quest_id);
     if (questProperties)
     {
-        if (player->HasFinishedQuest(quest_id))
+        if (player->hasQuestFinished(quest_id))
             recout += "Player has already completed that quest.";
         else
         {
@@ -191,7 +193,7 @@ bool ChatHandler::HandleQuestStartCommand(const char* args, WorldSession* m_sess
                                 return false;
 
                             if (!player->getItemInterface()->AddItemToFreeSlot(item))
-                                item->DeleteMe();
+                                item->deleteMe();
                         }
                     }
 
@@ -202,10 +204,11 @@ bool ChatHandler::HandleQuestStartCommand(const char* args, WorldSession* m_sess
                         {
                             item->setStackCount(questProperties->srcitemcount ? questProperties->srcitemcount : 1);
                             if (!player->getItemInterface()->AddItemToFreeSlot(item))
-                                item->DeleteMe();
+                                item->deleteMe();
                         }
                     }
 
+                    player->updateNearbyQuestGameObjects();
                     sHookInterface.OnQuestAccept(player, questProperties, nullptr);
 
                     recout += "Quest has been added to the player's quest log.";
@@ -269,7 +272,7 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
 
     if (QuestProperties const* qst = sMySQLStore.getQuestProperties(quest_id))
     {
-        if (plr->HasFinishedQuest(quest_id))
+        if (plr->hasQuestFinished(quest_id))
         {
             recout += "Player has already completed that quest.\n\n";
         }
@@ -306,7 +309,7 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
                     // I need some way to get the guid without targeting the creature or looking through all the spawns...
                     Object* questGiver = nullptr;
 
-                    for (auto* pCreature: plr->GetMapMgr()->CreatureStorage)
+                    for (auto* pCreature: plr->getWorldMap()->getCreatures())
                     {
                         if (pCreature)
                         {
@@ -337,7 +340,7 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
 
             sGMLog.writefromsession(m_session, "completed quest %u [%s] for player %s", quest_id, qst->title.c_str(), plr->getName().c_str());
             sQuestMgr.BuildQuestComplete(plr, qst);
-            plr->AddToFinishedQuests(quest_id);
+            plr->addQuestToFinished(quest_id);
 
             // Quest Rewards : Copied from QuestMgr::OnQuestFinished()
             // Reputation reward
@@ -350,11 +353,11 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
                     if (qst->reward_repvalue[z])
                         amt = qst->reward_repvalue[z];
 
-                    if (qst->reward_replimit && (plr->GetStanding(fact) >= (int32)qst->reward_replimit))
+                    if (qst->reward_replimit && (plr->getFactionStanding(fact) >= (int32)qst->reward_replimit))
                         continue;
 
                     amt = float2int32(amt * worldConfig.getFloatRate(RATE_QUESTREPUTATION));
-                    plr->ModStanding(fact, amt);
+                    plr->modFactionStanding(fact, amt);
                 }
             }
             // Static Item reward
@@ -385,7 +388,7 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
                                     item->setStackCount(uint32(qst->reward_itemcount[i]));
                                     if (!plr->getItemInterface()->SafeAddItem(item, slotresult.ContainerSlot, slotresult.Slot))
                                     {
-                                        item->DeleteMe();
+                                        item->deleteMe();
                                     }
                                 }
                             }
@@ -424,7 +427,7 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
                                 item->setStackCount(uint32(qst->reward_choiceitemcount[reward_slot]));
                                 if (!plr->getItemInterface()->SafeAddItem(item, slotresult.ContainerSlot, slotresult.Slot))
                                 {
-                                    item->DeleteMe();
+                                    item->deleteMe();
                                 }
                             }
                         }
@@ -443,12 +446,12 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
             std::set<uint32>::iterator iter = qst->remove_quest_list.begin();
             for (; iter != qst->remove_quest_list.end(); ++iter)
             {
-                if (!plr->HasFinishedQuest((*iter)))
-                    plr->AddToFinishedQuests((*iter));
+                if (!plr->hasQuestFinished((*iter)))
+                    plr->addQuestToFinished((*iter));
             }
 
 #if VERSION_STRING > TBC
-            plr->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUEST_COUNT, 1, 0, 0);
+            plr->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUEST_COUNT, 1, 0, 0);
 #endif
             if (qst->reward_money > 0)
             {
@@ -459,12 +462,15 @@ bool ChatHandler::HandleQuestFinishCommand(const char* args, WorldSession* m_ses
                     plr->modCoinage(qst->reward_money);
                 }
 #if VERSION_STRING > TBC
-                plr->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_QUEST_REWARD_GOLD, qst->reward_money, 0, 0);
+                plr->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_QUEST_REWARD_GOLD, qst->reward_money, 0, 0);
 #endif
             }
+
+            plr->updateNearbyQuestGameObjects();
+
 #if VERSION_STRING > TBC
-            plr->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUESTS_IN_ZONE, qst->zone_id, 0, 0);
-            plr->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUEST, qst->id, 0, 0);
+            plr->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUESTS_IN_ZONE, qst->zone_id, 0, 0);
+            plr->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUEST, qst->id, 0, 0);
 #endif
         }
     }
@@ -519,46 +525,43 @@ bool ChatHandler::HandleQuestItemCommand(const char* args, WorldSession* m_sessi
         SendMultilineMessage(m_session, recout.c_str());
         return true;
     }
-    else
+    recout = "|cff00ff00Quest item matches: itemid: count -> Name\n\n";
+    SendMultilineMessage(m_session, recout.c_str());
+
+    uint32 count = 0;
+    do
     {
-        recout = "|cff00ff00Quest item matches: itemid: count -> Name\n\n";
+        Field* fields = result->Fetch();
+        uint32 id = fields[0].GetUInt32();
+        std::string itemid = MyConvertIntToString(id);
+        std::string itemcnt = MyConvertIntToString(fields[1].GetUInt32());
+        auto tmpItem = sMySQLStore.getItemProperties(id);
+        if (tmpItem != nullptr)
+        {
+            recout = "|cff00ccff";
+            recout += itemid;
+            recout += ": ";
+            recout += itemcnt;
+            recout += " -> ";
+            recout += tmpItem->Name;
+            recout += "\n";
+        }
+        else
+            recout = "|cffff0000Invalid Item!\n";
+
+
         SendMultilineMessage(m_session, recout.c_str());
 
-        uint32 count = 0;
-        do
+        ++count;
+
+        if (count == 25)
         {
-            Field* fields = result->Fetch();
-            uint32 id = fields[0].GetUInt32();
-            std::string itemid = MyConvertIntToString(id);
-            std::string itemcnt = MyConvertIntToString(fields[1].GetUInt32());
-            auto tmpItem = sMySQLStore.getItemProperties(id);
-            if (tmpItem != nullptr)
-            {
-                recout = "|cff00ccff";
-                recout += itemid;
-                recout += ": ";
-                recout += itemcnt;
-                recout += " -> ";
-                recout += tmpItem->Name;
-                recout += "\n";
-            }
-            else
-                recout = "|cffff0000Invalid Item!\n";
-
-
-            SendMultilineMessage(m_session, recout.c_str());
-
-            ++count;
-
-            if (count == 25)
-            {
-                RedSystemMessage(m_session, "More than 25 results returned. aborting.");
-                break;
-            }
+            RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+            break;
         }
-        while (result->NextRow());
-        delete result;
     }
+    while (result->NextRow());
+    delete result;
 
     return true;
 }
@@ -697,7 +700,7 @@ bool ChatHandler::HandleQuestListCommand(const char* args, WorldSession* m_sessi
             return true;
         }
 
-        Creature* unit = m_session->GetPlayer()->GetMapMgr()->GetCreature(wowGuid.getGuidLowPart());
+        Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
         if (unit)
         {
             if (!unit->isQuestGiver())
@@ -791,7 +794,7 @@ bool ChatHandler::HandleQuestAddStartCommand(const char* args, WorldSession* m_s
         return false;
     }
 
-    Creature* unit = m_session->GetPlayer()->GetMapMgr()->GetCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
     if (!unit)
     {
         SystemMessage(m_session, "You must target an npc.");
@@ -838,7 +841,7 @@ bool ChatHandler::HandleQuestAddStartCommand(const char* args, WorldSession* m_s
 
     sQuestMgr.LoadExtraQuestStuff();
 
-    QuestRelation* qstrel = new QuestRelation;
+    QuestRelation* qstrel = nullptr;
     qstrel->qst = qst;
     qstrel->type = QUESTGIVER_QUEST_START;
 
@@ -860,7 +863,6 @@ bool ChatHandler::HandleQuestAddStartCommand(const char* args, WorldSession* m_s
     SendMultilineMessage(m_session, recout.c_str());
     sGMLog.writefromsession(m_session, "added starter of quest %u [%s] to NPC %u [%s]", qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
 
-    delete qstrel;
     return true;
 }
 
@@ -878,7 +880,7 @@ bool ChatHandler::HandleQuestAddFinishCommand(const char* args, WorldSession* m_
         return false;
     }
 
-    Creature* unit = m_session->GetPlayer()->GetMapMgr()->GetCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
     if (!unit)
     {
         SystemMessage(m_session, "You must target an npc.");
@@ -925,7 +927,7 @@ bool ChatHandler::HandleQuestAddFinishCommand(const char* args, WorldSession* m_
 
     sQuestMgr.LoadExtraQuestStuff();
 
-    QuestRelation* qstrel = new QuestRelation;
+    QuestRelation* qstrel = nullptr;
     qstrel->qst = qst;
     qstrel->type = QUESTGIVER_QUEST_END;
 
@@ -947,7 +949,6 @@ bool ChatHandler::HandleQuestAddFinishCommand(const char* args, WorldSession* m_
     SendMultilineMessage(m_session, recout.c_str());
     sGMLog.writefromsession(m_session, "added finisher of quest %u [%s] to NPC %u [%s]", qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
 
-    delete qstrel;
     return true;
 }
 
@@ -978,7 +979,7 @@ bool ChatHandler::HandleQuestDelStartCommand(const char* args, WorldSession* m_s
         return false;
     }
 
-    Creature* unit = m_session->GetPlayer()->GetMapMgr()->GetCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
     if (!unit)
     {
         SystemMessage(m_session, "You must target an npc.");
@@ -1025,7 +1026,7 @@ bool ChatHandler::HandleQuestDelStartCommand(const char* args, WorldSession* m_s
 
     sQuestMgr.LoadExtraQuestStuff();
 
-    QuestRelation* qstrel = new QuestRelation;
+    QuestRelation* qstrel = nullptr;
     qstrel->qst = qst;
     qstrel->type = QUESTGIVER_QUEST_START;
 
@@ -1046,7 +1047,6 @@ bool ChatHandler::HandleQuestDelStartCommand(const char* args, WorldSession* m_s
     SendMultilineMessage(m_session, recout.c_str());
     sGMLog.writefromsession(m_session, "deleted starter of quest %u [%s] to NPC %u [%s]", qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
 
-    delete qstrel;
     return true;
 }
 
@@ -1063,7 +1063,7 @@ bool ChatHandler::HandleQuestDelFinishCommand(const char* args, WorldSession* m_
         return false;
     }
 
-    Creature* unit = m_session->GetPlayer()->GetMapMgr()->GetCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
     if (!unit)
     {
         SystemMessage(m_session, "You must target an npc.");
@@ -1110,7 +1110,7 @@ bool ChatHandler::HandleQuestDelFinishCommand(const char* args, WorldSession* m_
 
     sQuestMgr.LoadExtraQuestStuff();
 
-    QuestRelation* qstrel = new QuestRelation;
+    QuestRelation* qstrel = nullptr;
     qstrel->qst = qst;
     qstrel->type = QUESTGIVER_QUEST_END;
 
@@ -1132,7 +1132,6 @@ bool ChatHandler::HandleQuestDelFinishCommand(const char* args, WorldSession* m_
     SendMultilineMessage(m_session, recout.c_str());
     sGMLog.writefromsession(m_session, "deleted finisher of quest %u [%s] to NPC %u [%s]", qst->id, qst->title.c_str(), unit->getEntry(), unit->GetCreatureProperties()->Name.c_str());
 
-    delete qstrel;
     return true;
 }
 
@@ -1334,7 +1333,7 @@ bool ChatHandler::HandleQuestStarterSpawnCommand(const char* args, WorldSession*
     recout += "\n\n";
     SendMultilineMessage(m_session, recout.c_str());
 
-    m_session->GetPlayer()->SafeTeleport(locmap, 0, LocationVector(x, y, z));
+    m_session->GetPlayer()->safeTeleport(locmap, 0, LocationVector(x, y, z));
 
     return true;
 }
@@ -1405,7 +1404,7 @@ bool ChatHandler::HandleQuestFinisherSpawnCommand(const char* args, WorldSession
     recout += "\n\n";
     SendMultilineMessage(m_session, recout.c_str());
 
-    m_session->GetPlayer()->SafeTeleport(locmap, 0, LocationVector(x, y, z));
+    m_session->GetPlayer()->safeTeleport(locmap, 0, LocationVector(x, y, z));
 
     return true;
 }
@@ -1425,7 +1424,7 @@ bool ChatHandler::HandleQuestLoadCommand(const char* /*args*/, WorldSession* m_s
     if (wowGuid.getRawGuid() == 0)
         return true;
 
-    Creature* unit = m_session->GetPlayer()->GetMapMgr()->GetCreature(wowGuid.getGuidLowPart());
+    Creature* unit = m_session->GetPlayer()->getWorldMap()->getCreature(wowGuid.getGuidLowPart());
     if (!unit)
         return true;
 
@@ -1498,7 +1497,7 @@ bool ChatHandler::HandleQuestRewardCommand(const char* args, WorldSession* m_ses
             }
             else
             {
-                recout << "Reward (" << itemid << "): " << GetItemLinkByProto(itemProto, m_session->language);
+                recout << "Reward (" << itemid << "): " << sMySQLStore.getItemLinkByProto(itemProto, m_session->language);
                 if (q->reward_itemcount[r] == 1)
                     recout << "\n";
                 else
@@ -1516,7 +1515,7 @@ bool ChatHandler::HandleQuestRewardCommand(const char* args, WorldSession* m_ses
             }
             else
             {
-                recout << "Reward choice (" << itemid << "): " << GetItemLinkByProto(itemProto, m_session->language);
+                recout << "Reward choice (" << itemid << "): " << sMySQLStore.getItemLinkByProto(itemProto, m_session->language);
                 if (q->reward_choiceitemcount[r] == 1)
                     recout << "\n";
                 else

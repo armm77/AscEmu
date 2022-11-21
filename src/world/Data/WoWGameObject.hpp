@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -76,7 +76,15 @@ struct WoWGameObject : WoWObject
     uint32_t display_id;
     uint32_t flags;
     float rotation[GAMEOBJECT_ROTATION_COUNT];
-    uint32_t dynamic;
+    union
+    {
+        struct
+        {
+            uint16_t dyn_flag;
+            int16_t path_progress;
+        } dynamic_field_parts;
+        uint32_t dynamic;
+    };
     uint32_t faction_template;
     uint32_t level;
     union
@@ -103,7 +111,15 @@ struct WoWGameObject : WoWObject
     uint32_t display_id;
     uint32_t flags;
     float rotation[GAMEOBJECT_ROTATION_COUNT];
-    uint32_t dynamic;
+    union
+    {
+        struct
+        {
+            uint16_t dyn_flag;
+            int16_t path_progress;
+        } dynamic_field_parts;
+        uint32_t dynamic;
+    };
     uint32_t faction_template;
     uint32_t level;
     union

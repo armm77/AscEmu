@@ -1,13 +1,13 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/WorldSession.h"
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
 #include "Server/Packets/MsgInspectArenaTeams.h"
-#include "Map/MapMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Server/Packets/CmsgArenaTeamQuery.h"
 #include "Server/Packets/CmsgArenaTeamInvite.h"
 #include "Server/Packets/CmsgArenaTeamRemove.h"
@@ -19,6 +19,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/SmsgArenaTeamQueryResponse.h"
 #include "Server/Packets/SmsgArenaTeamInvite.h"
 #include "Server/Packets/SmsgArenaTeamRooster.h"
+#include "Server/Packets/SmsgMessageChat.h"
 
 using namespace AscEmu::Packets;
 
@@ -31,7 +32,7 @@ void WorldSession::handleArenaTeamQueryOpcode(WorldPacket& recvPacket)
     if (auto arenaTeam = sObjectMgr.GetArenaTeamById(srlPacket.teamId))
     {
         SendPacket(SmsgArenaTeamQueryResponse(arenaTeam->m_id, arenaTeam->m_name,
-            arenaTeam->GetPlayersPerTeam(), arenaTeam->m_emblem).serialise().get());
+            arenaTeam->getPlayersPerTeam(), arenaTeam->m_emblem).serialise().get());
 
         SendPacket(SmsgArenaTeamStats(arenaTeam->m_id, arenaTeam->m_stats).serialise().get());
     }
@@ -39,8 +40,6 @@ void WorldSession::handleArenaTeamQueryOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleArenaTeamAddMemberOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgArenaTeamInvite srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -51,7 +50,7 @@ void WorldSession::handleArenaTeamAddMemberOpcode(WorldPacket& recvPacket)
 
     if (!arenaTeam->isMember(GetPlayer()->getGuidLow()))
     {
-        GetPlayer()->SoftDisconnect();
+        GetPlayer()->softDisconnect();
         return;
     }
 
@@ -80,7 +79,7 @@ void WorldSession::handleArenaTeamAddMemberOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (player->m_arenateaminviteguid != 0)
+    if (player->getInviteArenaTeamId() != 0)
     {
         SystemMessage("That player is already invited to an arena team");
         return;
@@ -92,15 +91,13 @@ void WorldSession::handleArenaTeamAddMemberOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    player->m_arenateaminviteguid = _player->getArenaTeam(arenaTeam->m_type)->m_id;
+    player->setInviteArenaTeamId(_player->getArenaTeam(arenaTeam->m_type)->m_id);
 
-    player->SendPacket(SmsgArenaTeamInvite(_player->getName(), _player->getArenaTeam(arenaTeam->m_type)->m_name).serialise().get());
+    player->sendPacket(SmsgArenaTeamInvite(_player->getName(), _player->getArenaTeam(arenaTeam->m_type)->m_name).serialise().get());
 }
 
 void WorldSession::handleArenaTeamRemoveMemberOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgArenaTeamRemove srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -108,11 +105,11 @@ void WorldSession::handleArenaTeamRemoveMemberOpcode(WorldPacket& recvPacket)
     auto arenaTeam = sObjectMgr.GetArenaTeamById(srlPacket.teamId);
     if (arenaTeam == nullptr)
     {
-        GetPlayer()->SoftDisconnect();
+        GetPlayer()->softDisconnect();
         return;
     }
 
-    const auto slot = static_cast<uint8_t>(arenaTeam->m_type);
+    const auto slot = arenaTeam->m_type;
 
     if ((arenaTeam = _player->getArenaTeam(slot)) == nullptr)
     {
@@ -126,7 +123,7 @@ void WorldSession::handleArenaTeamRemoveMemberOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    const auto playerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.playerName.c_str());
+    const auto playerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.playerName);
     if (playerInfo == nullptr)
     {
         SystemMessage("That player cannot be found.");
@@ -139,28 +136,26 @@ void WorldSession::handleArenaTeamRemoveMemberOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (arenaTeam->RemoveMember(playerInfo))
+    if (arenaTeam->removeMember(playerInfo))
     {
         char buffer[1024];
-        snprintf(buffer, 1024, "%s was removed from the arena team '%s'.", playerInfo->name, arenaTeam->m_name.c_str());
+        snprintf(buffer, 1024, "%s was removed from the arena team '%s'.", playerInfo->name.c_str(), arenaTeam->m_name.c_str());
 
-        arenaTeam->SendPacket(SmsgMessageChat(SystemMessagePacket(buffer)).serialise().get());
+        arenaTeam->sendPacket(SmsgMessageChat(SystemMessagePacket(buffer)).serialise().get());
 
-        SystemMessage("Removed %s from the arena team '%s'.", playerInfo->name, arenaTeam->m_name.c_str());
+        SystemMessage("Removed %s from the arena team '%s'.", playerInfo->name.c_str(), arenaTeam->m_name.c_str());
     }
 }
 
 void WorldSession::handleArenaTeamInviteAcceptOpcode(WorldPacket& /*recvPacket*/)
 {
-    CHECK_INWORLD_RETURN
-
-    if (_player->m_arenateaminviteguid == 0)
+    if (_player->getInviteArenaTeamId() == 0)
     {
         SystemMessage("You have not been invited into another arena team.");
         return;
     }
 
-    auto arenaTeam = sObjectMgr.GetArenaTeamById(_player->m_arenateaminviteguid);
+    auto arenaTeam = sObjectMgr.GetArenaTeamById(_player->getInviteArenaTeamId());
     if (arenaTeam == nullptr)
     {
         SystemMessage("That arena team no longer exists.");
@@ -179,12 +174,12 @@ void WorldSession::handleArenaTeamInviteAcceptOpcode(WorldPacket& /*recvPacket*/
         return;
     }
 
-    if (arenaTeam->AddMember(_player->m_playerInfo))
+    if (arenaTeam->addMember(_player->m_playerInfo))
     {
         char buffer[1024];
         snprintf(buffer, 1024, "%s joined the arena team, '%s'.", _player->getName().c_str(), arenaTeam->m_name.c_str());
 
-        arenaTeam->SendPacket(SmsgMessageChat(SystemMessagePacket(buffer)).serialise().get());
+        arenaTeam->sendPacket(SmsgMessageChat(SystemMessagePacket(buffer)).serialise().get());
     }
     else
     {
@@ -194,26 +189,22 @@ void WorldSession::handleArenaTeamInviteAcceptOpcode(WorldPacket& /*recvPacket*/
 
 void WorldSession::handleArenaTeamInviteDenyOpcode(WorldPacket& /*recvPacket*/)
 {
-    CHECK_INWORLD_RETURN
-
-    if (_player->m_arenateaminviteguid == 0)
+    if (_player->getInviteArenaTeamId() == 0)
     {
         SystemMessage("You were not invited.");
         return;
     }
 
-    ArenaTeam* team = sObjectMgr.GetArenaTeamById(_player->m_arenateaminviteguid);
+    ArenaTeam* team = sObjectMgr.GetArenaTeamById(_player->getInviteArenaTeamId());
     if (team == nullptr)
         return;
 
     if (const auto player = sObjectMgr.GetPlayer(team->m_leader))
-        player->GetSession()->SystemMessage("%s denied your arena team invitation for %s.", _player->getName().c_str(), team->m_name.c_str());
+        player->getSession()->SystemMessage("%s denied your arena team invitation for %s.", _player->getName().c_str(), team->m_name.c_str());
 }
 
 void WorldSession::handleArenaTeamLeaveOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgArenaTeamLeave srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -221,7 +212,7 @@ void WorldSession::handleArenaTeamLeaveOpcode(WorldPacket& recvPacket)
     auto arenaTeam = sObjectMgr.GetArenaTeamById(srlPacket.teamId);
     if (arenaTeam == nullptr)
     {
-        GetPlayer()->SoftDisconnect();
+        GetPlayer()->softDisconnect();
         return;
     }
 
@@ -233,7 +224,7 @@ void WorldSession::handleArenaTeamLeaveOpcode(WorldPacket& recvPacket)
 
     if (arenaTeam->m_leader == _player->getGuidLow() && arenaTeam->m_memberCount == 1)
     {
-        arenaTeam->Destroy();
+        arenaTeam->destroy();
         return;
     }
 
@@ -243,12 +234,12 @@ void WorldSession::handleArenaTeamLeaveOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (arenaTeam->RemoveMember(_player->m_playerInfo))
+    if (arenaTeam->removeMember(_player->m_playerInfo))
     {
         char buffer[1024];
         snprintf(buffer, 1024, "%s left the arena team, '%s'.", _player->getName().c_str(), arenaTeam->m_name.c_str());
 
-        arenaTeam->SendPacket(SmsgMessageChat(SystemMessagePacket(buffer)).serialise().get());
+        arenaTeam->sendPacket(SmsgMessageChat(SystemMessagePacket(buffer)).serialise().get());
 
         SystemMessage("You have left the arena team, '%s'.", arenaTeam->m_name.c_str());
     }
@@ -256,8 +247,6 @@ void WorldSession::handleArenaTeamLeaveOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handleArenaTeamDisbandOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgArenaTeamDisband srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -265,7 +254,7 @@ void WorldSession::handleArenaTeamDisbandOpcode(WorldPacket& recvPacket)
     auto arenaTeam = sObjectMgr.GetArenaTeamById(srlPacket.teamId);
     if (arenaTeam == nullptr)
     {
-        GetPlayer()->SoftDisconnect();
+        GetPlayer()->softDisconnect();
         return;
     }
 
@@ -281,13 +270,11 @@ void WorldSession::handleArenaTeamDisbandOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    arenaTeam->Destroy();
+    arenaTeam->destroy();
 }
 
 void WorldSession::handleArenaTeamPromoteOpcode(WorldPacket& recvPacket)
 {
-    CHECK_INWORLD_RETURN
-
     CmsgArenaTeamLeader srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -295,11 +282,11 @@ void WorldSession::handleArenaTeamPromoteOpcode(WorldPacket& recvPacket)
     auto arenaTeam = sObjectMgr.GetArenaTeamById(srlPacket.teamId);
     if (arenaTeam == nullptr)
     {
-        GetPlayer()->SoftDisconnect();
+        GetPlayer()->softDisconnect();
         return;
     }
 
-    const auto slot = static_cast<uint8_t>(arenaTeam->m_type);
+    const auto slot = arenaTeam->m_type;
 
     if (slot >= NUM_ARENA_TEAM_TYPES)
         return;
@@ -316,7 +303,7 @@ void WorldSession::handleArenaTeamPromoteOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    const auto playerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.playerName.c_str());
+    const auto playerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.playerName);
     if (playerInfo == nullptr)
     {
         SystemMessage("That player cannot be found.");
@@ -329,7 +316,7 @@ void WorldSession::handleArenaTeamPromoteOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    arenaTeam->SetLeader(playerInfo);
+    arenaTeam->setLeader(playerInfo);
 }
 
 void WorldSession::handleArenaTeamRosterOpcode(WorldPacket& recvPacket)
@@ -341,7 +328,7 @@ void WorldSession::handleArenaTeamRosterOpcode(WorldPacket& recvPacket)
     if (auto arenaTeam = sObjectMgr.GetArenaTeamById(srlPacket.teamId))
     {
         const auto memberList = arenaTeam->getRoosterMembers();
-        SendPacket(SmsgArenaTeamRooster(arenaTeam->m_id, static_cast<uint32_t>(memberList.size()), arenaTeam->GetPlayersPerTeam(), memberList).serialise().get());
+        SendPacket(SmsgArenaTeamRooster(arenaTeam->m_id, static_cast<uint32_t>(memberList.size()), arenaTeam->getPlayersPerTeam(), memberList).serialise().get());
     }
 }
 
@@ -352,9 +339,9 @@ void WorldSession::handleInspectArenaStatsOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received MSG_INSPECT_ARENA_STATS: %u (guidLow)", srlPacket.guid.getGuidLow());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_INSPECT_ARENA_STATS: %u (guidLow)", srlPacket.guid.getGuidLow());
 
-    const auto player = _player->GetMapMgr()->GetPlayer(srlPacket.guid.getGuidLow());
+    const auto player = _player->getWorldMap()->getPlayer(srlPacket.guid.getGuidLow());
     if (player == nullptr)
         return;
 

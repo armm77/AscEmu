@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,16 +20,16 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class BeatenCorpse : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         if (plr->hasQuestInQuestLog(4921))
         {
-            GossipMenu menu(pObject->getGuid(), 3557, plr->GetSession()->language);
+            GossipMenu menu(pObject->getGuid(), 3557, plr->getSession()->language);
             menu.addItem(GOSSIP_ICON_CHAT, 498, 1);     // I inspect the body further.
             menu.sendGossipPacket(plr);
         }
@@ -45,7 +45,7 @@ public:
                 return;
 
             questLog->setMobCountForIndex(0, 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -53,16 +53,20 @@ public:
 
 class Wizzlecranks_Shredder : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Wizzlecranks_Shredder)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Wizzlecranks_Shredder(c); }
     explicit Wizzlecranks_Shredder(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnReachWP(uint32_t iWaypointId, bool /*bForwards*/) override
+    void OnReachWP(uint32_t type, uint32_t iWaypointId) override
     {
+        if (type != WAYPOINT_MOTION_TYPE)
+            return;
+
         if (iWaypointId == 195)
         {
-            getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Thank you Young warior!");
+            getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Thank you Young warior!");
             getCreature()->Despawn(5000, 1000);
-            getCreature()->DeleteWaypoints();
+            getCreature()->stopMoving();
             if (getCreature()->m_escorter == nullptr)
                 return;
 
@@ -77,16 +81,20 @@ class Wizzlecranks_Shredder : public CreatureAIScript
 
 class Gilthares_Firebough : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Gilthares_Firebough)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Gilthares_Firebough(c); }
     explicit Gilthares_Firebough(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
-    void OnReachWP(uint32_t iWaypointId, bool /*bForwards*/) override
+    void OnReachWP(uint32_t type, uint32_t iWaypointId) override
     {
+        if (type != WAYPOINT_MOTION_TYPE)
+            return;
+
         if (iWaypointId == 100)
         {
-            getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Finally, I am rescued");
+            getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Finally, I am rescued");
             getCreature()->Despawn(5000, 1000);
-            getCreature()->DeleteWaypoints();
+            getCreature()->stopMoving();
             if (getCreature()->m_escorter == nullptr)
                 return;
 
@@ -102,7 +110,8 @@ class Gilthares_Firebough : public CreatureAIScript
 int kolkarskilled = 0;
 class VerogtheDervish : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(VerogtheDervish)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new VerogtheDervish(c); }
     explicit VerogtheDervish(Creature* pCreature) : CreatureAIScript(pCreature) {}
     void OnDied(Unit* mKiller) override
     {
@@ -113,13 +122,12 @@ class VerogtheDervish : public CreatureAIScript
 
             if (kolkarskilled > 8 && mPlayer->hasQuestInQuestLog(851))
             {
-                getCreature()->GetMapMgr()->GetInterface()->SpawnCreature(3395, -1209.8f, -2729.84f, 106.33f, 4.8f, true, false, 0, 0)->Despawn(600000, 0);
+                getCreature()->getWorldMap()->getInterface()->spawnCreature(3395, LocationVector(-1209.8f, -2729.84f, 106.33f, 4.8f), true, false, 0, 0)->Despawn(600000, 0);
                 kolkarskilled = 0;
-                getCreature()->SendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "I am slain! Summon Verog!");
+                getCreature()->sendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "I am slain! Summon Verog!");
             }
         }
     }
-
 };
 
 void SetupBarrens(ScriptMgr* mgr)

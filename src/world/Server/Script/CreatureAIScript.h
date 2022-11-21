@@ -1,159 +1,99 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include "CommonTypes.hpp"
-#include "Spell/SpellMgr.h"
+#include "Spell/SpellMgr.hpp"
 #include "Chat/ChatDefines.hpp"
-#include "Management/Item.h"
-#include "Map/InstanceDefines.hpp"
-#include "Units/Creatures/AIInterface.h"
+#include "Map/Maps/InstanceDefines.hpp"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Units/Creatures/Summons/Summon.h"
 #include "ScriptMgr.h"
 #include "ScriptEvent.hpp"
-#include "Map/MapMgr.h"
-#include "Map/Instance.h"
+#include "Map/Management/MapMgr.hpp"
+#include "Map/Maps/InstanceMap.hpp"
+#include "Movement/WaypointDefines.h"
 
 class Creature;
-class CreatureAIScript;
 
-enum AISpellTargetType
-{
-    TARGET_SELF,
-    TARGET_VARIOUS,
-    TARGET_ATTACKING,
-    TARGET_DESTINATION,
-    TARGET_SOURCE,
-    TARGET_RANDOM_FRIEND,
-    TARGET_RANDOM_SINGLE,
-    TARGET_RANDOM_DESTINATION,
-    TARGET_CUSTOM
-};
-
-class SERVER_DECL CreatureAISpells
+class SERVER_DECL SummonList
 {
 public:
-    CreatureAISpells(SpellInfo const* spellInfo, float castChance, uint32_t targetType, uint32_t duration, uint32_t cooldown, bool forceRemove, bool isTriggered)
+    typedef std::list<uint64_t> StorageType;
+    typedef StorageType::iterator iterator;
+    typedef StorageType::const_iterator const_iterator;
+    typedef StorageType::size_type size_type;
+    typedef StorageType::value_type value_type;
+
+    explicit SummonList(Creature* creature) : _creature(creature) { }
+
+    iterator begin()
     {
-        mSpellInfo = spellInfo;
-        mCastChance = castChance;
-        mTargetType = targetType;
-        mDuration = duration;
-
-        mDurationTimerId = 0;
-
-        mCooldown = cooldown;
-        mCooldownTimerId = 0;
-        mForceRemoveAura = forceRemove;
-        mIsTriggered = isTriggered;
-
-        mMaxStackCount = 1;
-
-        mMinPositionRangeToCast = 0.0f;
-        mMaxPositionRangeToCast = 0.0f;
-
-        mMinHpRangeToCast = 0;
-        mMaxHpRangeToCast = 100;
-
-        if (mSpellInfo != nullptr)
-        {
-            mMinPositionRangeToCast = GetMinRange(sSpellRangeStore.LookupEntry(mSpellInfo->getRangeIndex()));
-            mMaxPositionRangeToCast = GetMaxRange(sSpellRangeStore.LookupEntry(mSpellInfo->getRangeIndex()));
-        }
-
-        mAttackStopTimer = 0;
-
-        mCustomTargetCreature = nullptr;
+        return _storage.begin();
     }
 
-    ~CreatureAISpells()
+    const_iterator begin() const
     {
+        return _storage.begin();
     }
 
-    SpellInfo const* mSpellInfo;
-    float mCastChance;
-    uint32_t mTargetType;
-    uint32_t mDuration;
-
-    void setdurationTimer(uint32_t durationTimer);
-
-    uint32_t mDurationTimerId;
-
-    void setCooldownTimerId(uint32_t cooldownTimer);
-
-    uint32_t mCooldown;
-    uint32_t mCooldownTimerId;
-
-    bool mForceRemoveAura;
-    bool mIsTriggered;
-
-    // non db script messages
-    struct AISpellEmotes
+    iterator end()
     {
-        AISpellEmotes(std::string pText, uint8_t pType, uint32_t pSoundId)
-        {
-            mText = (!pText.empty() ? pText : "");
-            mType = pType;
-            mSoundId = pSoundId;
-        }
+        return _storage.end();
+    }
 
-        std::string mText;
-        uint8_t mType;
-        uint32_t mSoundId;
-    };
-    typedef std::vector<AISpellEmotes> AISpellEmoteArray;
-    AISpellEmoteArray mAISpellEmote;
+    const_iterator end() const
+    {
+        return _storage.end();
+    }
 
-    void addDBEmote(uint32_t textId);
-    void addEmote(std::string pText, uint8_t pType = CHAT_MSG_MONSTER_YELL, uint32_t pSoundId = 0);
+    iterator erase(iterator i)
+    {
+        return _storage.erase(i);
+    }
 
-    void sendRandomEmote(CreatureAIScript* creatureAI);
+    bool empty() const
+    {
+        return _storage.empty();
+    }
 
-    uint32_t mMaxStackCount;
+    size_type size() const
+    {
+        return _storage.size();
+    }
 
-    void setMaxStackCount(uint32_t stackCount);
-    uint32_t getMaxStackCount();
+    void clear()
+    {
+        _storage.clear();
+    }
 
-    float mMinPositionRangeToCast;
-    float mMaxPositionRangeToCast;
+    void summon(Creature const* summon);
+    void despawn(Creature const* summon);
+    void despawnEntry(uint32_t entry);
+    void despawnAll();
 
-    bool isDistanceInRange(float targetDistance);
-    void setMinMaxDistance(float minDistance, float maxDistance);
+    template <typename T>
+    void despawnIf(T const& predicate)
+    {
+        _storage.remove_if(predicate);
+    }
 
-    // if it is not a random target type it sets the hp range when the creature can cast this spell
-    // if it is a random target it controles when the spell can be cast based on the target hp
-    int mMinHpRangeToCast;
-    int mMaxHpRangeToCast;
+    void removeNotExisting();
+    bool hasEntry(uint32_t entry) const;
 
-    bool isHpInPercentRange(int targetHp);
-    void setMinMaxPercentHp(int minHp, int maxHp);
-
-    typedef std::vector<uint32_t> ScriptPhaseList;
-    ScriptPhaseList mPhaseList;
-
-    void setAvailableForScriptPhase(std::vector<uint32_t> phaseVector);
-    bool isAvailableForScriptPhase(uint32_t scriptPhase);
-
-    uint32_t mAttackStopTimer;
-    void setAttackStopTimer(uint32_t attackStopTime);
-    uint32_t getAttackStopTimer();
-
-    std::string mAnnouncement;
-    void setAnnouncement(std::string announcement);
-    void sendAnnouncement(CreatureAIScript* creatureAI);
-
-    Unit* mCustomTargetCreature;
-    void setCustomTarget(Unit* targetCreature);
-    Unit* getCustomTarget();
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // basic
+private:
+    Creature* _creature;
+    StorageType _storage;
 };
-
 
 class SERVER_DECL CreatureAIScript
 {
 public:
-
     CreatureAIScript(Creature* creature);
     virtual ~CreatureAIScript();
 
@@ -162,6 +102,7 @@ public:
     virtual void OnDamageTaken(Unit* /*_attacker*/, uint32_t /*_amount*/) {}
     virtual void DamageTaken(Unit* /*_attacker*/, uint32_t* /*damage*/) {} // Warning triggers before dmg applied, you can modify the damage done here
     virtual void OnCastSpell(uint32_t /*_spellId*/) {}
+    virtual void OnSpellHitTarget(Object* /*target*/, SpellInfo const* /*info*/) {} // Triggers when a casted Spell Hits a Target
     virtual void OnTargetParried(Unit* /*_target*/) {}
     virtual void OnTargetDodged(Unit* /*_target*/) {}
     virtual void OnTargetBlocked(Unit* /*_target*/, int32 /*_amount*/) {}
@@ -179,18 +120,34 @@ public:
     virtual void OnCallForHelp() {}
     virtual void OnLoad() {}
     virtual void OnDespawn() {}
-    virtual void OnReachWP(uint32_t /*_waypointId*/, bool /*_isForwards*/) {}
+    virtual void OnReachWP(uint32_t /*type*/, uint32_t /*id*/) {}
+    virtual void justReachedSpawn() {}
     virtual void OnLootTaken(Player* /*player*/, ItemProperties const* /*_itemProperties*/) {}
     virtual void AIUpdate() {}
+    virtual void AIUpdate(unsigned long /*time_passed*/) {}
     virtual void OnEmote(Player* /*_player*/, EmoteType /*_emote*/) {}
     virtual void StringFunctionCall(int) {}
-    virtual void OnSummon(Unit* /*summoner*/) {}
 
-    virtual void OnEnterVehicle() {}
-    virtual void OnExitVehicle() {}
-    virtual void OnFirstPassengerEntered(Unit* /*_passenger*/) {}
-    virtual void OnVehicleFull() {}
-    virtual void OnLastPassengerLeft(Unit* /*_passenger*/) {}
+    // Used in AIInterface to make a Creatures Attack Only in certain conditions
+    virtual bool canAttackTarget(Unit* target) { return true; }
+
+    // Summon
+    virtual void onSummonedCreature(Creature* /*summon*/) {}    // We summoned a Creature
+    virtual void OnSummon(Unit* /*summoner*/) {}    // We got Summoned by Summoner
+    virtual void OnSummonDies(Creature* /*summon*/, Unit* /*killer*/) {}    // One of our Summoned Creatures died
+    virtual void OnSummonDespawn(Creature* /*summon*/) {}   // Summoned Creature got UnSummoned
+
+    // Quests
+    virtual void onQuestAccept(Player* /*player*/, QuestProperties const* /*qst*/) {}
+    virtual void onQuestRewarded(Player* /*player*/, QuestProperties const* /*qst*/) {}
+
+    // Vehicles
+    virtual void OnSpellClick(Unit* /*_clicker*/, bool /*spellClickHandled*/) { }
+    virtual void OnVehicleInitialize() { }
+    virtual void OnVehicleDeactivate() { }
+    virtual void OnInstallAccessory(Creature* /*_accessory*/) { }
+    virtual void OnAddPassenger(Unit* /*_passenger*/, int8_t /*_seatId*/) { }
+    virtual void OnRemovePassenger(Unit* /*_passenger*/) { }
 
     virtual void OnScriptPhaseChange(uint32_t /*_phaseId*/) {}
     virtual void OnHitBySpell(uint32_t /*_spellId*/, Unit* /*_caster*/) {}
@@ -207,11 +164,11 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////////
     // Event default management
     // \brief: These functions are called internal for script events. Do NOT use them in your scripts!
-    void _internalOnDied();
-    void _internalOnTargetDied();
-    void _internalOnCombatStart();
+    void _internalOnDied(Unit* killer);
+    void _internalOnTargetDied(Unit* target);
+    void _internalOnCombatStart(Unit* target);
     void _internalOnCombatStop();
-    void _internalAIUpdate();
+    void _internalAIUpdate(unsigned long time_passed);
     void _internalOnScriptPhaseChange();
 
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -226,9 +183,14 @@ public:
     Creature* getNearestCreature(float posX, float posY, float posZ, uint32_t entry);
 
     void GetCreatureListWithEntryInGrid(std::list<Creature*>& container, uint32 entry, float maxSearchRange /*= 250.0f*/);
+    Creature* findNearestCreature(uint32_t entry, float maxSearchRange /*= 250.0f*/);
     void GetGameObjectListWithEntryInGrid(std::list<GameObject*>& container, uint32 entry, float maxSearchRange /*= 250.0f*/);
+    GameObject* findNearestGameObject(uint32_t entry, float maxSearchRange /*= 250.0f*/);
 
     float getRangeToObject(Object* object);
+
+    Creature* summonCreature(uint32_t entry, float posX, float posY, float posZ, float posO, CreatureSummonDespawnType despawnType = MANUAL_DESPAWN, uint32_t duration = 0);
+    Creature* summonCreature(uint32_t entry, LocationVector position, CreatureSummonDespawnType despawnType = MANUAL_DESPAWN, uint32_t duration = 0);
 
     CreatureAIScript* spawnCreatureAndGetAIScript(uint32_t entry, float posX, float posY, float posZ, float posO, uint32_t factionId = 0, uint32_t phase = 1);
 
@@ -260,22 +222,35 @@ public:
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // wp movement
-    Movement::WayPoint* CreateWaypoint(int pId, uint32_t pWaittime, uint32_t pMoveFlag, Movement::Location pCoords);
-    void AddWaypoint(Movement::WayPoint* pWayPoint);
-    void ForceWaypointMove(uint32_t pWaypointId);
-    void SetWaypointToMove(uint32_t pWaypointId);
-    void StopWaypointMovement();
-    void SetWaypointMoveType(Movement::WaypointMovementScript wp_move_script_type);
-    uint32_t GetCurrentWaypoint();
-    size_t GetWaypointCount();
-    bool HasWaypoints();
+    WaypointNode createWaypoint(uint32_t pId, uint32_t pWaittime, uint32_t pMoveType, LocationVector pCoords);
+    void addWaypoint(uint32_t pathid, WaypointNode pWayPoint);
+    WaypointPath* getCustomPath(uint32_t pathId);
+
+    void setWaypointToMove(uint32_t pathid, uint32_t pWaypointId);
+    void stopWaypointMovement();
+
+    virtual void waypointStarted(uint32_t /*nodeId*/, uint32_t /*pathId*/) { }
+    virtual void waypointReached(uint32_t /*nodeId*/, uint32_t /*pathId*/) { }
+    virtual void waypointPathEnded(uint32_t /*nodeId*/, uint32_t /*pathId*/) { }
+
+    // loads waypoints from database and initialise them
+    void loadCustomWaypoins(uint32_t pathId);
+
+    uint32_t getCurrentWaypoint();
+
+    size_t getWaypointCount(uint32_t pathId);
+    bool hasWaypoints(uint32_t pathId); //todo aaron02
+
+private:
+    std::unordered_map<uint32_t, WaypointPath> _waypointStore;
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // combat setup
+public:
     bool canEnterCombat();
     void setCanEnterCombat(bool enterCombat);
     bool _isInCombat();
-    void _delayNextAttack(int32_t milliseconds);
+    void _delayNextAttack(uint32_t milliseconds);
 
     void _setMeleeDisabled(bool disable);
     bool _isMeleeDisabled();
@@ -298,11 +273,9 @@ public:
     // script phase
     // \brief: script phase is reset to 0 in _internalOnDied() and _internalOnCombatStop()
 private:
-
     uint32_t mScriptPhase;
 
 public:
-
     uint32_t getScriptPhase();
     void setScriptPhase(uint32_t scriptPhase);
     void resetScriptPhase();
@@ -313,6 +286,7 @@ public:
      // \brief: 
 protected:
     scriptEventMap scriptEvents;
+    SummonList summons;    
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // timers
@@ -320,7 +294,6 @@ protected:
     //        available (instanceUpdateFrequency). If the creature is on a map without a
     //        instance script, the timer gets updated locale (AIUpdateFrequency).
 private:
-
     //reference to instance time - used for creatures located on a map with a instance script.
     typedef std::list<uint32_t> creatureTimerIds;
     creatureTimerIds mCreatureTimerIds;
@@ -334,7 +307,6 @@ private:
     uint32_t mCreatureTimerCount;
 
 public:
-
     uint32_t _addTimer(uint32_t durationInMs);
     uint32_t _getTimeForTimer(uint32_t timerId);
     void _removeTimer(uint32_t& timerId);
@@ -345,7 +317,7 @@ public:
     uint32_t _getTimerCount();
 
     //only for internal use!
-    void updateAITimers();
+    void updateAITimers(unsigned long time_passed);
 
     //used for debug
     void displayCreatureTimerList(Player* player);
@@ -353,17 +325,14 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////////
     // ai upodate frequency
 private:
-
     uint32_t mAIUpdateFrequency;
 
     uint32_t mCustomAIUpdateDelayTimerId;
     uint32_t mCustomAIUpdateDelay;
+
+    SmallTimeTracker m_oldAIUpdate;
+
 public:
-
-    //new
-    void registerAiUpdateFrequency();
-    void removeAiUpdateFrequency();
-
     //old stuff
     void SetAIUpdateFreq(uint32_t pUpdateFreq);
     uint32_t GetAIUpdateFreq();
@@ -387,11 +356,10 @@ public:
     CreatureAISpellsArray mCreatureAISpells;
 
 public:
-
-    uint32_t mSpellWaitTimerId;
-
     //addAISpell(spellID, Chance, TargetType, Duration (s), waitBeforeNextCast (s))
-    CreatureAISpells* addAISpell(uint32_t spellId, float castChance, uint32_t targetType, uint32_t duration = 0, uint32_t cooldown = 0, bool forceRemove = false, bool isTriggered = false);
+    CreatureAISpells* addAISpell(uint32_t spellId, float castChance, uint32_t targetType, uint32_t duration = 0, uint32_t cooldown = 0, bool forceRemove = false, bool isTriggered = false, bool heroicOnly = false);
+    
+    CreatureAISpells* addAISpell(uint32_t spellId, float castChance, uint32_t cooldown, std::function<Unit* ()> func, bool isTriggered = false, bool heroicOnly = false);
 
     void _applyAura(uint32_t spellId);
     void _removeAura(uint32_t spellId);
@@ -407,11 +375,7 @@ public:
     void _unsetTargetToChannel();
     Unit* _getTargetToChannel();
 
-    Unit* mCurrentSpellTarget;
-    CreatureAISpells* mLastCastedSpell;
-
     // only for internal use
-    void newAIUpdateSpellSystem();
     void castSpellOnRandomTarget(CreatureAISpells* AiSpell);
 
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -431,7 +395,6 @@ public:
     };
 
 private:
-
     typedef std::vector<uint32_t> definedEmoteVector;
     definedEmoteVector mEmotesOnCombatStart;
     definedEmoteVector mEmotesOnTargetDied;
@@ -440,11 +403,10 @@ private:
     definedEmoteVector mEmotesOnIdle;
 
 public:
-
     void sendChatMessage(uint8_t type, uint32_t soundId, std::string text);
-    void sendDBChatMessage(uint32_t textId);
+    void sendDBChatMessage(uint32_t textId, Unit* target = nullptr);
 
-    void sendRandomDBChatMessage(std::vector<uint32_t> emoteVector);
+    void sendRandomDBChatMessage(std::vector<uint32_t> emoteVector, Unit* target);
 
     void addEmoteForEvent(uint32_t eventType, uint32_t scriptTextId);
 
@@ -455,7 +417,6 @@ public:
     // \brief: idle timer is seperated from custom timers. If isIdleEmoteEnabled is true,
     //         a random chat message is send by _internalAIUpdate stored in mEmotesOnIdle
 private:
-
     bool isIdleEmoteEnabled;
     uint32_t idleEmoteTimerId;
 
@@ -463,7 +424,6 @@ private:
     uint32_t idleEmoteTimeMax;
 
 public:
-
     void enableOnIdleEmote(bool enable, uint32_t durationInMs = 0);
     void setIdleEmoteTimerId(uint32_t timerId);
     uint32_t getIdleEmoteTimerId();
@@ -475,11 +435,9 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////////
     // basic
 private:
-
     Creature* _creature;
 
 public:
-
     Creature* getCreature() { return _creature; }
 
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -491,9 +449,9 @@ public:
     template<class T> inline
         const T& RAID_MODE(const T& normal10, const T& normal25, const T& heroic10, const T& heroic25) const
     {
-        if (_creature->GetMapMgr()->pInstance)
+        if (_creature->getWorldMap()->getInstance())
         {
-            switch (_creature->GetMapMgr()->pInstance->m_difficulty)
+            switch (_creature->getWorldMap()->getDifficulty())
             {
             case InstanceDifficulty::RAID_10MAN_NORMAL:
                 return normal10;
@@ -514,21 +472,20 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////////
     // linked creature AI scripts
 private:
-
     CreatureAIScript* linkedCreatureAI;
 
 public:
-
     CreatureAIScript* getLinkedCreatureAIScript() { return linkedCreatureAI; }
     void setLinkedCreatureAIScript(CreatureAIScript* creatureAI);
     void removeLinkToCreatureAIScript();
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // target
-    Unit* getBestPlayerTarget(TargetFilter pFilter = TargetFilter_None, float pMinRange = 0.0f, float pMaxRange = 0.0f);
-    Unit* getBestUnitTarget(TargetFilter pFilter = TargetFilter_None, float pMinRange = 0.0f, float pMaxRange = 0.0f);
+    Unit* getBestPlayerTarget(TargetFilter pFilter = TargetFilter_None, float pMinRange = 0.0f, float pMaxRange = 0.0f, int32_t auraId = 0);
+    Unit* getBestUnitTarget(TargetFilter pFilter = TargetFilter_None, float pMinRange = 0.0f, float pMaxRange = 0.0f, int32_t auraid = 0);
     Unit* getBestTargetInArray(UnitArray& pTargetArray, TargetFilter pFilter);
     Unit* getNearestTargetInArray(UnitArray& pTargetArray);
     Unit* getSecondMostHatedTargetInArray(UnitArray& pTargetArray);
-    bool isValidUnitTarget(Object* pObject, TargetFilter pFilter, float pMinRange = 0.0f, float pMaxRange = 0.0f);
+    Unit* getLowestHealthTargetInArray(UnitArray& pTargetArray);
+    bool isValidUnitTarget(Object* pObject, TargetFilter pFilter, float pMinRange = 0.0f, float pMaxRange = 0.0f, int32_t auraId = 0);
 };

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -90,13 +90,6 @@ class SERVER_DECL OpcodeTables
             }
         }
 
-        void sizeOfHexTables()
-        {
-            for (auto versionId = 0; versionId < MAX_VERSION_INDEX; ++versionId)
-                std::cout << "Size of hex store for version [" << getNameForVersionId(versionId) << "]: "
-                        << _versionHexTable[versionId].size() << std::endl;
-        }
-
         uint32_t getInternalIdForHex(uint16_t hex, int versionId = -1)
         {
             if (versionId == -1 || versionId >= MAX_VERSION_INDEX)
@@ -109,7 +102,7 @@ class SERVER_DECL OpcodeTables
             return 0;
         }
 
-        std::string getNameForOpcode(uint32_t hex, int versionId = -1)
+        std::string getNameForOpcode(uint16_t hex, int versionId = -1)
         {
             const auto internalId = getInternalIdForHex(hex, versionId);
 
@@ -150,7 +143,7 @@ class SERVER_DECL OpcodeTables
             uint32_t internalId;
         };
 
-        std::vector<HexToId> _versionHexTable[MAX_VERSION_INDEX];
+        std::vector<HexToId> _versionHexTable[MAX_VERSION_INDEX] = {};
 };
 
 #define sOpcodeTables OpcodeTables::getInstance()

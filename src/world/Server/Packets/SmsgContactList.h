@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -12,14 +12,14 @@ namespace AscEmu::Packets
 {
     struct SmsgContactListMember
     {
-        uint64_t guid;
-        uint32_t flag;
+        uint64_t guid = 0;
+        uint32_t flag = 0;
         std::string note;
 
-        uint8_t isOnline;
-        uint32_t zoneId;
-        uint32_t level;
-        uint32_t playerClass;
+        uint8_t isOnline = 0;
+        uint32_t zoneId = 0;
+        uint32_t level = 0;
+        uint32_t playerClass = 0;
     };
 
     class SmsgContactList : public ManagedPacket

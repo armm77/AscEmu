@@ -1,12 +1,12 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Management/TaxiMgr.h"
 #include "Server/WorldSession.h"
-#include "Units/Creatures/Creature.h"
+#include "Objects/Units/Creatures/Creature.h"
 #include "Management/Gossip/GossipScript.hpp"
 #include "Server/Script/ScriptMgr.h"
 #include "Management/Gossip/GossipMenu.hpp"
@@ -14,7 +14,6 @@ This file is released under the MIT license. See README-MIT for more information
 class SilvaFilnaveth_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         GossipMenu menu(pObject->getGuid(), 0);
@@ -36,17 +35,15 @@ public:
         Creature* pCreature = pObject->isCreature() ? static_cast<Creature*>(pObject) : NULL;
         if (pCreature == NULL)
             return;
-        plr->TaxiStart(sTaxiMgr.GetTaxiPath(315), 479, 0);     // Hippogryph
+        plr->startTaxiPath(sTaxiMgr.GetTaxiPath(315), 479, 0);     // Hippogryph
     }
 
     void destroy() override { delete this; }
-
 };
 
 class BunthenPlainswind_Gossip : public GossipScript
 {
 public:
-
     void onHello(Object* pObject, Player* plr) override
     {
         GossipMenu menu(pObject->getGuid(), 0);
@@ -68,11 +65,10 @@ public:
         Creature* pCreature = pObject->isCreature() ? static_cast<Creature*>(pObject) : NULL;
         if (pCreature == NULL)
             return;
-        plr->TaxiStart(sTaxiMgr.GetTaxiPath(316), 295, 0);     // Wyvern
+        plr->startTaxiPath(sTaxiMgr.GetTaxiPath(316), 295, 0);     // Wyvern
     }
 
-    void destroy() { delete this; }
-
+    void destroy() override { delete this; }
 };
 
 void SetupMoongladeGossip(ScriptMgr* mgr)

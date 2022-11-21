@@ -1,10 +1,10 @@
-# Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 
 set(PATH_PREFIX Console)
 
 set(SRC_CONSOLE_FILES
-   ${PATH_PREFIX}/LogonConsole.cpp
-   ${PATH_PREFIX}/LogonConsole.h
+    ${PATH_PREFIX}/LogonConsole.cpp
+    ${PATH_PREFIX}/LogonConsole.h
 )
 
 source_group(Console FILES ${SRC_CONSOLE_FILES})

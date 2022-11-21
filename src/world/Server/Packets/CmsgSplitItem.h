@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -27,10 +27,10 @@ namespace AscEmu::Packets
 
         CmsgSplitItem(int8_t srcInventorySlot, int8_t srcSlot, int8_t destInventorySlot, int8_t destSlot, uint32_t itemCount) :
             ManagedPacket(CMSG_SPLIT_ITEM, 8),
-            srcInventorySlot(srcInventorySlot),
-            srcSlot(srcSlot),
             destInventorySlot(destInventorySlot),
             destSlot(destSlot),
+            srcInventorySlot(srcInventorySlot),
+            srcSlot(srcSlot),
             itemCount(itemCount)
         {
         }

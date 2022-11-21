@@ -1,17 +1,17 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "DatabaseUpdater.hpp"
-#include "../Logging/Logger.hpp"
+#include <Logging/Logger.hpp>
 #include "Database.h"
 #include "Field.hpp"
-#include "../Common.hpp"
-#include "../Util.hpp"
+#include <Common.hpp>
+#include <Util.hpp>
 #include <iostream>
 
-void DatabaseUpdater::initBaseIfNeeded(std::string dbName, std::string dbBaseType, Database& dbPointer)
+void DatabaseUpdater::initBaseIfNeeded(const std::string& dbName, const std::string& dbBaseType, Database& dbPointer)
 {
     QueryResult* dbResult = dbPointer.Query("SHOW TABLES FROM %s", dbName.c_str());
     if (dbResult == nullptr)
@@ -62,7 +62,7 @@ void DatabaseUpdater::initBaseIfNeeded(std::string dbName, std::string dbBaseTyp
     }
 }
 
-void DatabaseUpdater::setupDatabase(std::string database, Database& dbPointer)
+void DatabaseUpdater::setupDatabase(const std::string& database, Database& dbPointer)
 {
     const std::string sqlBaseDir = "sql/" + database;
     fs::path baseFilePath = fs::current_path();
@@ -91,7 +91,7 @@ void DatabaseUpdater::setupDatabase(std::string database, Database& dbPointer)
     }
 }
 
-void DatabaseUpdater::checkAndApplyDBUpdatesIfNeeded(std::string database, Database& dbPointer)
+void DatabaseUpdater::checkAndApplyDBUpdatesIfNeeded(const std::string& database, Database& dbPointer)
 {
     applyUpdatesForDatabase(database, dbPointer);
 
@@ -109,7 +109,7 @@ struct DatabaseUpdateFile
     uint32_t minorVersion;
 };
 
-void DatabaseUpdater::applyUpdatesForDatabase(std::string database, Database& dbPointer)
+void DatabaseUpdater::applyUpdatesForDatabase(const std::string& database, Database& dbPointer)
 {
     const std::string sqlUpdateDir = "sql/" + database + "/updates";
 
@@ -136,10 +136,20 @@ void DatabaseUpdater::applyUpdatesForDatabase(std::string database, Database& db
     std::map<uint32_t, DatabaseUpdateFile> updateSqlStore;
 
     uint32_t count = 0;
+    std::vector<std::string> updateFiles;
+
     for (auto& p : fs::recursive_directory_iterator(sqlUpdateDir))
     {
         const std::string filePathName = p.path().string();
+        updateFiles.push_back(filePathName);
+    }
 
+    // In Windows, recursive_directory_iterator seems to get files sorted but
+    // in Linux they are in random order -Appled
+    std::sort(updateFiles.begin(), updateFiles.end());
+
+    for (const auto& filePathName : updateFiles)
+    {
         std::string fileName = filePathName;
         fileName.erase(0, sqlUpdateDir.size() + 1);
 
@@ -152,11 +162,13 @@ void DatabaseUpdater::applyUpdatesForDatabase(std::string database, Database& db
         dbUpdateFile.minorVersion = minorVersion;
 
         //\todo Remove me
-        sLogger.info("Available file in updates dir: %s", filePathName.c_str());
+        //sLogger.info("Available file in updates dir: %s", filePathName.c_str());
 
         updateSqlStore.emplace(std::pair<uint32_t, DatabaseUpdateFile>(count, dbUpdateFile));
         ++count;
     }
+
+    updateFiles.clear();
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // 3. save filenames into vector, when newer than current db version
@@ -164,7 +176,7 @@ void DatabaseUpdater::applyUpdatesForDatabase(std::string database, Database& db
 
     if (!updateSqlStore.empty())
     {
-        sLogger.debug("=========== New %s update files in %s ===========", database.c_str(), sqlUpdateDir.c_str());
+        //sLogger.debug("=========== New %s update files in %s ===========", database.c_str(), sqlUpdateDir.c_str());
         //compare it with latest update in mysql
         for (const auto update : updateSqlStore)
         {

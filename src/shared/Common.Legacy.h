@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,82 +20,75 @@
 #ifndef _COMMON_H
 #define _COMMON_H
 
-#include "AscemuServerDefines.hpp"
+#include "git_version.h"
+#include <signal.h>
+
+#ifndef WIN32
+#include <sched.h>
+#include <sys/resource.h>
+#endif
+
 #include "DynLib.hpp"
 #include "SysInfo.hpp"
 #include "PerformanceCounter.hpp"
 
-#include <cstdlib>
 #include <cstdio>
-
 #include <cstdarg>
 #include <ctime>
 #include <cmath>
 #include <cerrno>
 
-#if defined( __WIN32__ ) || defined( WIN32 ) || defined( _WIN32 )
-    #define WIN32_LEAN_AND_MEAN
-    #define NOMINMAX
-    #include <windows.h>
-    #undef NOMINMAX
-#else
-    #define MAX_PATH 1024
-#endif
-
 #include "Network/NetworkIncludes.hpp"
 
 // current platform and compiler
-#define PLATFORM_WIN32 0
-#define PLATFORM_UNIX  1
-#define PLATFORM_APPLE 2
+#define PLATFORM_WINDOWS 0
+#define PLATFORM_UNIX    1
+#define PLATFORM_APPLE   2
+#define PLATFORM_INTEL   3
 
-#define UNIX_FLAVOUR_LINUX 1
-#define UNIX_FLAVOUR_BSD 2
-#define UNIX_FLAVOUR_OTHER 3
-#define UNIX_FLAVOUR_OSX 4
-
-#if defined( __WIN32__ ) || defined( WIN32 ) || defined( _WIN32 )
-    #define PLATFORM PLATFORM_WIN32
-#elif defined(__APPLE__)
-    #define PLATFORM PLATFORM_APPLE
+#if defined( _WIN64 )
+#  define PLATFORM PLATFORM_WINDOWS
+#elif defined( __WIN32__ ) || defined( WIN32 ) || defined( _WIN32 )
+#  define PLATFORM PLATFORM_WINDOWS
+#elif defined( __APPLE_CC__ )
+#  define PLATFORM PLATFORM_APPLE
+#elif defined( __INTEL_COMPILER )
+#  define PLATFORM PLATFORM_INTEL
 #else
-    #define PLATFORM PLATFORM_UNIX
+#  define PLATFORM PLATFORM_UNIX
 #endif
 
 #define COMPILER_MICROSOFT 0
 #define COMPILER_GNU       1
-#define COMPILER_CLANG     3
+#define COMPILER_BORLAND   2
+#define COMPILER_INTEL     3
 
 #ifdef _MSC_VER
-    #define COMPILER COMPILER_MICROSOFT
-#elif defined(__GNUC__)
-    #define COMPILER COMPILER_GNU
-#elif defined(__clang__)
-    #define COMPILER COMPILER_CLANG
+#  define COMPILER COMPILER_MICROSOFT
+#elif defined( __BORLANDC__ )
+#  define COMPILER COMPILER_BORLAND
+#elif defined( __INTEL_COMPILER )
+#  define COMPILER COMPILER_INTEL
+#elif defined( __GNUC__ )
+#  define COMPILER COMPILER_GNU
 #else
-    #pragma error "FATAL ERROR: Unknown compiler."
+#  pragma error "FATAL ERROR: Unknown compiler."
 #endif
 
-#if _WIN32
-    #define PLATFORM_TEXT "Win32"
-#elif __APPLE__
-    #define PLATFORM_TEXT "OSX"
-#elif defined(BSD)
-    #define PLATFORM_TEXT "BSD"
-#elif defined(__linux__)
-    #define PLATFORM_TEXT "Linux"
+#ifdef WIN32
+    #define LIBMASK ".dll";
+#else
+    #ifndef __APPLE__
+        #define LIBMASK ".so";
+    #else
+        #define LIBMASK ".dylib";
+    #endif
 #endif
 
 #ifdef _DEBUG
     #define CONFIG "Debug"
 #else
     #define CONFIG "Release"
-#endif
-
-#if defined(__x86_64__) || defined(__x86_64) || defined(__amd64__) || defined(_WIN64)
-    #define ARCH "X64"
-#else
-    #define ARCH "X86"
 #endif
 
 #ifdef USE_EPOLL
@@ -132,7 +125,6 @@
 #include "Threading/LegacyThreading.h"
 
 #include "Threading/ConditionVariable.h"
-
 
 #if COMPILER == COMPILER_MICROSOFT
     #define I64FMT "%016I64X"

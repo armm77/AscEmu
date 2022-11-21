@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -40,7 +40,7 @@ struct QuestProperties
     uint32_t type;
     uint32_t required_races;
     uint32_t required_class;
-    uint32_t required_tradeskill;
+    uint16_t required_tradeskill;
     uint32_t required_tradeskill_value;
     uint32_t required_rep_faction;
     uint32_t required_rep_value;

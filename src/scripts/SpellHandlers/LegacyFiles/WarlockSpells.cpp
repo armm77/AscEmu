@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,15 +18,16 @@
  */
 
 #include "Setup.h"
-#include "Units/Stats.h"
+#include "Objects/Units/Stats.h"
 #include "Storage/MySQLDataStore.hpp"
-#include "Map/MapMgr.h"
-#include "Spell/SpellMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Spell/SpellAuras.h"
-#include <Spell/Definitions/PowerType.h>
-#include <Units/Creatures/Pet.h>
+#include <Spell/Definitions/PowerType.hpp>
+#include <Objects/Units/Creatures/Pet.h>
 
- //////////////////////////////////////////////////////////////
+#include "Management/ItemInterface.h"
+
+//////////////////////////////////////////////////////////////
  //bool SoulLinkParent( uint32_t i, Spell *s )
  //
  //Precondition(s)
@@ -83,7 +84,7 @@ bool LifeTap(uint8_t effectIndex, Spell* s)
         return false;
 
     s->getPlayerCaster()->dealDamage(playerTarget, damage, s->getSpellInfo()->getId());
-    damage = damage * (100 + playerTarget->m_lifetapbonus) / 100;    // Apply improved life tap
+    damage = damage * (100 + playerTarget->m_lifeTapBonus) / 100;    // Apply improved life tap
     s->getPlayerCaster()->energize(playerTarget, s->getSpellInfo()->getId(), damage, POWER_TYPE_MANA);
 
     return true;
@@ -106,9 +107,9 @@ bool MinorHealthStone(uint8_t /*effectIndex*/, Spell* s)
     if (s->getPlayerCaster() == nullptr)
         return false;
 
-    if (s->getPlayerCaster()->HasSpell(18692))
+    if (s->getPlayerCaster()->hasSpell(18692))
         s->CreateItem(19004);
-    else if (s->getPlayerCaster()->HasSpell(18693))
+    else if (s->getPlayerCaster()->hasSpell(18693))
         s->CreateItem(19005);
     else
         s->CreateItem(5512);
@@ -121,9 +122,9 @@ bool LesserHealthStone(uint8_t /*effectIndex*/, Spell* s)
     if (s->getPlayerCaster() == nullptr)
         return false;
 
-    if (s->getPlayerCaster()->HasSpell(18693))    // Improved Healthstone (2)
+    if (s->getPlayerCaster()->hasSpell(18693))    // Improved Healthstone (2)
         s->CreateItem(19007);
-    else if (s->getPlayerCaster()->HasSpell(18692))    // Improved Healthstone (1)
+    else if (s->getPlayerCaster()->hasSpell(18692))    // Improved Healthstone (1)
         s->CreateItem(19006);
     else
         s->getPlayerCaster()->getItemInterface()->AddItemById(5511, 1, 0);
@@ -135,9 +136,9 @@ bool HealthStone(uint8_t /*effectIndex*/, Spell* s)
     if (s->getPlayerCaster() == nullptr)
         return false;
 
-    if (s->getPlayerCaster()->HasSpell(18693))    // Improved Healthstone (2)
+    if (s->getPlayerCaster()->hasSpell(18693))    // Improved Healthstone (2)
         s->CreateItem(19009);
-    else if (s->getPlayerCaster()->HasSpell(18692))    // Improved Healthstone (1)
+    else if (s->getPlayerCaster()->hasSpell(18692))    // Improved Healthstone (1)
         s->CreateItem(19008);
     else
         s->CreateItem(5509);
@@ -150,9 +151,9 @@ bool GreaterHealthStone(uint8_t /*effectIndex*/, Spell* s)
     if (s->getPlayerCaster() == nullptr)
         return false;
 
-    if (s->getPlayerCaster()->HasSpell(18693))    // Improved Healthstone (2)
+    if (s->getPlayerCaster()->hasSpell(18693))    // Improved Healthstone (2)
         s->CreateItem(19011);
-    else if (s->getPlayerCaster()->HasSpell(18692))    // Improved Healthstone (1)
+    else if (s->getPlayerCaster()->hasSpell(18692))    // Improved Healthstone (1)
         s->CreateItem(19010);
     else
         s->CreateItem(5510);
@@ -165,9 +166,9 @@ bool MajorHealthStone(uint8_t /*effectIndex*/, Spell* s)
     if (s->getPlayerCaster() == nullptr)
         return false;
 
-    if (s->getPlayerCaster()->HasSpell(18693))    // Improved Healthstone (2)
+    if (s->getPlayerCaster()->hasSpell(18693))    // Improved Healthstone (2)
         s->CreateItem(19013);
-    else if (s->getPlayerCaster()->HasSpell(18692))    // Improved Healthstone (1)
+    else if (s->getPlayerCaster()->hasSpell(18692))    // Improved Healthstone (1)
         s->CreateItem(19012);
     else
         s->CreateItem(9421);
@@ -180,9 +181,9 @@ bool MasterHealthStone(uint8_t /*effectIndex*/, Spell* s)
     if (s->getPlayerCaster() == nullptr)
         return false;
 
-    if (s->getPlayerCaster()->HasSpell(18693))    // Improved Healthstone (2)
+    if (s->getPlayerCaster()->hasSpell(18693))    // Improved Healthstone (2)
         s->CreateItem(22105);
-    else if (s->getPlayerCaster()->HasSpell(18692))    // Improved Healthstone (1)
+    else if (s->getPlayerCaster()->hasSpell(18692))    // Improved Healthstone (1)
         s->CreateItem(22104);
     else
         s->CreateItem(22103);
@@ -195,9 +196,9 @@ bool DemonicHealthStone(uint8_t /*effectIndex*/, Spell* s)
     if (s->getPlayerCaster() == nullptr)
         return false;
 
-    if (s->getPlayerCaster()->HasSpell(18693))    // Improved Healthstone (2)
+    if (s->getPlayerCaster()->hasSpell(18693))    // Improved Healthstone (2)
         s->CreateItem(36891);
-    else if (s->getPlayerCaster()->HasSpell(18692))    // Improved Healthstone (1)
+    else if (s->getPlayerCaster()->hasSpell(18692))    // Improved Healthstone (1)
         s->CreateItem(36890);
     else
         s->CreateItem(36889);
@@ -210,9 +211,9 @@ bool FelHealthStone(uint8_t /*effectIndex*/, Spell* s)
     if (s->getPlayerCaster() == nullptr)
         return false;
 
-    if (s->getPlayerCaster()->HasSpell(18693))    // Improved Healthstone (2)
+    if (s->getPlayerCaster()->hasSpell(18693))    // Improved Healthstone (2)
         s->CreateItem(36894);
-    else if (s->getPlayerCaster()->HasSpell(18692))    // Improved Healthstone (1)
+    else if (s->getPlayerCaster()->hasSpell(18692))    // Improved Healthstone (1)
         s->CreateItem(36893);
     else
         s->CreateItem(36892);
@@ -509,11 +510,11 @@ bool SummonSuccubusQuest(uint8_t /*effectIndex*/, Spell* s)
     if (cp == nullptr)
         return false;
 
-    Creature* pCreature = s->getPlayerCaster()->GetMapMgr()->CreateCreature(cp->Id);
+    Creature* pCreature = s->getPlayerCaster()->getWorldMap()->createCreature(cp->Id);
     pCreature->Load(cp, s->getPlayerCaster()->GetPositionX(), s->getPlayerCaster()->GetPositionY(), s->getPlayerCaster()->GetPositionZ());
-    pCreature->GetAIInterface()->Init(pCreature, AI_SCRIPT_AGRO, Movement::WP_MOVEMENT_SCRIPT_NONE);
-    pCreature->GetAIInterface()->taunt(s->getPlayerCaster(), true);
-    pCreature->PushToWorld(s->getPlayerCaster()->GetMapMgr());
+    pCreature->getAIInterface()->Init(pCreature);
+    pCreature->getThreatManager().tauntUpdate();
+    pCreature->PushToWorld(s->getPlayerCaster()->getWorldMap());
     pCreature->Despawn(60000, 0);
 
     return true;
@@ -527,11 +528,11 @@ bool SummonVoidWalkerQuest(uint8_t /*effectIndex*/, Spell* s)
     if (cp == nullptr)
         return false;
 
-    Creature* pCreature = p_caster->GetMapMgr()->CreateCreature(cp->Id);
+    Creature* pCreature = p_caster->getWorldMap()->createCreature(cp->Id);
     pCreature->Load(cp, p_caster->GetPositionX(), p_caster->GetPositionY(), p_caster->GetPositionZ());
-    pCreature->GetAIInterface()->Init(pCreature, AI_SCRIPT_AGRO, Movement::WP_MOVEMENT_SCRIPT_NONE);
-    pCreature->GetAIInterface()->taunt(p_caster, true);
-    pCreature->PushToWorld(p_caster->GetMapMgr());
+    pCreature->getAIInterface()->Init(pCreature);
+    pCreature->getThreatManager().tauntUpdate();
+    pCreature->PushToWorld(p_caster->getWorldMap());
     pCreature->Despawn(60000, 0);
 
     return true;
@@ -545,11 +546,11 @@ bool SummonFelHunterQuest(uint8_t /*effectIndex*/, Spell* s)
     if (cp == nullptr)
         return false;
 
-    Creature* pCreature = p_caster->GetMapMgr()->CreateCreature(cp->Id);
+    Creature* pCreature = p_caster->getWorldMap()->createCreature(cp->Id);
     pCreature->Load(cp, p_caster->GetPositionX(), p_caster->GetPositionY(), p_caster->GetPositionZ());
-    pCreature->GetAIInterface()->Init(pCreature, AI_SCRIPT_AGRO, Movement::WP_MOVEMENT_SCRIPT_NONE);
-    pCreature->GetAIInterface()->taunt(p_caster, true);
-    pCreature->PushToWorld(p_caster->GetMapMgr());
+    pCreature->getAIInterface()->Init(pCreature);
+    pCreature->getThreatManager().tauntUpdate();
+    pCreature->PushToWorld(p_caster->getWorldMap());
     pCreature->Despawn(60000, 0);
 
     return true;
@@ -579,7 +580,7 @@ bool DemonicKnowledge(uint8_t effectIndex, Aura* a, bool apply)
             for (uint16_t x = 0; x < 7; x++)
                 PetOwner->modModDamageDonePositive(x, val);
 
-            PetOwner->CalcDamage();
+            PetOwner->calculateDamage();
         }
     }
 
@@ -597,9 +598,9 @@ bool ImprovedLifeTap(uint8_t effectIndex, Aura* a, bool apply)
 
 
     if (apply)
-        p_target->m_lifetapbonus = amount;
+        p_target->m_lifeTapBonus = amount;
     else
-        p_target->m_lifetapbonus = 0;
+        p_target->m_lifeTapBonus = 0;
 
     return true;
 }
@@ -612,9 +613,9 @@ bool SoulSiphon(uint8_t effectIndex, Aura* a, bool apply)
     if (caster)
     {
         if (apply)
-            caster->m_soulSiphon.amt += amount;
+            caster->m_soulSiphon.m_amount += amount;
         else
-            caster->m_soulSiphon.amt -= amount;
+            caster->m_soulSiphon.m_amount -= amount;
     }
 
     return true;
@@ -644,22 +645,22 @@ bool DemonicCircleSummon(uint8_t /*effectIndex*/, Aura* a, bool apply)
 {
     Unit* m_target = a->getOwner();
 
-    if (m_target->GetMapMgr() == nullptr)
+    if (m_target->getWorldMap() == nullptr)
         return true;
 
     if (apply)
     {
 
-        GameObject* circle = m_target->GetMapMgr()->GetGameObject(a->getOwner()->m_ObjectSlots[0]);
+        GameObject* circle = m_target->getWorldMap()->getGameObject(a->getOwner()->m_objectSlots[0]);
         SpellInfo const* sp = sSpellMgr.getSpellInfo(48020);
 
-        if (circle != NULL && sp != NULL && m_target->CalcDistance(circle) <= GetMaxRange(sSpellRangeStore.LookupEntry(sp->getRangeIndex())))
+        if (circle != NULL && sp != NULL && m_target->CalcDistance(circle) <= sp->getMaxRange())
         {
-            if (!m_target->HasAura(62388))
+            if (!m_target->hasAurasWithId(62388))
                 m_target->castSpell(m_target, 62388, true);
         }
         else
-            m_target->RemoveAura(62388);
+            m_target->removeAllAurasById(62388);
     }
     else
     {

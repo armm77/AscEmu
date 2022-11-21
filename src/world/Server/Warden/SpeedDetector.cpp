@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,12 +18,11 @@
  *
  */
 
-#include "StdAfx.h"
+
 #include "Server/Warden/SpeedDetector.h"
 #include "Server/MainServerDefines.h"
 #include "Server/World.h"
-#include "Server/World.Legacy.h"
-#include "Units/Players/Player.h"
+#include "Objects/Units/Players/Player.hpp"
 
 SpeedCheatDetector::SpeedCheatDetector()
 {
@@ -97,7 +96,7 @@ void SpeedCheatDetector::AddSample(float x, float y, int stamp, float player_spe
 
 void SpeedCheatDetector::ReportCheater(Player* _player)
 {
-    if ((worldConfig.antiHack.isAntiHackCheckDisabledForGm && _player->GetSession()->HasGMPermissions()))
+    if ((worldConfig.antiHack.isAntiHackCheckDisabledForGm && _player->getSession()->HasGMPermissions()))
         return; // do not check GMs speed been the config tells us not to.
 
     //toshik is wonderful and i can't understand how he managed to make this happen
@@ -108,9 +107,9 @@ void SpeedCheatDetector::ReportCheater(Player* _player)
         return;
     }
 
-    float speed = (_player->flying_aura) ? _player->getSpeedRate(TYPE_FLY, true) : (_player->getSpeedRate(TYPE_SWIM, true) > _player->getSpeedRate(TYPE_RUN, true)) ? _player->getSpeedRate(TYPE_SWIM, true) : _player->getSpeedRate(TYPE_RUN, true);
-    _player->BroadcastMessage("Speedhack detected. In case server was wrong then make a report how to reproduce this case. You will be logged out in 7 seconds.");
-    sCheatLog.writefromsession(_player->GetSession(), "Caught %s speed hacking last occurrence with speed: %f instead of %f", _player->getName().c_str(), speed + bigest_hacked_speed_dif, speed);
+    float speed = (_player->m_flyingAura) ? _player->getSpeedRate(TYPE_FLY, true) : (_player->getSpeedRate(TYPE_SWIM, true) > _player->getSpeedRate(TYPE_RUN, true)) ? _player->getSpeedRate(TYPE_SWIM, true) : _player->getSpeedRate(TYPE_RUN, true);
+    _player->broadcastMessage("Speedhack detected. In case server was wrong then make a report how to reproduce this case. You will be logged out in 7 seconds.");
+    sCheatLog.writefromsession(_player->getSession(), "Caught %s speed hacking last occurrence with speed: %f instead of %f", _player->getName().c_str(), speed + bigest_hacked_speed_dif, speed);
     sEventMgr.AddEvent(_player, &Player::eventKickFromServer, EVENT_PLAYER_KICK, 7000, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
 
     //next check will be very far away

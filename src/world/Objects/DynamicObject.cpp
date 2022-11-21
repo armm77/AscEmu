@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,17 +19,17 @@
  *
  */
 
-#include "StdAfx.h"
+
 #include "Objects/DynamicObject.h"
-#include "Map/MapMgr.h"
-#include "Faction.h"
-#include "Spell/SpellMgr.h"
+#include "Map/Management/MapMgr.hpp"
+#include "Management/Faction.h"
+#include "Spell/SpellMgr.hpp"
 #include "Spell/SpellAuras.h"
 #include "Spell/Spell.Legacy.h"
-#include "Spell/Definitions/ProcFlags.h"
-#include "Spell/Definitions/SpellIsFlags.h"
-#include "Objects/ObjectMgr.h"
+#include "Spell/Definitions/SpellIsFlags.hpp"
+#include "Management/ObjectMgr.h"
 #include "Data/WoWDynamicObject.hpp"
+#include "Spell/Definitions/SpellEffects.hpp"
 
 // MIT Start
 
@@ -142,8 +142,8 @@ DynamicObject::DynamicObject(uint32 high, uint32 low)
 
 DynamicObject::~DynamicObject()
 {
-    if (u_caster != nullptr && u_caster->dynObj == this)
-        u_caster->dynObj = nullptr;
+    if (u_caster != nullptr && u_caster->m_dynamicObject == this)
+        u_caster->m_dynamicObject = nullptr;
 }
 
 void DynamicObject::Create(Unit* caster, Spell* pSpell, float x, float y, float z, uint32 duration, float radius, uint32 type)
@@ -189,16 +189,16 @@ void DynamicObject::Create(Unit* caster, Spell* pSpell, float x, float y, float 
     m_phase = caster->GetPhase();
 
     if (pSpell->g_caster)
-        PushToWorld(pSpell->g_caster->GetMapMgr());
+        PushToWorld(pSpell->g_caster->getWorldMap());
     else
-        PushToWorld(caster->GetMapMgr());
+        PushToWorld(caster->getWorldMap());
 
-    if (caster->dynObj != nullptr)
+    if (caster->m_dynamicObject != nullptr)
     {
         //expires
-        caster->dynObj->Remove();
+        caster->m_dynamicObject->Remove();
     }
-    caster->dynObj = this;
+    caster->m_dynamicObject = this;
 
     //sEventMgr.AddEvent(this, &DynamicObject::UpdateTargets, EVENT_DYNAMICOBJECT_UPDATE, 100, 0,EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
     UpdateTargets();
@@ -272,13 +272,13 @@ void DynamicObject::UpdateTargets()
 
         while (jtr != jend)
         {
-            target = GetMapMgr() ? GetMapMgr()->GetUnit(*jtr) : nullptr;
+            target = getWorldMap() ? getWorldMap()->getUnit(*jtr) : nullptr;
             jtr2 = jtr;
             ++jtr;
 
             if ((target != nullptr) && (getDistanceSq(target) > radius))
             {
-                target->RemoveAura(m_spellProto->getId());
+                target->removeAllAurasById(m_spellProto->getId());
                 targets.erase(jtr2);
             }
         }
@@ -312,10 +312,10 @@ void DynamicObject::Remove()
 
         uint64 TargetGUID = *itr;
 
-        target = m_mapMgr->GetUnit(TargetGUID);
+        target = m_WorldMap->getUnit(TargetGUID);
 
         if (target != nullptr)
-            target->RemoveAura(m_spellProto->getId());
+            target->removeAllAurasById(m_spellProto->getId());
     }
 
     //\todo: Despawn animation only for GOs? Zyres.

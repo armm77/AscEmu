@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -11,7 +11,6 @@ This file is released under the MIT license. See README-MIT for more information
 #include <iostream>
 #include <cstdarg>
 #include <string>
-#include "../../src/world/WorldConf.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // World functions
@@ -79,7 +78,7 @@ void WorldPacketLog::disablePacketLog()
 
 SessionLog::SessionLog(const char* filename, bool open)
 {
-#if defined(linux) || defined(__linux)
+#if defined(linux) || defined(__linux) || defined(FreeBSD) || defined(__FreeBSD__) || defined(__APPLE__)
     mFileName = strdup(filename);
 #else
     mFileName = _strdup(filename);
@@ -139,59 +138,4 @@ void SessionLog::write(const char* format, ...)
         fprintf(mSessionLogFile, "%s\n", out);
         va_end(ap);
     }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////
-// AscEmuLog format/color functions
-namespace AELog
-{
-#ifndef _WIN32
-    const char* GetColorForDebugFlag(LogFlags log_flags)
-    {
-        switch (log_flags)
-        {
-            case LF_MAP:
-            case LF_MAP_CELL:
-            case LF_VMAP:
-            case LF_MMAP:
-                return CONSOLE_COLOR_BLUE;
-            case LF_OPCODE:
-                return CONSOLE_COLOR_WHITE;
-            case LF_SPELL:
-            case LF_AURA:
-            case LF_SPELL_EFF:
-            case LF_AURA_EFF:
-                return CONSOLE_COLOR_PURPLE;
-            case LF_SCRIPT_MGR:
-            case LF_DB_TABLES:
-                return CONSOLE_COLOR_YELLOW;
-            default:
-                return CONSOLE_COLOR_YELLOW;
-}
-}
-#else
-    int GetColorForDebugFlag(LogFlags log_flags)
-    {
-        switch (log_flags)
-        {
-            case LF_MAP:
-            case LF_MAP_CELL:
-            case LF_VMAP:
-            case LF_MMAP:
-                return CONSOLE_COLOR_BLUE;
-            case LF_OPCODE:
-                return CONSOLE_COLOR_WHITE;
-            case LF_SPELL:
-            case LF_AURA:
-            case LF_SPELL_EFF:
-            case LF_AURA_EFF:
-                return CONSOLE_COLOR_PURPLE;
-            case LF_SCRIPT_MGR:
-            case LF_DB_TABLES:
-                return CONSOLE_COLOR_YELLOW;
-            default:
-                return CONSOLE_COLOR_YELLOW;
-        }
-    }
-#endif
 }

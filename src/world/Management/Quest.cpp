@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,12 +19,9 @@
  *
  */
 
-#include "StdAfx.h"
-#include "Storage/MySQLStructures.h"
+
 #include "Storage/MySQLDataStore.hpp"
 #include "Quest.h"
-#include "Server/WorldSession.h"
-#include "QuestMgr.h"
 
 uint32 QuestProperties::GetRewardItemCount() const
 {

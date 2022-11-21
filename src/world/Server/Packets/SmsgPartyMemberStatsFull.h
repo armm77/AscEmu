@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -8,7 +8,7 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "ManagedPacket.h"
 #include "Spell/SpellAuras.h"
-#include "Units/Creatures/Pet.h"
+#include "Objects/Units/Creatures/Pet.h"
 
 namespace AscEmu::Packets
 {
@@ -44,7 +44,7 @@ namespace AscEmu::Packets
             {
                 packet << player->getGuid();
 
-                auto playerPet = player->GetSummon();
+                auto playerPet = player->getFirstPetFromSummons();
                 if (playerPet)
                     packet << uint32_t(0x7FFFFFFF);
                 else
@@ -66,7 +66,7 @@ namespace AscEmu::Packets
                 packet << uint64_t(auramask);
                 for (uint8_t i = 0; i < 64; ++i)
                 {
-                    if (const auto aurApp = player->GetAuraWithSlot(i))
+                    if (const auto aurApp = player->getAuraWithVisualSlot(i))
                     {
                         auramask |= (uint64_t(1) << i);
                         packet << uint32_t(aurApp->getSpellId());
@@ -92,7 +92,7 @@ namespace AscEmu::Packets
                     packet << uint64_t(petauramask);
                     for (uint8_t i = 0; i < 64; ++i)
                     {
-                        if (const auto auraApp = playerPet->GetAuraWithSlot(i))
+                        if (const auto auraApp = playerPet->getAuraWithVisualSlot(i))
                         {
                             petauramask |= (uint64_t(1) << i);
                             packet << uint32_t(auraApp->getSpellId());

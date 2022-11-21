@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2011 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,10 +18,10 @@
  */
 
 #include "Setup.h"
-#include "Objects/Faction.h"
+#include "Management/Faction.h"
 #include "Spell/SpellAuras.h"
 #include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.h"
+#include "Spell/Definitions/ProcFlags.hpp"
 
 bool Penance(uint8_t /*effectIndex*/, Spell* pSpell)
 {
@@ -141,7 +141,7 @@ bool PainAndSufferingProc(uint8_t /*effectIndex*/, Spell* pSpell)
         return true;
 
     // Set new aura's duration, reset event timer and set client visual aura
-    aura->refresh(true);
+    aura->refreshOrModifyStack(true);
 
     return true;
 }

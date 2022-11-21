@@ -1,12 +1,12 @@
-# Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 
 set(PATH_PREFIX Server/LogonCommClient)
 
 set(SRC_LOGON_COMMUNICATION_CLIENT_FILES
-   ${PATH_PREFIX}/LogonCommClient.cpp
-   ${PATH_PREFIX}/LogonCommClient.h
-   ${PATH_PREFIX}/LogonCommHandler.cpp
-   ${PATH_PREFIX}/LogonCommHandler.h
+    ${PATH_PREFIX}/LogonCommClient.cpp
+    ${PATH_PREFIX}/LogonCommClient.h
+    ${PATH_PREFIX}/LogonCommHandler.cpp
+    ${PATH_PREFIX}/LogonCommHandler.h
 )
 
 source_group(Server\\LogonCommClient FILES ${SRC_LOGON_COMMUNICATION_CLIENT_FILES})

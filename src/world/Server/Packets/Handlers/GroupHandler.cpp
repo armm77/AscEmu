@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
 #include "Server/Packets/CmsgGroupInvite.h"
 #include "Server/Packets/SmsgGroupInvite.h"
 #include "Server/Packets/SmsgPartyCommandResult.h"
@@ -17,20 +17,23 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgRequestPartyMemberStats.h"
 #include "Server/Packets/SmsgPartyMemberStatsFull.h"
 #include "Server/WorldSession.h"
-#include "Objects/ObjectMgr.h"
-#include "Map/MapMgr.h"
+#include "Management/ObjectMgr.h"
+#include "Map/Management/MapMgr.hpp"
 #include "Server/Packets/CmsgGroupChangeSubGroup.h"
 #include "Server/Packets/CmsgGroupAssistantLeader.h"
 #include "Server/Packets/MsgPartyAssign.h"
 #include "Server/Packets/MsgRaidReadyCheck.h"
+
+#if VERSION_STRING >= Cata
 #include "Server/Packets/SmsgGroupList.h"
+#endif
 
 using namespace AscEmu::Packets;
 
 #if VERSION_STRING >= Cata
 void WorldSession::sendEmptyGroupList(Player* player)
 {
-    player->SendPacket(SmsgGroupList().serialise().get());
+    player->sendPacket(SmsgGroupList().serialise().get());
 }
 
 void WorldSession::handleGroupInviteResponseOpcode(WorldPacket& recvPacket)
@@ -56,25 +59,16 @@ void WorldSession::handleGroupInviteResponseOpcode(WorldPacket& recvPacket)
             group->AddMember(_player->m_playerInfo);
             _player->m_dungeonDifficulty = group->m_difficulty;
             _player->sendDungeonDifficultyPacket();
-            return;
         }
         else
         {
+            // Added into ObjectMgr, should not leak memory
             group = new Group(true);
             group->m_difficulty = group_inviter->m_dungeonDifficulty;
             group->AddMember(group_inviter->m_playerInfo);
             group->AddMember(_player->m_playerInfo);
             _player->m_dungeonDifficulty = group->m_difficulty;
             _player->sendDungeonDifficultyPacket();
-
-            Instance* instance = sInstanceMgr.GetInstanceByIds(group_inviter->GetMapId(), group_inviter->GetInstanceID());
-            if (instance != nullptr && instance->m_creatorGuid == group_inviter->getGuidLow())
-            {
-                group->m_instanceIds[instance->m_mapId][instance->m_difficulty] = instance->m_instanceId;
-                instance->m_creatorGroup = group->GetID();
-                instance->m_creatorGuid = 0;
-                sInstanceMgr.SaveInstanceToDB(instance);
-            }
         }
     }
     else
@@ -88,7 +82,7 @@ void WorldSession::handleGroupInviteResponseOpcode(WorldPacket& recvPacket)
 
         WorldPacket data(SMSG_GROUP_DECLINE, strlen(_player->getName().c_str()));
         data << _player->getName().c_str();
-        group_inviter->GetSession()->SendPacket(&data);
+        group_inviter->getSession()->SendPacket(&data);
     }
 }
 
@@ -342,15 +336,15 @@ void WorldSession::handleGroupInviteOpcode(WorldPacket& recvPacket)
         data.WriteByteSeq(inviter_guid[5]);
         data.WriteByteSeq(inviter_guid[7]);
 
-        data.WriteString(_player->getName().c_str());
+        data.WriteString(_player->getName());
 
         data << int32_t(0);
 
-        player->GetSession()->SendPacket(&data);
+        player->getSession()->SendPacket(&data);
         return;
     }
 
-    if (player->getTeam() != _player->getTeam() && _player->GetSession()->GetPermissionCount() == 0 && !sWorld.settings.player.isInterfactionGroupEnabled)
+    if (player->getTeam() != _player->getTeam() && _player->getSession()->GetPermissionCount() == 0 && !sWorld.settings.player.isInterfactionGroupEnabled)
     {
         SendPacket(SmsgPartyCommandResult(0, member_name, ERR_PARTY_WRONG_FACTION).serialise().get());
         return;
@@ -368,7 +362,7 @@ void WorldSession::handleGroupInviteOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (player->isGMFlagSet() && !_player->GetSession()->HasPermissions())
+    if (player->isGMFlagSet() && !_player->getSession()->HasPermissions())
     {
         SendPacket(SmsgPartyCommandResult(0, member_name, ERR_PARTY_CANNOT_FIND).serialise().get());
         return;
@@ -413,11 +407,11 @@ void WorldSession::handleGroupInviteOpcode(WorldPacket& recvPacket)
     data.WriteByteSeq(inviter_guid[5]);
     data.WriteByteSeq(inviter_guid[7]);
 
-    data.WriteString(_player->getName().c_str());
+    data.WriteString(_player->getName());
 
     data << int32_t(0);
 
-    player->GetSession()->SendPacket(&data);
+    player->getSession()->SendPacket(&data);
 
     SendPacket(SmsgPartyCommandResult(0, member_name, ERR_PARTY_NO_ERROR).serialise().get());
 
@@ -458,11 +452,11 @@ void WorldSession::handleGroupInviteOpcode(WorldPacket& recvPacket)
     if (invitedPlayer->isInGroup())
     {
         SendPacket(SmsgPartyCommandResult(invitedPlayer->getGroup()->getGroupType(), srlPacket.name, ERR_PARTY_ALREADY_IN_GROUP).serialise().get());
-        invitedPlayer->GetSession()->SendPacket(SmsgGroupInvite(0, _player->getName().c_str()).serialise().get());
+        invitedPlayer->getSession()->SendPacket(SmsgGroupInvite(0, _player->getName().c_str()).serialise().get());
         return;
     }
 
-    if (invitedPlayer->getTeam() != _player->getTeam() && _player->GetSession()->GetPermissionCount() == 0 && !worldConfig.player.isInterfactionGroupEnabled)
+    if (invitedPlayer->getTeam() != _player->getTeam() && _player->getSession()->GetPermissionCount() == 0 && !worldConfig.player.isInterfactionGroupEnabled)
     {
         SendPacket(SmsgPartyCommandResult(0, srlPacket.name, ERR_PARTY_WRONG_FACTION).serialise().get());
         return;
@@ -480,13 +474,13 @@ void WorldSession::handleGroupInviteOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (invitedPlayer->isGMFlagSet() && !_player->GetSession()->HasPermissions())
+    if (invitedPlayer->isGMFlagSet() && !_player->getSession()->HasPermissions())
     {
         SendPacket(SmsgPartyCommandResult(0, srlPacket.name, ERR_PARTY_CANNOT_FIND).serialise().get());
         return;
     }
 
-    invitedPlayer->GetSession()->SendPacket(SmsgGroupInvite(1, _player->getName().c_str()).serialise().get());
+    invitedPlayer->getSession()->SendPacket(SmsgGroupInvite(1, _player->getName().c_str()).serialise().get());
 
     SendPacket(SmsgPartyCommandResult(0, srlPacket.name, ERR_PARTY_NO_ERROR).serialise().get());
 
@@ -502,7 +496,7 @@ void WorldSession::handleGroupDeclineOpcode(WorldPacket& /*recvPacket*/)
     if (inviter == nullptr)
         return;
 
-    inviter->SendPacket(SmsgGroupDecline(_player->getName()).serialise().get());
+    inviter->sendPacket(SmsgGroupDecline(_player->getName()).serialise().get());
     inviter->setGroupInviterId(0);
     _player->setGroupInviterId(0);
 }
@@ -522,22 +516,13 @@ void WorldSession::handleGroupAcceptOpcode(WorldPacket& /*recvPacket*/)
     auto group = player->getGroup();
     if (group == nullptr)
     {
+        // Added into ObjectMgr, should not leak memory
         group = new Group(true);
         group->AddMember(player->getPlayerInfo());
         group->AddMember(_player->getPlayerInfo());
         group->m_difficulty = player->m_dungeonDifficulty;
         _player->m_dungeonDifficulty = player->m_dungeonDifficulty;
         _player->sendDungeonDifficultyPacket();
-
-        const auto instance = sInstanceMgr.GetInstanceByIds(player->GetMapId(), player->GetInstanceID());
-        if (instance && instance->m_creatorGuid == player->getGuidLow())
-        {
-            group->m_instanceIds[instance->m_mapId][instance->m_difficulty] = instance->m_instanceId;
-            instance->m_creatorGroup = group->GetID();
-            instance->m_creatorGuid = 0;
-
-            sInstanceMgr.SaveInstanceToDB(instance);
-        }
     }
     else
     {
@@ -553,7 +538,7 @@ void WorldSession::handleGroupUninviteOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_GROUP_UNINVITE: %s (name)", srlPacket.name.c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GROUP_UNINVITE: %s (name)", srlPacket.name.c_str());
 
     const auto uninvitePlayer = sObjectMgr.GetPlayer(srlPacket.name.c_str(), false);
     if (uninvitePlayer == nullptr)
@@ -588,7 +573,7 @@ void WorldSession::handleGroupUninviteGuidOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_GROUP_UNINVITE_GUID: %u (guidLow)", srlPacket.guid.getGuidLow());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GROUP_UNINVITE_GUID: %u (guidLow)", srlPacket.guid.getGuidLow());
 
     const auto uninvitePlayer = sObjectMgr.GetPlayer(srlPacket.guid.getGuidLow());
     if (uninvitePlayer == nullptr)
@@ -637,7 +622,7 @@ void WorldSession::handleMinimapPingOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received MSG_MINIMAP_PING: %f (x), %f (y)", srlPacket.posX, srlPacket.posY);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_MINIMAP_PING: %f (x), %f (y)", srlPacket.posX, srlPacket.posY);
 
     if (!_player->isInGroup())
         return;
@@ -655,7 +640,7 @@ void WorldSession::handleGroupSetLeaderOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_GROUP_SET_LEADER: %u (guidLow)", srlPacket.guid.getGuidLow());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GROUP_SET_LEADER: %u (guidLow)", srlPacket.guid.getGuidLow());
 
     const auto targetPlayer = sObjectMgr.GetPlayer(srlPacket.guid.getGuidLow());
     if (targetPlayer == nullptr)
@@ -687,7 +672,7 @@ void WorldSession::handleLootMethodOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_LOOT_METHOD: %u (method), %u (guidLow), %u (theshold)", srlPacket.method, srlPacket.guid.getGuidLow(), srlPacket.threshold);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_LOOT_METHOD: %u (method), %u (guidLow), %u (theshold)", srlPacket.method, srlPacket.guid.getGuidLow(), srlPacket.threshold);
 
     if (!_player->isGroupLeader())
     {
@@ -713,7 +698,7 @@ void WorldSession::handleSetPlayerIconOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received MSG_RAID_TARGET_UPDATE: %u (icon)", srlPacket.icon);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_RAID_TARGET_UPDATE: %u (icon)", srlPacket.icon);
 
     const auto group = _player->getGroup();
     if (group == nullptr)
@@ -749,15 +734,15 @@ void WorldSession::handlePartyMemberStatsOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received CMSG_REQUEST_PARTY_MEMBER_STATS: %u (guidLow)", srlPacket.guid.getGuidLow());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_PARTY_MEMBER_STATS: %u (guidLow)", srlPacket.guid.getGuidLow());
 
-    if (_player->GetMapMgr() == nullptr)
+    if (_player->getWorldMap() == nullptr)
     {
-        sLogger.debug("Received CMSG_REQUEST_PARTY_MEMBER_STATS: But MapMgr is not ready!");
+        sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_PARTY_MEMBER_STATS: But MapMgr is not ready!");
         return;
     }
 
-    const auto requestedPlayer = _player->GetMapMgr()->GetPlayer(srlPacket.guid.getGuidLow());
+    const auto requestedPlayer = _player->getWorldMap()->getPlayer(srlPacket.guid.getGuidLow());
     if (_player->getGroup() == nullptr || requestedPlayer == nullptr)
     {
         SendPacket(SmsgPartyMemberStatsFull(srlPacket.guid, nullptr).serialise().get());
@@ -767,7 +752,7 @@ void WorldSession::handlePartyMemberStatsOpcode(WorldPacket& recvPacket)
     if (!_player->getGroup()->HasMember(requestedPlayer))
         return;
 
-    if (_player->IsVisible(requestedPlayer->getGuid()))
+    if (_player->isVisibleObject(requestedPlayer->getGuid()))
         return;
 
     SendPacket(SmsgPartyMemberStatsFull(requestedPlayer->getGuid(), requestedPlayer).serialise().get());
@@ -791,7 +776,7 @@ void WorldSession::handleConvertGroupToRaidOpcode(WorldPacket& /*recvPacket*/)
 
 void WorldSession::handleRequestRaidInfoOpcode(WorldPacket& /*recvPacket*/)
 {
-    sInstanceMgr.BuildRaidSavedInstancesForPlayer(_player);
+    _player->sendRaidInfo();
 }
 
 void WorldSession::handleGroupChangeSubGroup(WorldPacket& recvPacket)
@@ -800,7 +785,7 @@ void WorldSession::handleGroupChangeSubGroup(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto playerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name.c_str());
+    const auto playerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.name);
     if (playerInfo == nullptr || playerInfo->m_Group == nullptr)
         return;
 
@@ -857,7 +842,7 @@ void WorldSession::handleGroupPromote(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    PlayerInfo* playerInfo = nullptr;
+    CachedCharacterInfo* playerInfo = nullptr;
 
     if (srlPacket.isActivated)
         playerInfo = sObjectMgr.GetPlayerInfo(srlPacket.guid.getGuidLow());
@@ -887,10 +872,12 @@ void WorldSession::handleReadyCheckOpcode(WorldPacket& recvPacket)
         if (!srlPacket.deserialise(recvPacket))
             return;
 
-        if (group->GetLeader() && group->GetLeader()->m_loggedInPlayer)
-            group->GetLeader()->m_loggedInPlayer->SendPacket(MsgRaidReadyCheck(_player->getGuid(), srlPacket.isReady, false).serialise().get());
+        if (group->GetLeader())
+            if (Player* leader = sObjectMgr.GetPlayer(group->GetLeader()->guid))
+                leader->sendPacket(MsgRaidReadyCheck(_player->getGuid(), srlPacket.isReady, false).serialise().get());
 
-        if (group->GetAssistantLeader() && group->GetAssistantLeader()->m_loggedInPlayer)
-            group->GetAssistantLeader()->m_loggedInPlayer->SendPacket(MsgRaidReadyCheck(_player->getGuid(), srlPacket.isReady, false).serialise().get());
+        if (group->GetAssistantLeader())
+            if (Player* assistant = sObjectMgr.GetPlayer(group->GetAssistantLeader()->guid))
+                assistant->sendPacket(MsgRaidReadyCheck(_player->getGuid(), srlPacket.isReady, false).serialise().get());
     }
 }

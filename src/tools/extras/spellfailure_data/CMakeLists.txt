@@ -1,9 +1,9 @@
-# Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 
 file(GLOB spellfailure_data_sources *.cpp)
 
 set(spellfailure_SRCS
-  ${spellfailure_data_sources}
+    ${spellfailure_data_sources}
 )
 
 add_executable(spellfailure_data ${spellfailure_SRCS})

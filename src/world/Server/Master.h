@@ -1,15 +1,12 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include "Common.hpp"
-#include "Config/Config.h"
-#include "Database/DatabaseCommon.hpp"
 #include "MainServerDefines.h"
-#include "../shared/AscemuServerDefines.hpp"
 #include <iostream>
 
 class SERVER_DECL Master
@@ -31,7 +28,7 @@ class SERVER_DECL Master
 
         bool Run(int argc, char** argv);
         void PrintBanner();
-        bool LoadWorldConfiguration(char* config_file);
+        bool LoadWorldConfiguration(std::string config_file);
         void OpenCheatLogFiles();
         void StartNetworkSubsystem();
         void StartRemoteConsole();
@@ -46,7 +43,7 @@ class SERVER_DECL Master
         bool m_restartEvent;
 
         //lib Log
-        void libLog(const char* format, ...)
+        inline void libLog(const char* format, ...)
         {
             char message_buffer[32768];
             va_list ap;
@@ -55,7 +52,7 @@ class SERVER_DECL Master
             vsnprintf(message_buffer, 32768, format, ap);
             va_end(ap);
 
-            std::cout << message_buffer << std::endl;
+            std::cout << message_buffer << "\n";
         }
 
     private:

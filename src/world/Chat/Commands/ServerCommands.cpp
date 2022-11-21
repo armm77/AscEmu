@@ -1,14 +1,16 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "StdAfx.h"
+
+#include "Chat/ChatHandler.hpp"
 #include "Server/WorldSocket.h"
 #include "Storage/MySQLDataStore.hpp"
 #include "Server/MainServerDefines.h"
 #include "Server/Master.h"
 #include "Server/Packets/SmsgServerMessage.h"
+#include "Server/Script/ScriptMgr.h"
 
 //.server info
 bool ChatHandler::HandleServerInfoCommand(const char* /*args*/, WorldSession* m_session)
@@ -20,11 +22,11 @@ bool ChatHandler::HandleServerInfoCommand(const char* /*args*/, WorldSession* m_
     sObjectMgr._playerslock.lock();
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
-        if (itr->second->GetSession())
+        if (itr->second->getSession())
         {
             online_count++;
-            latency_avg += itr->second->GetSession()->GetLatency();
-            if (itr->second->GetSession()->GetPermissionCount())
+            latency_avg += itr->second->getSession()->GetLatency();
+            if (itr->second->getSession()->GetPermissionCount())
             {
                 if (!worldConfig.gm.listOnlyActiveGms)
                 {
@@ -42,7 +44,7 @@ bool ChatHandler::HandleServerInfoCommand(const char* /*args*/, WorldSession* m_
 
     uint32 active_sessions = uint32(sWorld.getSessionCount());
 
-    GreenSystemMessage(m_session, "Server Revision: |r%sAscEmu %s/%s-%s-%s %s(www.ascemu.org)", MSG_COLOR_WHITE, BUILD_HASH_STR, CONFIG, PLATFORM_TEXT, ARCH, MSG_COLOR_LIGHTBLUE);
+    GreenSystemMessage(m_session, "Server Revision: |r%sAscEmu %s/%s-%s-%s %s(www.ascemu.org)", MSG_COLOR_WHITE, BUILD_HASH_STR, CONFIG, AE_PLATFORM, AE_ARCHITECTURE, MSG_COLOR_LIGHTBLUE);
     GreenSystemMessage(m_session, "Server Uptime: |r%s", sWorld.getWorldUptimeString().c_str());
     GreenSystemMessage(m_session, "Active Sessions: |r%u", active_sessions);
     GreenSystemMessage(m_session, "Current GMs: |r%u GMs", online_gm);
@@ -102,7 +104,7 @@ bool ChatHandler::HandleServerSaveCommand(const char* args, WorldSession* m_sess
 
     if (player_target->m_nextSave < 180000)
     {
-        player_target->SaveToDB(false);
+        player_target->saveToDB(false);
         GreenSystemMessage(m_session, "Player %s saved to DB", player_target->getName().c_str());
     }
     else
@@ -122,9 +124,9 @@ bool ChatHandler::HandleServerSaveAllCommand(const char* /*args*/, WorldSession*
     sObjectMgr._playerslock.lock();
     for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
     {
-        if (itr->second->GetSession())
+        if (itr->second->getSession())
         {
-            itr->second->SaveToDB(false);
+            itr->second->saveToDB(false);
             online_count++;
         }
     }
@@ -354,12 +356,12 @@ bool ChatHandler::HandleReloadNpcScriptTextCommand(const char* /*args*/, WorldSe
     return true;
 }
 
-//.server reload npc_text
+//.server reload npc_gossip_text
 bool ChatHandler::HandleReloadNpcTextCommand(const char* /*args*/, WorldSession* m_session)
 {
     auto startTime = Util::TimeNow();
     sMySQLStore.loadNpcTextTable();
-    GreenSystemMessage(m_session, "WorldDB 'npc_text' table reloaded in %u ms", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    GreenSystemMessage(m_session, "WorldDB 'npc_gossip_text' table reloaded in %u ms", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
     return true;
 }
 

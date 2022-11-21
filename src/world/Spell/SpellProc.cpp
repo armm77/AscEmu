@@ -1,12 +1,12 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "SpellProc.h"
+#include "SpellProc.hpp"
 
-#include "Definitions/ProcFlags.h"
-#include "SpellMgr.h"
+#include "Definitions/ProcFlags.hpp"
+#include "SpellMgr.hpp"
 
 #include "Server/Script/ScriptMgr.h"
 
@@ -33,7 +33,7 @@ bool SpellProc::checkExtraProcFlags([[maybe_unused]]Unit* procOwner, DamageInfo 
 
 #if VERSION_STRING < WotLK
     // In Classic and TBC weapon enchantments never proc while in feral forms
-    if (procOwner->isPlayer() && static_cast<Player*>(procOwner)->IsInFeralForm() &&
+    if (procOwner->isPlayer() && static_cast<Player*>(procOwner)->isInFeralForm() &&
         (mExtraProcFlags & EXTRA_PROC_ON_MAIN_HAND_HIT_ONLY ||
         mExtraProcFlags & EXTRA_PROC_ON_OFF_HAND_HIT_ONLY))
         return false;
@@ -70,7 +70,7 @@ bool SpellProc::checkClassMask(SpellInfo const* castingSpell) const
     return false;
 }
 
-bool SpellProc::doEffect(Unit* /*victim*/, SpellInfo const* /*castingSpell*/, uint32_t /*flag*/, uint32_t /*dmg*/, uint32_t /*abs*/, int* /*dmgOverwrite*/, uint32_t /*weaponDamageType*/)
+bool SpellProc::doEffect(Unit* /*victim*/, SpellInfo const* /*castingSpell*/, uint32_t /*flag*/, uint32_t /*dmg*/, uint32_t /*abs*/, uint32_t /*weaponDamageType*/)
 {
     return false;
 }
@@ -79,7 +79,7 @@ uint32_t SpellProc::calcProcChance(Unit* /*victim*/, SpellInfo const* /*castingS
 {
     // Check if proc chance is based on combo points
     if (mOwner->isPlayer() && mOrigSpell != nullptr && mOrigSpell->getAttributesEx() & ATTRIBUTESEX_REQ_COMBO_POINTS1 && mOrigSpell->getAttributesExD() & ATTRIBUTESEXD_PROCCHANCE_COMBOBASED)
-        return float2int32(static_cast<Player*>(mOwner)->m_comboPoints * mOrigSpell->getEffectPointsPerComboPoint(0));
+        return static_cast<uint32_t>(static_cast<Player*>(mOwner)->getComboPoints() * mOrigSpell->getEffectPointsPerComboPoint(0));
     else
         return mProcChance;
 }
@@ -98,7 +98,7 @@ void SpellProc::castSpell(Unit* victim, SpellInfo const* castingSpell)
         if (getCasterGuid() == getProcOwner()->getGuid())
             caster = getProcOwner();
         else
-            caster = getProcOwner()->GetMapMgrUnit(getCasterGuid());
+            caster = getProcOwner()->getWorldMapUnit(getCasterGuid());
     }
 
     if (caster == nullptr)
@@ -107,10 +107,7 @@ void SpellProc::castSpell(Unit* victim, SpellInfo const* castingSpell)
     SpellCastTargets targets(victim->getGuid());
     Spell* spell = sSpellMgr.newSpell(caster, mSpell, true, nullptr);
 
-    for (uint8_t i = 0; i < MAX_SPELL_EFFECTS; ++i)
-    {
-        spell->forced_basepoints[i] = getOverrideEffectDamage(i);
-    }
+    spell->forced_basepoints = mOverrideEffectDamage;
 
     spell->ProcedOnSpell = castingSpell;
     if (mOrigSpell != nullptr)
@@ -172,20 +169,14 @@ void SpellProc::setCastedOnProcOwner(bool enable) { m_castOnProcOwner = enable; 
 
 int32_t SpellProc::getOverrideEffectDamage(uint8_t effIndex) const
 {
-    if (effIndex >= MAX_SPELL_EFFECTS)
-        return 0;
-
-    return mOverrideEffectDamage[effIndex];
+    int32_t overrideValue = 0;
+    mOverrideEffectDamage.get(effIndex, &overrideValue);
+    return overrideValue;
 }
-
-int32_t* SpellProc::getOverrideEffectDamages() { return mOverrideEffectDamage; }
 
 void SpellProc::setOverrideEffectDamage(uint8_t effIndex, int32_t damage)
 {
-    if (effIndex >= MAX_SPELL_EFFECTS)
-        return;
-
-    mOverrideEffectDamage[effIndex] = damage;
+    mOverrideEffectDamage.set(effIndex, damage);
 }
 
 Aura* SpellProc::getCreatedByAura() const { return m_createdByAura; }
@@ -281,11 +272,6 @@ SpellProc* SpellProcMgr::newSpellProc(Unit* owner, SpellInfo const* spellInfo, S
         result->mProcClassMask[0] = 0;
         result->mProcClassMask[1] = 0;
         result->mProcClassMask[2] = 0;
-    }
-
-    for (uint8_t i = 0; i < MAX_SPELL_EFFECTS; ++i)
-    {
-        result->mOverrideEffectDamage[i] = 0;
     }
 
     if (sScriptMgr.getSpellScript(spellInfo->getId()) != nullptr)

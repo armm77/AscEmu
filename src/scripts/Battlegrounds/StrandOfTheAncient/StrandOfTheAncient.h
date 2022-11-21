@@ -1,18 +1,16 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Management/Battleground/Battleground.h"
+#include "Management/Battleground/Battleground.hpp"
 #include "StrandOfTheAncientDefinitions.h"
 
-
-class StrandOfTheAncient : public CBattleground
+class StrandOfTheAncient : public Battleground
 {
 private:
-
     uint32_t Attackers;   // 0 - horde / 1 - alliance
     uint32_t Defenders;
     uint32_t BattleRound;
@@ -37,10 +35,9 @@ private:
     SOTAGraveyard graveyard[NUM_SOTA_GRAVEYARDS];
 
 public:
+    static Battleground* Create(BattlegroundMap* m, uint32_t i, uint32_t l, uint32_t t) { return new StrandOfTheAncient(m, i, l, t); }
 
-    static CBattleground* Create(MapMgr* m, uint32_t i, uint32_t l, uint32_t t) { return new StrandOfTheAncient(m, i, l, t); }
-
-    StrandOfTheAncient(MapMgr* mgr, uint32_t id, uint32_t lgroup, uint32_t t);
+    StrandOfTheAncient(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t);
     ~StrandOfTheAncient();
 
     uint32_t GetNameID() override { return 34; }   //\todo in worldstring_tables ?

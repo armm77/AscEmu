@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,6 +19,8 @@
 
 #ifndef AUTHSTRUCTS_H
 #define AUTHSTRUCTS_H
+
+#include "CommonTypes.hpp"
 
 #pragma pack(push,1)
 typedef struct

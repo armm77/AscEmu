@@ -1,30 +1,32 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include "Data/Flags.hpp"
-#include "Units/UnitDefines.hpp"
 #include "WorldPacket.h"
 #include "MovementDefines.h"
 #include "LocationVector.h"
 #include "CommonDefines.hpp"
+#include "Macros/MapsMacros.hpp"
+#include "Map/Cells/CellHandlerDefines.hpp"
 
 
 struct MovementInfo
 {
     MovementInfo() : flags(0), flags2(0), update_time(0),
         position(0.f, 0.f, 0.f, 0.f),
-        transport_guid(0), transport_position(0.f, 0.f, 0.f, 0.f), transport_time(0),
+        pitch_rate(0.f), fall_time(0), spline_elevation(0.f),
+        transport_guid(0), transport_position(0.f, 0.f, 0.f, 0.f), transport_time(0)
 #if VERSION_STRING >= WotLK
-        transport_seat(0), transport_time2(0),
+        , transport_seat(0), transport_time2(0)
 #endif
 #if VERSION_STRING >= Cata
-        byte_parameter(0),
+        , byte_parameter(0)
 #endif
-        pitch_rate(0.f), fall_time(0), spline_elevation(0.f) {}
+         {}
 
 #if VERSION_STRING >= Cata
     ObjectGuid const& getGuid() const { return guid; }
@@ -54,6 +56,8 @@ struct MovementInfo
     float getPitch() const { return pitch_rate; }
     uint32_t getFallTime() const { return fall_time; }
     float getSplineElevation() const { return spline_elevation; }
+
+    void setFallTime(uint32_t val) { fall_time = val; }
 
 #if VERSION_STRING >= Cata
     int8_t getByteParam() const { return byte_parameter; }
@@ -118,8 +122,13 @@ struct MovementInfo
 #endif
     }
 
+#if VERSION_STRING < Cata
     void readMovementInfo(ByteBuffer& data, uint16_t opcode);
     void writeMovementInfo(ByteBuffer& data, uint16_t opcode, float custom_speed = 0.f) const;
+#else
+    void readMovementInfo(ByteBuffer& data, uint16_t opcode, ExtraMovementStatusElement* extras = nullptr);
+    void writeMovementInfo(ByteBuffer& data, uint16_t opcode, float custom_speed = 0.f, ExtraMovementStatusElement* extras = nullptr) const;
+#endif
 
     uint32_t flags;
 
@@ -198,4 +207,32 @@ inline float normalizeOrientation(float orientation)
     }
 
     return fmod(orientation, 2.0f * static_cast<float>(M_PI));
+}
+
+inline void normalizeMapCoord(float &c)
+{
+    if (c > Map::Terrain::MapHalfSize - 0.5f)
+        c = Map::Terrain::MapHalfSize - 0.5f;
+    else if (c < -(Map::Terrain::MapHalfSize - 0.5f))
+        c = -(Map::Terrain::MapHalfSize - 0.5f);
+}
+
+inline bool isValidMapCoord(float c)
+{
+    return std::isfinite(c) && (std::fabs(c) <= Map::Terrain::MapHalfSize - 0.5f);
+}
+
+inline bool isValidMapCoord(float x, float y)
+{
+    return isValidMapCoord(x) && isValidMapCoord(y);
+}
+
+inline bool isValidMapCoord(float x, float y, float z)
+{
+    return isValidMapCoord(x, y) && isValidMapCoord(z);
+}
+
+inline bool isValidMapCoord(float x, float y, float z, float o)
+{
+    return isValidMapCoord(x, y, z) && std::isfinite(o);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -29,12 +29,12 @@ void Hanazua(Player* pPlayer, Object* pObject)
     say = "Go swiftly, ";
     say += pPlayer->getName();
     say += ", my fate is in your hands.";
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, say.c_str());
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, say.c_str());
 }
 
 void AHumbleTask(Player* /*pPlayer*/, Object* pObject)
 {
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Greatmother Hawkwind gestures to the pitcher of water sitting on the edge of the well.");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Greatmother Hawkwind gestures to the pitcher of water sitting on the edge of the well.");
 }
 
 void Yorus_Barleybrew(Player* pPlayer, Object* pObject)
@@ -50,23 +50,23 @@ void Menara_Voidrender(Player* /*pPlayer*/, Object* pObject)
 
 void Hanazua_III(Player* /*pPlayer*/, Object* pObject)
 {
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Killed  Sarkoth !!");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Killed  Sarkoth !!");
 }
 
 void TheFamilyAndTheFishingPole(Player* /*pPlayer*/, Object* pObject)
 {
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "I got some extras with me; if you pay me back what i paid for them, you can have one. I got some bait too.");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "I got some extras with me; if you pay me back what i paid for them, you can have one. I got some bait too.");
 }
 
 void MillysHarvest(Player* /*pPlayer*/, Object* pObject)
 {
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "I hope for you!");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "I hope for you!");
     (static_cast<Creature*>(pObject))->eventAddEmote(EMOTE_ONESHOT_CRY, 2000);
 }
 
 void Rest_n_Relaxation(Player* /*pPlayer*/, Object* pObject)
 {
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Think of small pumpkins, my friend!!");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Think of small pumpkins, my friend!!");
     (static_cast<Creature*>(pObject))->emote(EMOTE_ONESHOT_CHEER);
 }
 
@@ -74,16 +74,16 @@ void OntoGoldshireComplete(Player* pPlayer, Object* pObject)
 {
     char msg[256];
     snprintf((char*)msg, 256, "You are dismissed %s . ", pPlayer->getName().c_str());
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, msg);
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, msg);
     (static_cast<Creature*>(pObject))->emote(EMOTE_ONESHOT_BOW);
 }
 
 void ZuluhedtheWhacked(Player* pPlayer, Object* /*pObject*/)
 {
-    Creature* Zuluhed = pPlayer->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(-4206.199219f, 313.5462f, 122.907f, 11980);
+    Creature* Zuluhed = pPlayer->getWorldMap()->getInterface()->getCreatureNearestCoords(-4206.199219f, 313.5462f, 122.907f, 11980);
     if(Zuluhed == nullptr)
     {
-        pPlayer->GetMapMgr()->CreateAndSpawnCreature(11980, -4206.199219f, 313.5462f, 122.907f, 1.2589f);
+        pPlayer->getWorldMap()->createAndSpawnCreature(11980, LocationVector(-4206.199219f, 313.5462f, 122.907f, 1.2589f));
     }
 }
 
@@ -142,7 +142,7 @@ void Wishock(Player* pPlayer, Object* pObject)
 {
     (static_cast<Creature*>(pObject))->setStandState(STANDSTATE_DEAD);
     pPlayer->emote(EMOTE_STATE_LAUGH);
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Arrgh...");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Arrgh...");
 }
 
 void CapturedMountaineer(Player* pPlayer, Object* pObject)
@@ -150,22 +150,22 @@ void CapturedMountaineer(Player* pPlayer, Object* pObject)
     std::string say = "I raise my brew and hope to be rid of the likes of you!  Cheers, you no good scoundrel, ";
     say += pPlayer->getName();
     say += "!";
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, say.c_str());
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, say.c_str());
 }
 
 void PlaguedLands(Player* /*pPlayer*/, Object* pObject)
 {
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Be cleansed!");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Be cleansed!");
 }
 
 void DeeprunRatRoundup(Player* /*pPlayer*/, Object* pObject)
 {
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Into the box me pretties! Thas it. One by one ye go.");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Into the box me pretties! Thas it. One by one ye go.");
 }
 
 void MaybellComplete(Player* /*pPlayer*/, Object* pObject)
 {
-    (static_cast<Creature*>(pObject))->SendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "Here goes nothing...");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_YELL, LANG_UNIVERSAL, "Here goes nothing...");
     (static_cast<Creature*>(pObject))->emote(EMOTE_ONESHOT_CRY);
     (static_cast<Creature*>(pObject))->Despawn(5000, 30000);
 }
@@ -203,7 +203,7 @@ void OnQuestFinished(Player* pPlayer, QuestProperties* pQuest, Object* pObject)
 
 void ZuluhedtheWhackedCancel(Player* pPlayer)
 {
-    Creature* Zuluhed = pPlayer->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(-4206.199219f, 313.5462f, 122.907f, 11980);
+    Creature* Zuluhed = pPlayer->getWorldMap()->getInterface()->getCreatureNearestCoords(-4206.199219f, 313.5462f, 122.907f, 11980);
     if(Zuluhed != nullptr)
     {
         Zuluhed->Despawn(0, 0);
@@ -233,7 +233,7 @@ void InnkeeperFlex(Player* pPlayer, Unit* pUnit)
         if (auto* questLog = pPlayer->getQuestLogByQuestId(8356))
         {
             questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -242,7 +242,7 @@ void InnkeeperFlex(Player* pPlayer, Unit* pUnit)
         if (auto* questLog = pPlayer->getQuestLogByQuestId(8359))
         {
             questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -255,7 +255,7 @@ void InnkeeperDance(Player* pPlayer, Unit* pUnit)
         if (auto* questLog = pPlayer->getQuestLogByQuestId(8357))
         {
             questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -264,7 +264,7 @@ void InnkeeperDance(Player* pPlayer, Unit* pUnit)
         if (auto* questLog = pPlayer->getQuestLogByQuestId(8360))
         {
             questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -277,7 +277,7 @@ void InnkeeperTrain(Player* pPlayer, Unit* pUnit)
         if (auto* questLog = pPlayer->getQuestLogByQuestId(8355))
         {
             questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -286,7 +286,7 @@ void InnkeeperTrain(Player* pPlayer, Unit* pUnit)
         if (auto* questLog = pPlayer->getQuestLogByQuestId(8358))
         {
             questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -299,7 +299,7 @@ void InnkeeperChicken(Player* pPlayer, Unit* pUnit)
         if (auto* questLog = pPlayer->getQuestLogByQuestId(8353))
         {
             questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -308,7 +308,7 @@ void InnkeeperChicken(Player* pPlayer, Unit* pUnit)
         if (auto* questLog = pPlayer->getQuestLogByQuestId(8354))
         {
             questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-            questLog->SendUpdateAddKill(0);
+            questLog->sendUpdateAddKill(0);
             questLog->updatePlayerFields();
         }
     }
@@ -316,8 +316,8 @@ void InnkeeperChicken(Player* pPlayer, Unit* pUnit)
 
 void OnEmote(Player* pPlayer, uint32_t Emote, Unit* pUnit)
 {
-    pUnit = pPlayer->GetMapMgr()->GetUnit(pPlayer->getTargetGuid());
-    if(!pUnit || !pUnit->isAlive() || pUnit->GetAIInterface()->getNextTarget())
+    pUnit = pPlayer->getWorldMap()->getUnit(pPlayer->getTargetGuid());
+    if(!pUnit || !pUnit->isAlive() || pUnit->getAIInterface()->getCurrentTarget())
         return;
 
     switch(Emote)
@@ -346,20 +346,33 @@ void OnEmote(Player* pPlayer, uint32_t Emote, Unit* pUnit)
 void InvasionPointCataclysm(Player* pPlayer, uint32_t /*AreaTrigger*/)
 {
     if (pPlayer->hasQuestInQuestLog(10766))
-        pPlayer->SafeTeleport(530, 0, -2723.674561f, 1952.664673f, 146.939743f, 3.185559f);
+        pPlayer->safeTeleport(530, 0, LocationVector(-2723.674561f, 1952.664673f, 146.939743f, 3.185559f));
+}
+
+void TheAffray(Player* pPlayer, uint32_t /*AreaTrigger*/)
+{
+    if (pPlayer->hasQuestInQuestLog(1719))
+    {
+        Creature* twiggy = pPlayer->getWorldMap()->getInterface()->findNearestCreature(pPlayer, 6248, 30.0f);
+        if (twiggy && twiggy->GetScript())
+        {
+            twiggy->GetScript()->SetCreatureData64(1, pPlayer->getGuid());
+            twiggy->GetScript()->DoAction(1);
+        }
+    }
 }
 
 void Scratches(Player* pPlayer, uint32_t /*AreaTrigger*/)
 {
     if (auto* questLog = pPlayer->getQuestLogByQuestId(10556))
     {
-        Creature* Kaliri = pPlayer->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), 21468);
+        Creature* Kaliri = pPlayer->getWorldMap()->getInterface()->getCreatureNearestCoords(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), 21468);
         if (Kaliri == nullptr)
             return;
 
         Kaliri->Despawn(0, 0);
         questLog->setMobCountForIndex(0, questLog->getMobCountByIndex(0) + 1);
-        questLog->SendUpdateAddKill(0);
+        questLog->sendUpdateAddKill(0);
         questLog->updatePlayerFields();
     }
 }
@@ -373,6 +386,9 @@ void OnAreaTrigger(Player* pPlayer, uint32_t AreaTrigger)
             break;
         case 4560:
             InvasionPointCataclysm(pPlayer, 4560);
+            break;
+        case 522:
+            TheAffray(pPlayer, 522);
             break;
     }
 }

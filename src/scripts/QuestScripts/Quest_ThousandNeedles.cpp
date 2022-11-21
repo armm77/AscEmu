@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,20 +19,25 @@
  */
 
 #include "Setup.h"
+#include "Server/Script/CreatureAIScript.h"
 
 class Paoka_Swiftmountain : public CreatureAIScript
 {
-    ADD_CREATURE_FACTORY_FUNCTION(Paoka_Swiftmountain)
+public:
+    static CreatureAIScript* Create(Creature* c) { return new Paoka_Swiftmountain(c); }
     explicit Paoka_Swiftmountain(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
     // makes no sense... why do we check on wp 72 if player has this quest.... too late?
-    void OnReachWP(uint32_t iWaypointId, bool /*bForwards*/) override
+    void OnReachWP(uint32_t type, uint32_t iWaypointId) override
     {
+        if (type != WAYPOINT_MOTION_TYPE)
+            return;
+
         if (iWaypointId == 72)
         {
-            getCreature()->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "I appreciate the help you have shown Pao'ka. I hope this covers any misfortunes this deed has cost you.");
+            getCreature()->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "I appreciate the help you have shown Pao'ka. I hope this covers any misfortunes this deed has cost you.");
             getCreature()->Despawn(5000, 1000);
-            getCreature()->DeleteWaypoints();
+            getCreature()->stopMoving();
             if (getCreature()->m_escorter == nullptr)
                 return;
 
@@ -48,21 +53,20 @@ class Paoka_Swiftmountain : public CreatureAIScript
 class RumorsforKravel : public QuestScript
 {
 public:
-
     void OnQuestComplete(Player* mTarget, QuestLogEntry* /*qLogEntry*/) override
     {
         float SSX = mTarget->GetPositionX();
         float SSY = mTarget->GetPositionY();
         float SSZ = mTarget->GetPositionZ();
 
-        Creature* creat = mTarget->GetMapMgr()->GetInterface()->GetCreatureNearestCoords(SSX, SSY, SSZ, 4452);
-        if (creat == NULL)
+        Creature* creat = mTarget->getWorldMap()->getInterface()->getCreatureNearestCoords(SSX, SSY, SSZ, 4452);
+        if (creat == nullptr)
             return;
 
         std::string msg = "Hahah! ";
         msg += mTarget->getName();
         msg += ", you make quite a partner!";
-        creat->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg.c_str());
+        creat->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg.c_str());
         creat->emote(EMOTE_ONESHOT_LAUGH);
     }
 };

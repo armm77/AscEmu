@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -45,26 +45,26 @@ extern "C" SCRIPT_DECL uint32_t _exp_get_script_type()
 extern "C" SCRIPT_DECL void _exp_script_register(ScriptMgr* /*mgr*/)
 {
     // Mapping Battleground type to map Id
-    sBattlegroundManager.RegisterMapForBgType(BATTLEGROUND_ALTERAC_VALLEY, 30);
-    sBattlegroundManager.RegisterMapForBgType(BATTLEGROUND_WARSONG_GULCH, 489);
-    sBattlegroundManager.RegisterMapForBgType(BATTLEGROUND_ARATHI_BASIN, 529);
-    sBattlegroundManager.RegisterMapForBgType(BATTLEGROUND_EYE_OF_THE_STORM, 566);
-    sBattlegroundManager.RegisterMapForBgType(BATTLEGROUND_STRAND_OF_THE_ANCIENT, 607);
-    sBattlegroundManager.RegisterMapForBgType(BATTLEGROUND_ISLE_OF_CONQUEST, 628);
+    sBattlegroundManager.registerMapForBgType(BattlegroundDef::TYPE_ALTERAC_VALLEY, 30);
+    sBattlegroundManager.registerMapForBgType(BattlegroundDef::TYPE_WARSONG_GULCH, 489);
+    sBattlegroundManager.registerMapForBgType(BattlegroundDef::TYPE_ARATHI_BASIN, 529);
+    sBattlegroundManager.registerMapForBgType(BattlegroundDef::TYPE_EYE_OF_THE_STORM, 566);
+    sBattlegroundManager.registerMapForBgType(BattlegroundDef::TYPE_STRAND_OF_THE_ANCIENT, 607);
+    sBattlegroundManager.registerMapForBgType(BattlegroundDef::TYPE_ISLE_OF_CONQUEST, 628);
 
     // Registering factory methods
-    sBattlegroundManager.RegisterBgFactory(30, &AlteracValley::Create);
-    sBattlegroundManager.RegisterBgFactory(489, &WarsongGulch::Create);
-    sBattlegroundManager.RegisterBgFactory(529, &ArathiBasin::Create);
-    sBattlegroundManager.RegisterBgFactory(566, &EyeOfTheStorm::Create);
-    sBattlegroundManager.RegisterBgFactory(607, &StrandOfTheAncient::Create);
-    sBattlegroundManager.RegisterBgFactory(628, &IsleOfConquest::Create);
+    sBattlegroundManager.registerBgFactory(30, &AlteracValley::Create);
+    sBattlegroundManager.registerBgFactory(489, &WarsongGulch::Create);
+    sBattlegroundManager.registerBgFactory(529, &ArathiBasin::Create);
+    sBattlegroundManager.registerBgFactory(566, &EyeOfTheStorm::Create);
+    sBattlegroundManager.registerBgFactory(607, &StrandOfTheAncient::Create);
+    sBattlegroundManager.registerBgFactory(628, &IsleOfConquest::Create);
 
-    sBattlegroundManager.RegisterArenaFactory(559, &RingOfTrials::Create);
-    sBattlegroundManager.RegisterArenaFactory(562, &CircleOfBlood::Create);
-    sBattlegroundManager.RegisterArenaFactory(572, &RuinsOfLordaeron::Create);
-    sBattlegroundManager.RegisterArenaFactory(617, &DalaranSewers::Create);
-    sBattlegroundManager.RegisterArenaFactory(618, &RingOfValor::Create);
+    sBattlegroundManager.registerArenaFactory(559, &RingOfTrials::Create);
+    sBattlegroundManager.registerArenaFactory(562, &CircleOfBlood::Create);
+    sBattlegroundManager.registerArenaFactory(572, &RuinsOfLordaeron::Create);
+    sBattlegroundManager.registerArenaFactory(617, &DalaranSewers::Create);
+    sBattlegroundManager.registerArenaFactory(618, &RingOfValor::Create);
 }
 
 #ifdef WIN32

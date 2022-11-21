@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,10 +18,10 @@
  */
 
 #include "Setup.h"
-#include "Objects/Faction.h"
+#include "Management/Faction.h"
 #include "Spell/SpellAuras.h"
 #include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.h"
+#include "Spell/Definitions/ProcFlags.hpp"
 
 bool Starfall(uint8_t effectIndex, Spell* pSpell)
 {
@@ -36,7 +36,7 @@ bool Starfall(uint8_t effectIndex, Spell* pSpell)
             continue;
 
         Unit* Target = static_cast<Unit*>(itr);
-        if (isAttackable(Target, m_caster) && m_caster->CalcDistance(itr) <= pSpell->GetRadius(effectIndex))
+        if (isAttackable(Target, m_caster) && m_caster->CalcDistance(itr) <= pSpell->getEffectRadius(effectIndex))
         {
             m_caster->castSpell(Target, pSpell->getSpellInfo()->calculateEffectValue(effectIndex, m_caster), true);
             ++am;
@@ -61,7 +61,7 @@ bool PredatoryStrikes(uint8_t effectIndex, Aura* a, bool apply)
     else
         m_target->modAttackPowerMods(-realamount);
 
-    m_target->CalcDamage();
+    m_target->calculateDamage();
 
     return true;
 }
@@ -93,16 +93,16 @@ bool LifeBloom(uint8_t /*effectIndex*/, Aura* a, bool apply)
 
     // Remove other Lifeblooms - but do NOT handle unapply again
     bool expired = true;
-    for (uint32_t x = MAX_POSITIVE_AURAS_EXTEDED_START; x < MAX_POSITIVE_AURAS_EXTEDED_END; x++)
+    for (uint16_t x = AuraSlots::POSITIVE_SLOT_START; x < AuraSlots::POSITIVE_SLOT_END; ++x)
     {
-        if (m_target->m_auras[x])
+        if (auto* const aur = m_target->getAuraWithAuraSlot(x))
         {
-            if (m_target->m_auras[x]->getSpellId() == a->getSpellId())
+            if (aur->getSpellId() == a->getSpellId())
             {
-                m_target->m_auras[x]->m_ignoreunapply = true;
-                if (m_target->m_auras[x]->getTimeLeft())
+                aur->m_ignoreunapply = true;
+                if (aur->getTimeLeft())
                     expired = false;
-                m_target->m_auras[x]->removeAura();
+                aur->removeAura();
             }
         }
     }

@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -20,13 +20,12 @@
 
 #pragma once
 
-#include "Definitions/AuraEffects.h"
-#include "Definitions/AuraRemoveMode.h"
-#include "Definitions/SpellEffects.h"
-#include "Management/Item.h"
+#include "Definitions/AuraEffects.hpp"
+#include "Definitions/AuraRemoveMode.hpp"
+#include "Objects/Item.hpp"
 #include "Objects/Object.h"
 #include "Server/EventableObject.h"
-#include "Units/Unit.h"
+#include "Objects/Units/Unit.hpp"
 
 #include <cstdint>
 #include <set>
@@ -133,6 +132,11 @@ public:
     void setEffectIndex(uint8_t effIndex);
     uint8_t getEffectIndex() const;
 
+    void setEffectActive(bool set);
+    bool isActive() const;
+
+    void applyEffect(bool apply, bool skipScriptCheck = false);
+
     void setAura(Aura* aur);
     Aura* getAura() const;
 
@@ -147,6 +151,7 @@ private:
     float_t mDamageFraction = 0.0f;             // Leftover damage from previous tick which will be added to next tick
     float_t mEffectPctModifier = 1.0f;          // Effect percent modifier
     bool mEffectDamageStatic = false;           // If effect damage is set to static, effect will not gain spell power bonuses
+    bool mActive = false;                       // Is effect active
     uint8_t effIndex = 0;
 
     Aura* mAura = nullptr;
@@ -157,12 +162,18 @@ class SERVER_DECL Aura : public EventableObject
     friend class AbsorbAura;
 
     public:
-        AuraEffectModifier getAuraEffect(uint8_t effIndex) const;
+        AuraEffectModifier const* getAuraEffect(uint8_t effIndex) const;
+        AuraEffectModifier* getModifiableAuraEffect(uint8_t effIndex);
         bool hasAuraEffect(AuraEffect auraEffect) const;
-        void addAuraEffect(AuraEffect auraEffect, int32_t damage, int32_t miscValue, float_t effectPctModifier, bool isStaticDamage, uint8_t effIndex);
-        void removeAuraEffect(uint8_t effIndex);
+        void addAuraEffect(AuraEffect auraEffect, int32_t damage, int32_t miscValue, float_t effectPctModifier, bool isStaticDamage, uint8_t effIndex, bool reapplying = false);
+        void addAuraEffect(AuraEffectModifier const* auraEffect, bool reapplying = false);
+        void removeAuraEffect(uint8_t effIndex, bool reapplying = false);
+        void removeAllAuraEffects();
         // Returns how many active aura effects the aura has
         uint8_t getAppliedEffectCount() const;
+
+        uint16_t getAuraSlot() const;
+        void setAuraSlot(uint16_t slot);
 
         int32_t getEffectDamage(uint8_t effIndex) const;
         int32_t getEffectDamageByEffect(AuraEffect auraEffect) const;
@@ -172,7 +183,7 @@ class SERVER_DECL Aura : public EventableObject
 
         bool canPeriodicEffectCrit();
 
-        void applyModifiers(bool apply);
+        void applyModifiers(bool apply, AuraEffect applyOnlyFor = SPELL_AURA_NONE);
         void updateModifiers();
 
         int32_t getTimeLeft() const;
@@ -180,13 +191,17 @@ class SERVER_DECL Aura : public EventableObject
         int32_t getMaxDuration() const;
         void setMaxDuration(int32_t dur);
         int32_t getOriginalDuration() const;
-        // Overrides original duration
         void setOriginalDuration(int32_t dur);
+        // Overrides original duration
+        void setNewMaxDuration(int32_t dur, bool refreshDuration = true);
 
         // Does not return 0 to avoid division by zero
         // Returns 1 with permanent auras or with invalid effindex
         uint16_t getPeriodicTickCountForEffect(uint8_t effIndex) const;
-        void refresh([[maybe_unused]]bool saveMods = false, int16_t modifyStacks = 0);
+
+        // Refresh resets aura's duration and charges to max and recalculates modifiers
+        // Mods are saved only in special situations
+        void refreshOrModifyStack(bool saveMods = false, int16_t modifyStackAmount = 0);
 
         uint8_t getStackCount() const;
         uint16_t getCharges() const;
@@ -448,6 +463,8 @@ class SERVER_DECL Aura : public EventableObject
         // Do not update aura while updating modifiers
         bool m_updatingModifiers = false;
 
+        uint16_t m_auraSlot = 0xFFFF;
+
         // Time left
         int32_t m_duration = 0;
         // Maximum duration
@@ -495,10 +512,7 @@ class SERVER_DECL Aura : public EventableObject
         Aura(SpellInfo const* proto, int32 duration, Object* caster, Unit* target, bool temporary = false, Item* i_caster = NULL);
         ~Aura();
 
-        inline bool IsPassive() { if (!m_spellInfo) return false; return (m_spellInfo->isPassive() && !m_areaAura); }
-
-        inline uint16 GetAuraSlot() const { return m_auraSlot; }
-        void SetAuraSlot(uint16 slot) { m_auraSlot = slot; }
+        inline bool IsPassive() const { if (!m_spellInfo) return false; return (m_spellInfo->isPassive() && !m_areaAura); }
 
         Unit* GetUnitCaster();
         Player* GetPlayerCaster();
@@ -526,20 +540,20 @@ class SERVER_DECL Aura : public EventableObject
         /// Tells if the Aura is an area Aura.
         /// \param none    \return true if it is false otherwise.
         //////////////////////////////////////////////////////////////////////////////////////////
-        bool IsAreaAura();
+        bool IsAreaAura() const;
 
         //////////////////////////////////////////////////////////////////////////////////////////
 
         // Legacy Aura Handlers
         void SpellAuraBindSight(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModPossess(AuraEffectModifier* aurEff, bool apply);
-        void SpellAuraDummy(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModConfuse(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModCharm(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModFear(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModAttackSpeed(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModThreatGenerated(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModTaunt(AuraEffectModifier* aurEff, bool apply);
+        void SpellAuraModDetaunt(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModStun(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModDamageDone(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModDamageTaken(AuraEffectModifier* aurEff, bool apply);
@@ -648,7 +662,6 @@ class SERVER_DECL Aura : public EventableObject
         void SpellAuraModBaseResistancePerc(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModResistanceExclusive(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraSafeFall(AuraEffectModifier* aurEff, bool apply);
-        void SpellAuraRetainComboPoints(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraResistPushback(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModShieldBlockPCT(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraTrackStealthed(AuraEffectModifier* aurEff, bool apply);
@@ -689,7 +702,6 @@ class SERVER_DECL Aura : public EventableObject
         void SpellAuraIncreaseRating(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraRegenManaStatPCT(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraSpellHealingStatPCT(AuraEffectModifier* aurEff, bool apply);
-        void SpellAuraDetectStealth(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraReduceAOEDamageTaken(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraIncreaseMaxHealth(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraSpiritOfRedemption(AuraEffectModifier* aurEff, bool apply);
@@ -719,7 +731,6 @@ class SERVER_DECL Aura : public EventableObject
         void SpellAuraIncreaseAPbyStatPct(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModSpellDamageDOTPct(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraConsumeNoAmmo(AuraEffectModifier* aurEff, bool apply);
-        void SpellAuraIgnoreShapeshift(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraPhase(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraMirrorImage2(AuraEffectModifier* aurEff, bool apply);
         void SpellAuraModIgnoreArmorPct(AuraEffectModifier* aurEff, bool apply);
@@ -745,7 +756,6 @@ class SERVER_DECL Aura : public EventableObject
         uint32 GetAuraFlags() { return m_flags; }
 
         AreaAuraList targets; // This is only used for AA
-        uint16 m_auraSlot;
         uint32 m_castedItemId;
         uint64 itemCasterGUID;
         bool m_areaAura; // Area aura stuff -> never passive.
@@ -799,18 +809,18 @@ class AbsorbAura : public Aura
 
         virtual uint32_t absorbDamage(SchoolMask schoolMask, uint32_t* dmg, bool checkOnly);
         uint32_t getRemainingAbsorbAmount() const;
-        int32_t getTotalAbsorbAmount() const;
+        uint32_t getTotalAbsorbAmount() const;
 
         void spellAuraEffectSchoolAbsorb(AuraEffectModifier* aurEff, bool apply);
 
         bool isAbsorbAura() const override;
 
     protected:
-        int32_t calcAbsorbAmount(AuraEffectModifier* aurEff);
+        uint32_t calcAbsorbAmount(AuraEffectModifier* aurEff);
 
-        int32_t m_totalAbsorbValue = 0;
+        uint32_t m_totalAbsorbValue = 0;
         // Remaining absorb value
-        int32_t m_absorbValue = 0;
+        uint32_t m_absorbValue = 0;
         // How many percentages of the damage is absorbed
         uint8_t m_pctAbsorbValue = 100;
         SchoolMask m_absorbSchoolMask = SCHOOL_MASK_NONE;

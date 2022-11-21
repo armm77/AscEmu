@@ -1,18 +1,20 @@
 /*
-Copyright (c) 2014-2021 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "SpellAuras.h"
 
-#include "Definitions/SpellFamily.h"
-#include "Definitions/SpellIsFlags.h"
-#include "Definitions/SpellTypes.h"
-#include "SpellMgr.h"
+#include "Definitions/SpellFamily.hpp"
+#include "Definitions/SpellIsFlags.hpp"
+#include "Definitions/SpellTypes.hpp"
+#include "SpellMgr.hpp"
+#include "Management/ItemInterface.h"
 
-#include "Objects/ObjectMgr.h"
+#include "Management/ObjectMgr.h"
+#include "Server/Script/ScriptMgr.h"
 #include "Storage/MySQLDataStore.hpp"
-#include "Units/Creatures/Pet.h"
+#include "Objects/Units/Creatures/Pet.h"
 
 pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
 {
@@ -164,7 +166,7 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::spellAuraEffectNotImplemented,                                   // 145 SPELL_AURA_145
     &Aura::spellAuraEffectNotImplemented,                                   // 146 SPELL_AURA_146
     &Aura::spellAuraEffectNotImplemented,                                   // 147 SPELL_AURA_147
-    &Aura::SpellAuraRetainComboPoints,                                      // 148 SPELL_AURA_RETAIN_COMBO_POINTS
+    &Aura::spellAuraEffectRetainComboPoints,                                // 148 SPELL_AURA_RETAIN_COMBO_POINTS
     &Aura::SpellAuraResistPushback,                                         // 149 SPELL_AURA_RESIST_PUSHBACK
     &Aura::SpellAuraModShieldBlockPCT,                                      // 150 SPELL_AURA_MOD_SHIELD_BLOCK_PCT
     &Aura::SpellAuraTrackStealthed,                                         // 151 SPELL_AURA_TRACK_STEALTHED
@@ -208,6 +210,7 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::SpellAuraIncreaseRating,                                         // 189 SPELL_AURA_INCREASE_RATING
     &Aura::SpellAuraIncreaseRepGainPct,                                     // 190 SPELL_AURA_INCREASE_REP_GAIN_PCT
     &Aura::SpellAuraLimitSpeed,                                             // 191 SPELL_AURA_LIMIT_SPEED
+#if VERSION_STRING >= TBC
     &Aura::SpellAuraMeleeHaste,                                             // 192 SPELL_AURA_MELEE_HASTE
     &Aura::SpellAuraIncreaseTimeBetweenAttacksPCT,                          // 193 SPELL_AURA_INCREASE_TIME_BETWEEN_ATTACKS_PCT
     &Aura::spellAuraEffectNotImplemented,                                   // 194 SPELL_AURA_194
@@ -237,7 +240,7 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::spellAuraEffectNotImplemented,                                   // 218 SPELL_AURA_218
     &Aura::SpellAuraRegenManaStatPCT,                                       // 219 SPELL_AURA_REGEN_MANA_STAT_PCT
     &Aura::SpellAuraSpellHealingStatPCT,                                    // 220 SPELL_AURA_SPELL_HEALING_STAT_PCT
-    &Aura::spellAuraEffectNotImplemented,                                   // 221 SPELL_AURA_221
+    &Aura::SpellAuraModDetaunt,                                             // 221 SPELL_AURA_MOD_DETAUNT
     &Aura::spellAuraEffectNotImplemented,                                   // 222 SPELL_AURA_222
     &Aura::spellAuraEffectNotImplemented,                                   // 223 SPELL_AURA_223
     &Aura::spellAuraEffectNotImplemented,                                   // 224 SPELL_AURA_224
@@ -278,6 +281,8 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::spellAuraEffectNotImplemented,                                   // 259 SPELL_AURA_259
     &Aura::spellAuraEffectNotImplemented,                                   // 260 SPELL_AURA_260
     &Aura::SpellAuraPhase,                                                  // 261 SPELL_AURA_PHASE
+#endif
+#if VERSION_STRING >= WotLK
     &Aura::spellAuraEffectNotImplemented,                                   // 262 SPELL_AURA_262
     &Aura::SpellAuraAllowOnlyAbility,                                       // 263 SPELL_AURA_ALLOW_ONLY_ABILITY
     &Aura::spellAuraEffectNotImplemented,                                   // 264 SPELL_AURA_264
@@ -333,6 +338,8 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::spellAuraEffectNotImplemented,                                   // 314 SPELL_AURA_314
     &Aura::spellAuraEffectNotImplemented,                                   // 315 SPELL_AURA_315
     &Aura::spellAuraEffectNotImplemented,                                   // 316 SPELL_AURA_ALLOW_HASTE_AFFECT_DURATION
+#endif
+#if VERSION_STRING >= Cata
     &Aura::spellAuraEffectNotImplemented,                                   // 317 SPELL_AURA_317
     &Aura::spellAuraEffectNotImplemented,                                   // 318 SPELL_AURA_318
     &Aura::spellAuraEffectNotImplemented,                                   // 319 SPELL_AURA_319
@@ -387,6 +394,8 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::spellAuraEffectNotImplemented,                                   // 368 SPELL_AURA_368
     &Aura::spellAuraEffectNotImplemented,                                   // 369 SPELL_AURA_369
     &Aura::spellAuraEffectNotImplemented,                                   // 370 SPELL_AURA_370
+#endif
+#if VERSION_STRING >= Mop
     &Aura::spellAuraEffectNotImplemented,                                   // 371 SPELL_AURA_371
     &Aura::spellAuraEffectNotImplemented,                                   // 372 SPELL_AURA_372
     &Aura::spellAuraEffectNotImplemented,                                   // 373 SPELL_AURA_373
@@ -454,6 +463,7 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::spellAuraEffectNotImplemented,                                   // 435 SPELL_AURA_435
     &Aura::spellAuraEffectNotImplemented,                                   // 436 SPELL_AURA_436
     &Aura::spellAuraEffectNotImplemented,                                   // 437 SPELL_AURA_437
+#endif
 };
 
 const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
@@ -650,6 +660,7 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_INCREASE_RATING",                                           // 189 missing // Apply Aura: Increases Rating
     "SPELL_AURA_INCREASE_REP_GAIN_PCT",                                     // 190 // used // Apply Aura: Increases Reputation Gained by % // https://classic.wowhead.com/spell=30754/ (SPELL_AURA_MOD_FACTION_REPUTATION_GAIN)
     "SPELL_AURA_LIMIT_SPEED",                                               // 191 speed limit // https://classic.wowhead.com/spell=29894/
+#if VERSION_STRING >= TBC
     "SPELL_AURA_MELEE_HASTE",                                               // 192 Apply Aura: Melee Slow %
     "SPELL_AURA_INCREASE_TIME_BETWEEN_ATTACKS_PCT",                         // 193 Apply Aura: Increase Time Between Attacks (Melee, Ranged and Spell) by %
     "SPELL_AURA_194",                                                       // 194 NOT USED ANYMORE - 174 used instead // Apply Aura: Increase Spell Damage by % of Intellect (All)
@@ -720,6 +731,8 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_259",                                                       // 259 Mod Periodic Damage Taken Pct - Periodic Shadow damage taken increased by 3% // http://thottbot.com/s60448
     "SPELL_AURA_260",                                                       // 260 Screen Effect
     "SPELL_AURA_PHASE",                                                     // 261
+#endif
+#if VERSION_STRING >= WotLK
     "SPELL_AURA_262",                                                       // 262
     "SPELL_AURA_ALLOW_ONLY_ABILITY",                                        // 263
     "SPELL_AURA_264",                                                       // 264
@@ -775,6 +788,8 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_314",                                                       // 314
     "SPELL_AURA_315",                                                       // 315
     "SPELL_AURA_ALLOW_HASTE_AFFECT_DURATION",                               // 316
+#endif
+#if VERSION_STRING >= Cata
     "SPELL_AURA_317",                                                       // 317
     "SPELL_AURA_318",                                                       // 318
     "SPELL_AURA_319",                                                       // 319
@@ -829,6 +844,8 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_368",                                                       // 368
     "SPELL_AURA_369",                                                       // 369
     "SPELL_AURA_370",                                                       // 370
+#endif
+#if VERSION_STRING >= Mop
     "SPELL_AURA_371",                                                       // 371
     "SPELL_AURA_372",                                                       // 372
     "SPELL_AURA_373",                                                       // 373
@@ -896,11 +913,12 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_435",                                                       // 435
     "SPELL_AURA_436",                                                       // 436
     "SPELL_AURA_437",                                                       // 437
+#endif
 };
 
 void Aura::spellAuraEffectNotImplemented(AuraEffectModifier* aurEff, bool /*apply*/)
 {
-    sLogger.debug("Aura::applyModifiers : Unknown aura id %u for spell id %u", aurEff->getAuraEffectType(), getSpellId());
+    sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::applyModifiers : Unknown aura id %u for spell id %u", aurEff->getAuraEffectType(), getSpellId());
 }
 
 void Aura::spellAuraEffectNotUsed(AuraEffectModifier* /*aurEff*/, bool /*apply*/)
@@ -927,7 +945,7 @@ void Aura::spellAuraEffectPeriodicDamage(AuraEffectModifier* aurEff, bool apply)
                 auto c = GetUnitCaster();
                 if (c != nullptr && c->isPlayer())
                 {
-                    aurEff->setEffectDamage(float2int32(static_cast<Player*>(c)->m_casted_amount[SCHOOL_FIRE] * parentsp->getEffectBasePoints(0) / 100.0f));
+                    aurEff->setEffectDamage(float2int32(static_cast<Player*>(c)->m_castedAmount[SCHOOL_FIRE] * parentsp->getEffectBasePoints(0) / 100.0f));
                 }
                 else if (c != nullptr)
                 {
@@ -1033,7 +1051,7 @@ void Aura::spellAuraEffectDummy(AuraEffectModifier* aurEff, bool apply)
     if (sScriptMgr.CallScriptedDummyAura(getSpellId(), aurEff->getEffectIndex(), this, apply))
         return;
 
-    sLogger.debug("Aura::spellAuraEffectDummy : Spell %u (%s) has a dummy aura effect, but no handler for it.", m_spellInfo->getId(), m_spellInfo->getName().c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::spellAuraEffectDummy : Spell %u (%s) has a dummy aura effect, but no handler for it.", m_spellInfo->getId(), m_spellInfo->getName().c_str());
 }
 
 void Aura::spellAuraEffectPeriodicHeal(AuraEffectModifier* aurEff, bool apply)
@@ -1154,10 +1172,6 @@ void Aura::spellAuraEffectPeriodicTriggerSpell(AuraEffectModifier* aurEff, bool 
         }
     }
 
-    const auto triggerSpellId = getSpellInfo()->getEffectTriggerSpell(aurEff->getEffectIndex());
-    if (triggerSpellId == 0 || sSpellMgr.getSpellInfo(triggerSpellId) == nullptr)
-        return;
-
     if (apply)
     {
         // Set periodic timer only if timer was resetted
@@ -1205,12 +1219,12 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
             case FORM_BERSERKERSTANCE:
                 break;
             default:
-                p_target->Dismount();
+                p_target->dismount();
                 break;
         }
     }
 
-    const auto shapeshiftForm = sSpellShapeshiftFormStore.LookupEntry(aurEff->getEffectMiscValue());
+    const auto shapeshiftForm = sSpellShapeshiftFormStore.LookupEntry(static_cast<uint32_t>(aurEff->getEffectMiscValue()));
     if (shapeshiftForm == nullptr)
         return;
 
@@ -1223,7 +1237,11 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
 
     // Some forms have two additional hidden passive aura
     uint32_t passiveSpellId = 0, secondaryPassiveSpell = 0;
+#if VERSION_STRING > Classic
     auto modelId = shapeshiftForm->modelId;
+#else
+    uint32_t modelId = 0;
+#endif
     auto freeMovements = false, removePolymorph = false;
 
     switch (shapeshiftForm->id)
@@ -1297,7 +1315,7 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
         case FORM_ZOMBIE:
         {
             if (getPlayerOwner() != nullptr)
-                getPlayerOwner()->SendAvailSpells(shapeshiftForm, apply);
+                getPlayerOwner()->sendAvailSpells(shapeshiftForm, apply);
         } break;
         case FORM_DIREBEAR:
         {
@@ -1336,8 +1354,8 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
             // Check retained rage
             if (apply && getPlayerOwner() != nullptr && getPlayerOwner()->isClassWarrior())
             {
-                if (getPlayerOwner()->getPower(POWER_TYPE_RAGE) > getPlayerOwner()->m_retainedrage)
-                    getPlayerOwner()->setPower(POWER_TYPE_RAGE, getPlayerOwner()->m_retainedrage);
+                if (getPlayerOwner()->getPower(POWER_TYPE_RAGE) > getPlayerOwner()->m_retaineDrage)
+                    getPlayerOwner()->setPower(POWER_TYPE_RAGE, getPlayerOwner()->m_retaineDrage);
             }
         } break;
 #if VERSION_STRING >= WotLK
@@ -1357,9 +1375,9 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
             }
             else
             {
-                getOwner()->RemoveAura(54817);
-                getOwner()->RemoveAura(54879);
-                getOwner()->RemoveAura(61610);
+                getOwner()->removeAllAurasById(54817);
+                getOwner()->removeAllAurasById(54879);
+                getOwner()->removeAllAurasById(61610);
             }
         } break;
 #endif
@@ -1420,7 +1438,7 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
     if (apply)
     {
         if (removePolymorph && getOwner()->hasUnitStateFlag(UNIT_STATE_POLYMORPHED))
-            getOwner()->RemoveAura(getOwner()->getTransformAura());
+            getOwner()->removeAllAurasById(getOwner()->getTransformAura());
 
         if (modelId != 0)
         {
@@ -1444,7 +1462,7 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
             if (overWriteDisplay)
             {
                 getOwner()->setDisplayId(modelId);
-                getOwner()->EventModelChange();
+                getOwner()->eventModelChange();
             }
 
             // Save model id for later use
@@ -1464,15 +1482,16 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
         getOwner()->restoreDisplayId();
 
         if (passiveSpellId != 0)
-            getOwner()->RemoveAura(passiveSpellId);
+            getOwner()->removeAllAurasById(passiveSpellId);
         if (secondaryPassiveSpell != 0)
-            getOwner()->RemoveAura(secondaryPassiveSpell);
+            getOwner()->removeAllAurasById(secondaryPassiveSpell);
     }
 
     // Remove auras which unit should not have anymore
-    for (auto& aur : getOwner()->m_auras)
+    for (uint16_t i = AuraSlots::PASSIVE_SLOT_START; i < AuraSlots::POSITIVE_SLOT_END; ++i)
     {
-        if (aur == nullptr || aur->isNegative())
+        auto* const aur = getOwner()->getAuraWithAuraSlot(i);
+        if (aur == nullptr)
             continue;
 
         const auto requiredForm = aur->getSpellInfo()->getRequiredShapeShift();
@@ -1480,8 +1499,8 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
         {
             if (oldForm != FORM_NORMAL && oldForm != FORM_SHADOW && oldForm != FORM_STEALTH)
             {
-                const uint32_t oldFormMask = 1 << (oldForm - 1);
-                const uint32_t newFormMask = 1 << (newForm - 1);
+                const uint32_t oldFormMask = 1U << (oldForm - 1);
+                const uint32_t newFormMask = 1U << (newForm - 1);
                 // Check if the aura is usable in new form
                 if (oldFormMask & requiredForm && !(newFormMask & requiredForm))
                 {
@@ -1495,7 +1514,7 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
     if (getPlayerOwner() != nullptr)
     {
         // Apply talents and spells that require this form
-        for (const auto& spell : getPlayerOwner()->mSpells)
+        for (const auto& spell : getPlayerOwner()->m_spells)
         {
             const auto spellInfo = sSpellMgr.getSpellInfo(spell);
             if (spellInfo == nullptr)
@@ -1503,7 +1522,7 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
 
             if (spellInfo->isPassive() && spellInfo->getRequiredShapeShift() > 0)
             {
-                const uint32_t newFormMask = 1 << (newForm - 1);
+                const uint32_t newFormMask = 1U << (newForm - 1);
                 if (newFormMask & spellInfo->getRequiredShapeShift())
                     getPlayerOwner()->castSpell(getPlayerOwner(), spellInfo, true);
             }
@@ -1515,11 +1534,11 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
             // Change from normal form to feral form
             if (!(oldForm == FORM_MOONKIN || oldForm == FORM_CAT || oldForm == FORM_BEAR || oldForm == FORM_DIREBEAR) &&
                 (newForm == FORM_MOONKIN || newForm == FORM_CAT || newForm == FORM_BEAR || newForm == FORM_DIREBEAR))
-                getPlayerOwner()->ApplyFeralAttackPower(true);
+                getPlayerOwner()->applyFeralAttackPower(true);
             // Change from feral form to normal form
             else if ((oldForm == FORM_MOONKIN || oldForm == FORM_CAT || oldForm == FORM_BEAR || oldForm == FORM_DIREBEAR) &&
                 !(newForm == FORM_MOONKIN || newForm == FORM_CAT || newForm == FORM_BEAR || newForm == FORM_DIREBEAR))
-                getPlayerOwner()->ApplyFeralAttackPower(false);
+                getPlayerOwner()->applyFeralAttackPower(false);
         }
 
         // Apply dummy shapeshift spells
@@ -1529,16 +1548,16 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
             if (spellInfo == nullptr)
                 continue;
 
-            const uint32_t newFormMask = 1 << (newForm - 1);
+            const uint32_t newFormMask = 1U << (newForm - 1);
             if (spellInfo->getRequiredShapeShift() > 0 && (newFormMask & spellInfo->getRequiredShapeShift()))
                 getPlayerOwner()->castSpell(getPlayerOwner(), spellInfo, true);
         }
 
         // Hackfix - Heart of the Wild talent
-        getPlayerOwner()->EventTalentHearthOfWildChange(apply);
+        getPlayerOwner()->eventTalentHearthOfWildChange(apply);
 
-        getPlayerOwner()->UpdateStats();
-        getPlayerOwner()->UpdateAttackSpeed();
+        getPlayerOwner()->updateStats();
+        getPlayerOwner()->updateAttackSpeed();
     }
 }
 
@@ -1555,9 +1574,10 @@ void Aura::spellAuraEffectPeriodicLeech(AuraEffectModifier* aurEff, bool apply)
 
         if (casterUnit != nullptr)
         {
+#if VERSION_STRING <= Cata
             // Hackfix from legacy method
             // Apply bonus from [Warlock] Soul Siphon
-            if (casterUnit->m_soulSiphon.amt)
+            if (casterUnit->m_soulSiphon.m_amount)
             {
                 // Use std::map to prevent counting duplicate auras (stacked ones, from the same unit)
                 std::map<uint64_t, std::set<uint32_t> *> auras;
@@ -1566,17 +1586,28 @@ void Aura::spellAuraEffectPeriodicLeech(AuraEffectModifier* aurEff, bool apply)
                 int32_t count = 0;
 
                 auras.clear();
-                for (auto i = MAX_TOTAL_AURAS_START; i < MAX_TOTAL_AURAS_END; ++i)
+                for (uint16_t i = AuraSlots::TOTAL_SLOT_START; i < AuraSlots::TOTAL_SLOT_END; ++i)
                 {
-                    Aura* aura = m_target->m_auras[i];
+                    Aura* aura = m_target->getAuraWithAuraSlot(i);
                     if (aura == nullptr)
                         continue;
 
                     if (aura->getSpellInfo()->getSpellFamilyName() != 5)
                         continue;
 
-                    auto skill_line_ability = sObjectMgr.GetSpellSkill(aura->getSpellId());
-                    if (skill_line_ability == nullptr || skill_line_ability->skilline != SKILL_AFFLICTION)
+                    auto _continue = false;
+                    const auto spellSkillBounds = sSpellMgr.getSkillEntryForSpellBounds(aura->getSpellId());
+                    for (auto spellSkillItr = spellSkillBounds.first; spellSkillItr != spellSkillBounds.second; ++spellSkillItr)
+                    {
+                        auto skill_line_ability = spellSkillItr->second;
+                        if (skill_line_ability == nullptr || skill_line_ability->skilline != SKILL_AFFLICTION)
+                        {
+                            _continue = true;
+                            break;
+                        }
+                    }
+
+                    if (_continue)
                         continue;
 
                     itx = auras.find(aura->getCasterGuid());
@@ -1605,11 +1636,12 @@ void Aura::spellAuraEffectPeriodicLeech(AuraEffectModifier* aurEff, bool apply)
                     }
                 }
 
-                pct = count * casterUnit->m_soulSiphon.amt;
-                if (pct > casterUnit->m_soulSiphon.max)
-                    pct = casterUnit->m_soulSiphon.max;
+                pct = count * casterUnit->m_soulSiphon.m_amount;
+                if (pct > casterUnit->m_soulSiphon.m_max)
+                    pct = casterUnit->m_soulSiphon.m_max;
                 damage += aurEff->getEffectFloatDamage() * pct / 100;
             }
+#endif
         }
 
         aurEff->setEffectDamage(damage);
@@ -1633,10 +1665,10 @@ void Aura::spellAuraEffectTransform(AuraEffectModifier* aurEff, bool apply)
     {
         uint32_t displayId = 0;
         std::vector<uint32_t> displayIds;
-        const auto properties = sMySQLStore.getCreatureProperties(aurEff->getEffectMiscValue());
+        const auto properties = sMySQLStore.getCreatureProperties(static_cast<uint32_t>(aurEff->getEffectMiscValue()));
         if (properties == nullptr)
         {
-            sLogger.debug("Aura::spellAuraEffectTransform : Unknown creature entry %u in misc value for spell %u", aurEff->getEffectMiscValue(), getSpellId());
+            sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::spellAuraEffectTransform : Unknown creature entry %u in misc value for spell %u", aurEff->getEffectMiscValue(), getSpellId());
             return;
         }
 
@@ -1655,7 +1687,7 @@ void Aura::spellAuraEffectTransform(AuraEffectModifier* aurEff, bool apply)
 
         if (displayId == 0)
         {
-            sLogger.debug("Aura::spellAuraEffectTransform : Creature entry %u has no display id for spell %u", properties->Id, getSpellId());
+            sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::spellAuraEffectTransform : Creature entry %u has no display id for spell %u", properties->Id, getSpellId());
             return;
         }
 
@@ -1667,7 +1699,7 @@ void Aura::spellAuraEffectTransform(AuraEffectModifier* aurEff, bool apply)
             if (getSpellInfo()->isNegativeAura() || !(transformAura != nullptr && takePriority))
             {
                 getOwner()->setDisplayId(displayId);
-                getOwner()->EventModelChange();
+                getOwner()->eventModelChange();
 
                 getOwner()->setTransformAura(getSpellId());
             }
@@ -1739,8 +1771,8 @@ void Aura::spellAuraEffectModPowerRegen(AuraEffectModifier* aurEff, bool apply)
         return;
 
     const auto value = apply ? aurEff->getEffectDamage() : -aurEff->getEffectDamage();
-    getPlayerOwner()->m_ModInterrMRegen += value;
-    getPlayerOwner()->UpdateStats();
+    getPlayerOwner()->m_modInterrManaRegen += value;
+    getPlayerOwner()->updateStats();
 }
 
 void Aura::spellAuraEffectPeriodicDamagePercent(AuraEffectModifier* aurEff, bool apply)
@@ -1799,7 +1831,7 @@ void Aura::spellAuraEffectAddModifier(AuraEffectModifier* aurEff, bool apply)
     // Hunter's beastmastery talents
     if (aurEff->getAuraEffectType() == SPELL_AURA_ADD_FLAT_MODIFIER)
     {
-        const auto pet = getPlayerOwner()->GetSummon();
+        const auto pet = getPlayerOwner()->getFirstPetFromSummons();
         if (pet != nullptr)
         {
             switch (getSpellInfo()->getId())
@@ -1880,6 +1912,19 @@ void Aura::spellAuraEffectAddModifier(AuraEffectModifier* aurEff, bool apply)
     }
 }
 
+void Aura::spellAuraEffectRetainComboPoints(AuraEffectModifier* aurEff, bool apply)
+{
+    if (getPlayerOwner() == nullptr)
+        return;
+
+    if (!apply)
+    {
+        // Remove combo points created by this aura only if duration has expired
+        if (getTimeLeft() == 0)
+            getPlayerOwner()->addComboPoints(getPlayerOwner()->getTargetGuid(), static_cast<int8_t>(-aurEff->getEffectDamage()));
+    }
+}
+
 void Aura::spellAuraEffectPeriodicPowerBurn(AuraEffectModifier* aurEff, bool apply)
 {
     if (aurEff->getEffectMiscValue() < POWER_TYPE_MANA || aurEff->getEffectMiscValue() >= TOTAL_PLAYER_POWER_TYPES)
@@ -1915,7 +1960,7 @@ void Aura::spellAuraEffectPeriodicTriggerDummy(AuraEffectModifier* aurEff, bool 
     else
     {
         if (!sScriptMgr.CallScriptedDummyAura(getSpellId(), aurEff->getEffectIndex(), this, false))
-            sLogger.debug("Spell aura %u has a periodic trigger dummy effect but no handler for it", getSpellId());
+            sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Spell aura %u has a periodic trigger dummy effect but no handler for it", getSpellId());
 
 #if VERSION_STRING < Cata
         // Prior to cata periodic timer was resetted on refresh
