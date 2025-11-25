@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -23,7 +23,7 @@ namespace AscEmu::Packets
         }
 
         CmsgDestroyItem(int8_t srcInventorySlot, int8_t srcSlot) :
-            ManagedPacket(CMSG_DESTROYITEM, 2),
+            ManagedPacket(CMSG_DESTROY_ITEM, 2),
             srcInventorySlot(srcInventorySlot),
             srcSlot(srcSlot)
         {

@@ -1,21 +1,36 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Container.h"
-#include "Data/WoWItem.hpp"
 #include "Item.hpp"
-#include "Map/Management/MapMgrDefines.hpp"
+#include "Container.hpp"
+#include "Data/Flags.hpp"
+#include "Logging/Logger.hpp"
+#include "Management/Charter.hpp"
+#include "Management/ItemInterface.h"
+#include "Management/Guild/Guild.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Storage/WDB/WDBStores.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/DatabaseDefinition.hpp"
 #include "Server/Definitions.h"
+#include "Server/EventMgr.h"
 #include "Server/Packets/SmsgEnchantmentLog.h"
 #include "Server/Packets/SmsgItemEnchantmentTimeUpdate.h"
 #include "Server/Packets/SmsgItemTimeUpdate.h"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Storage/MySQLDataStore.hpp"
 #include "Spell/Definitions/SpellEffects.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Narrow.hpp"
+#include "Utilities/Strings.hpp"
 
 using namespace AscEmu::Packets;
 
-Item::Item()
+Item::Item() : m_loot(nullptr)
 {
     //////////////////////////////////////////////////////////////////////////
     m_objectType |= TYPE_ITEM;
@@ -48,29 +63,13 @@ Item::Item()
 
 Item::~Item()
 {
-    if (m_loot != nullptr)
-    {
-        delete m_loot;
-        m_loot = nullptr;
-    }
-
     sEventMgr.RemoveEvents(this);
 
-#if VERSION_STRING >= Cata
-    for (auto itr = m_enchantments.begin(); itr != m_enchantments.end(); ++itr)
-    {
-        // These are allocated with new
-        if (itr->second.Slot == REFORGE_ENCHANTMENT_SLOT || itr->second.Slot == TRANSMOGRIFY_ENCHANTMENT_SLOT)
-        {
-            delete itr->second.Enchantment;
-            itr->second.Enchantment = nullptr;
-        }
-    }
-#endif
     m_enchantments.clear();
 
     if (m_owner != nullptr)
     {
+        m_owner->getItemInterface()->RemoveRefundable(getGuid());
         m_owner->getItemInterface()->removeTemporaryEnchantedItem(this);
 #if VERSION_STRING >= WotLK
         m_owner->getItemInterface()->removeTradeableItem(this);
@@ -107,7 +106,7 @@ void Item::create(uint32_t itemId, Player* owner)
     m_itemProperties = sMySQLStore.getItemProperties(itemId);
     if (!m_itemProperties)
     {
-        sLogger.failure("Item::create: Can't create item %u missing properties!", itemId);
+        sLogger.failure("Item::create: Can't create item {} missing properties!", itemId);
         return;
     }
 
@@ -155,7 +154,7 @@ void Item::modStackCount(int32_t mod)
 }
 
 #ifdef AE_TBC
-void Item::setTextId(const uint32 textId)
+void Item::setTextId(const uint32_t textId)
 {
     write(itemData()->item_text_id, textId);
 }
@@ -226,6 +225,29 @@ void Item::setCreatePlayedTime(uint32_t time) { write(itemData()->create_played_
 #endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// Override Object functions
+
+Unit* Item::getUnitOwner()
+{
+    return m_owner;
+}
+
+Unit const* Item::getUnitOwner() const
+{
+    return m_owner;
+}
+
+Player* Item::getPlayerOwner()
+{
+    return m_owner;
+}
+
+Player const* Item::getPlayerOwner() const
+{
+    return m_owner;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 // m_enchantments
 EnchantmentInstance* Item::getEnchantment(EnchantmentSlot slot)
 {
@@ -265,24 +287,25 @@ bool Item::addEnchantment(uint32_t enchantmentId, EnchantmentSlot slot, uint32_t
 {
     m_isDirty = true;
 
-    DBC::Structures::SpellItemEnchantmentEntry const* Enchantment = nullptr;
+    WDB::Structures::SpellItemEnchantmentEntry const* Enchantment = nullptr;
 #if VERSION_STRING >= Cata
+    std::unique_ptr<WDB::Structures::SpellItemEnchantmentEntry> custom_enchant = nullptr;
     switch (slot)
     {
 
         case TRANSMOGRIFY_ENCHANTMENT_SLOT:
         case REFORGE_ENCHANTMENT_SLOT:
         {
-            auto custom_enchant = new DBC::Structures::SpellItemEnchantmentEntry();
+            custom_enchant = std::make_unique<WDB::Structures::SpellItemEnchantmentEntry>();
             custom_enchant->Id = enchantmentId;
 
-            Enchantment = custom_enchant;
+            Enchantment = custom_enchant.get();
         } break;
 
         default:
         {
 #endif
-            const auto spell_item_enchant = sSpellItemEnchantmentStore.LookupEntry(enchantmentId);
+            const auto spell_item_enchant = sSpellItemEnchantmentStore.lookupEntry(enchantmentId);
             if (spell_item_enchant == nullptr)
                 return false;
 
@@ -296,13 +319,16 @@ bool Item::addEnchantment(uint32_t enchantmentId, EnchantmentSlot slot, uint32_t
     enchantInstance.BonusApplied = false;
     enchantInstance.Slot = slot;
     enchantInstance.Enchantment = Enchantment;
+#if VERSION_STRING >= Cata
+    enchantInstance.customEnchantmentHolder = std::move(custom_enchant);
+#endif
     enchantInstance.RemoveAtLogout = removedAtLogout;
     enchantInstance.RandomSuffix = randomSuffix;
 
     // Set enchantment to item's wowdata fields
     _setEnchantmentDataFields(slot, Enchantment->Id, duration, 0);
 
-    m_enchantments.insert(std::make_pair(slot, enchantInstance));
+    m_enchantments.try_emplace(slot, std::move(enchantInstance));
 
     if (m_owner == nullptr)
         return true;
@@ -344,16 +370,6 @@ void Item::removeEnchantment(EnchantmentSlot slot, bool timerExpired/* = false*/
         applyEnchantmentBonus(slot, false);
 
     _setEnchantmentDataFields(slot, 0, 0, 0);
-
-#if VERSION_STRING >= Cata
-    // These are allocated with new
-    if (slot == REFORGE_ENCHANTMENT_SLOT || slot == TRANSMOGRIFY_ENCHANTMENT_SLOT)
-    {
-        delete itr->second.Enchantment;
-        itr->second.Enchantment = nullptr;
-    }
-#endif
-
     m_enchantments.erase(itr);
 
     if (!timerExpired)
@@ -412,7 +428,7 @@ void Item::removeSocketBonusEnchant()
     }
 }
 
-void Item::removeRelatedEnchants(DBC::Structures::SpellItemEnchantmentEntry const* newEnchant)
+void Item::removeRelatedEnchants(WDB::Structures::SpellItemEnchantmentEntry const* newEnchant)
 {
     for (EnchantmentMap::iterator itr = m_enchantments.begin(); itr != m_enchantments.end();)
     {
@@ -431,7 +447,7 @@ void Item::applyEnchantmentBonus(EnchantmentSlot slot, bool apply)
     if (enchantment == m_enchantments.end())
         return;
 
-    DBC::Structures::SpellItemEnchantmentEntry const* Entry = enchantment->second.Enchantment;
+    WDB::Structures::SpellItemEnchantmentEntry const* Entry = enchantment->second.Enchantment;
     const uint32_t RandomSuffixAmount = enchantment->second.RandomSuffix;
 
     if (enchantment->second.BonusApplied == apply)
@@ -457,7 +473,7 @@ void Item::applyEnchantmentBonus(EnchantmentSlot slot, bool apply)
     }
     else if (apply)
     {
-        sLogger.failure("Item::applyEnchantmentBonus : Tried to apply visual enchantment but equipment slot %i is invalid", itemSlot);
+        sLogger.failure("Item::applyEnchantmentBonus : Tried to apply visual enchantment but equipment slot {} is invalid", itemSlot);
     }
 
 #if VERSION_STRING >= Cata
@@ -477,7 +493,7 @@ void Item::applyEnchantmentBonus(EnchantmentSlot slot, bool apply)
                     {
                         if (Entry->spell[c] != 0)
                         {
-                            const auto procChance = Entry->min[c] == 0 ? float2int32(static_cast<float>(getItemProperties()->Delay) * 0.001f / 60.0f * 100.0f) : Entry->min[c];
+                            const auto procChance = Entry->min[c] == 0 ? Util::float2int32(static_cast<float>(getItemProperties()->Delay) * 0.001f / 60.0f * 100.0f) : Entry->min[c];
                             switch (m_owner->getItemInterface()->GetInventorySlotByGuid(getGuid()))
                             {
                                 case EQUIPMENT_SLOT_MAINHAND:
@@ -610,7 +626,7 @@ void Item::applyEnchantmentBonus(EnchantmentSlot slot, bool apply)
                 }
 
                 default:
-                    sLogger.failure("Unknown enchantment type: %u (%u)", Entry->type[c], Entry->Id);
+                    sLogger.failure("Unknown enchantment type: {} ({})", Entry->type[c], Entry->Id);
                     break;
                 }
         }
@@ -659,7 +675,7 @@ void Item::applyRandomProperties(bool apply)
     {
         if (static_cast<int32_t>(getRandomPropertiesId()) > 0)
         {
-            auto item_random_properties = sItemRandomPropertiesStore.LookupEntry(getRandomPropertiesId());
+            auto item_random_properties = sItemRandomPropertiesStore.lookupEntry(getRandomPropertiesId());
             for (uint8_t k = 0; k < 3; k++)
             {
                 if (item_random_properties == nullptr)
@@ -667,16 +683,16 @@ void Item::applyRandomProperties(bool apply)
 
                 if (item_random_properties->spells[k] != 0)
                 {
-                    auto spell_item_enchant = sSpellItemEnchantmentStore.LookupEntry(item_random_properties->spells[k]);
+                    auto spell_item_enchant = sSpellItemEnchantmentStore.lookupEntry(item_random_properties->spells[k]);
                     if (spell_item_enchant == nullptr)
                         continue;
 
                     auto slot = hasEnchantmentReturnSlot(item_random_properties->spells[k]);
                     if (slot < 0)
                     {
-                        EnchantmentSlot slot = PROP_ENCHANTMENT_SLOT_2;
-                        if (_findFreeRandomEnchantmentSlot(&slot, RandomEnchantmentType::PROPERTY))
-                            addEnchantment(item_random_properties->spells[k], slot, 0, true);
+                        EnchantmentSlot newSlot = PROP_ENCHANTMENT_SLOT_2;
+                        if (_findFreeRandomEnchantmentSlot(&newSlot, RandomEnchantmentType::PROPERTY))
+                            addEnchantment(item_random_properties->spells[k], newSlot, 0, true);
                     }
                     else if (apply)
                     {
@@ -687,7 +703,7 @@ void Item::applyRandomProperties(bool apply)
         }
         else
         {
-            auto item_random_suffix = sItemRandomSuffixStore.LookupEntry(abs(int(getRandomPropertiesId())));
+            auto item_random_suffix = sItemRandomSuffixStore.lookupEntry(abs(int(getRandomPropertiesId())));
             for (uint8_t k = 0; k < 3; ++k)
             {
                 if (item_random_suffix == nullptr)
@@ -695,16 +711,16 @@ void Item::applyRandomProperties(bool apply)
 
                 if (item_random_suffix->enchantments[k] != 0)
                 {
-                    auto spell_item_enchant = sSpellItemEnchantmentStore.LookupEntry(item_random_suffix->enchantments[k]);
+                    auto spell_item_enchant = sSpellItemEnchantmentStore.lookupEntry(item_random_suffix->enchantments[k]);
                     if (spell_item_enchant == nullptr)
                         continue;
 
                     auto slot = hasEnchantmentReturnSlot(spell_item_enchant->Id);
                     if (slot < 0)
                     {
-                        EnchantmentSlot slot = PROP_ENCHANTMENT_SLOT_0;
-                        if (_findFreeRandomEnchantmentSlot(&slot, RandomEnchantmentType::SUFFIX))
-                            addEnchantment(item_random_suffix->enchantments[k], slot, 0, true, item_random_suffix->prefixes[k]);
+                        EnchantmentSlot newSlot = PROP_ENCHANTMENT_SLOT_0;
+                        if (_findFreeRandomEnchantmentSlot(&newSlot, RandomEnchantmentType::SUFFIX))
+                            addEnchantment(item_random_suffix->enchantments[k], newSlot, 0, true, item_random_suffix->prefixes[k]);
                     }
                     else if (apply)
                     {
@@ -759,7 +775,7 @@ uint32_t Item::generateRandomSuffixFactor(ItemProperties const* m_itemProto)
         value = SuffixMods[m_itemProto->InventoryType];
 
     value = value * static_cast<double>(m_itemProto->ItemLevel) + 0.5;
-    return long2int32(value);
+    return Util::long2int32(value);
 }
 
 void Item::_setEnchantmentDataFields(EnchantmentSlot slot, uint32_t enchantmentId, uint32_t duration, uint32_t charges)
@@ -851,7 +867,7 @@ uint32_t Item::countGemsWithLimitId(uint32_t limitId)
 #endif
 }
 
-bool Item::isGemRelated(DBC::Structures::SpellItemEnchantmentEntry const* enchantment)
+bool Item::isGemRelated(WDB::Structures::SpellItemEnchantmentEntry const* enchantment)
 {
 #if VERSION_STRING > Classic
     if (getItemProperties()->SocketBonus == enchantment->Id)
@@ -904,22 +920,22 @@ bool Item::repairItem(Player* player, bool isGuildMoney, int32_t* repairCost /*=
 
 uint32_t Item::repairItemCost()
 {
-    auto durability_costs = sDurabilityCostsStore.LookupEntry(m_itemProperties->ItemLevel);
+    auto durability_costs = sDurabilityCostsStore.lookupEntry(m_itemProperties->ItemLevel);
     if (durability_costs == nullptr)
     {
-        sLogger.failure("Repair: Unknown item level (%u)", durability_costs);
+        sLogger.failure("Repair: Unknown item level ({})", fmt::ptr(durability_costs));
         return 0;
     }
 
-    auto durability_quality = sDurabilityQualityStore.LookupEntry((m_itemProperties->Quality + 1) * 2);
+    auto durability_quality = sDurabilityQualityStore.lookupEntry((m_itemProperties->Quality + 1) * 2);
     if (durability_quality == nullptr)
     {
-        sLogger.failure("Repair: Unknown item quality (%u)", durability_quality);
+        sLogger.failure("Repair: Unknown item quality ({})", fmt::ptr(durability_quality));
         return 0;
     }
 
     uint32_t dmodifier = durability_costs->modifier[m_itemProperties->Class == ITEM_CLASS_WEAPON ? m_itemProperties->SubClass : m_itemProperties->SubClass + 21];
-    uint32_t cost = long2int32((getMaxDurability() - getDurability()) * dmodifier * double(durability_quality->quality_modifier));
+    uint32_t cost = Util::long2int32((getMaxDurability() - getDurability()) * dmodifier * double(durability_quality->quality_modifier));
     return cost;
 }
 
@@ -993,10 +1009,8 @@ bool Item::hasStats() const
     if (getRandomPropertiesId() != 0)
         return true;
 
-    ItemProperties const* proto = getItemProperties();
-    for (uint8_t i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
-        if (proto->Stats[i].Value != 0)
-            return true;
+    if (ItemProperties const* proto = getItemProperties())
+        return proto->generalStatsMap.size() > 0;
 
     return false;
 }
@@ -1155,10 +1169,8 @@ bool Item::isTradeableWith(Player* player)
 #if VERSION_STRING == Cata
 int32_t Item::getReforgableStat(ItemModType statType) const
 {
-    ItemProperties const* proto = getItemProperties();
-    for (uint32_t i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
-        if (ItemModType(proto->Stats[i].Type) == statType)
-            return proto->Stats[i].Value;
+    if (ItemProperties const* proto = getItemProperties())
+        return proto->hasStat(statType);
     
     int32_t randomPropId = getRandomPropertiesId();
     if (!randomPropId)
@@ -1166,12 +1178,12 @@ int32_t Item::getReforgableStat(ItemModType statType) const
 
     if (randomPropId < 0)
     {
-        DBC::Structures::ItemRandomSuffixEntry const* randomSuffix = sItemRandomSuffixStore.LookupEntry(-randomPropId);
+        WDB::Structures::ItemRandomSuffixEntry const* randomSuffix = sItemRandomSuffixStore.lookupEntry(-randomPropId);
         if (!randomSuffix)
             return 0;
 
         for (uint32_t e = PROP_ENCHANTMENT_SLOT_0; e <= PROP_ENCHANTMENT_SLOT_4; ++e)
-            if (DBC::Structures::SpellItemEnchantmentEntry const* enchant = sSpellItemEnchantmentStore.LookupEntry(getEnchantmentId(EnchantmentSlot(e))))
+            if (WDB::Structures::SpellItemEnchantmentEntry const* enchant = sSpellItemEnchantmentStore.lookupEntry(getEnchantmentId(EnchantmentSlot(e))))
                 for (uint8_t f = 0; f < MAX_ITEM_ENCHANTMENT_EFFECTS; ++f)
                     if (enchant->type[f] == ITEM_ENCHANTMENT_TYPE_STAT && ItemModType(enchant->spell[f]) == statType)
                         for (uint8_t k = 0; k < 5; ++k)
@@ -1180,12 +1192,12 @@ int32_t Item::getReforgableStat(ItemModType statType) const
     }
     else
     {
-        DBC::Structures::ItemRandomPropertiesEntry const* randomProp = sItemRandomPropertiesStore.LookupEntry(randomPropId);
+        WDB::Structures::ItemRandomPropertiesEntry const* randomProp = sItemRandomPropertiesStore.lookupEntry(randomPropId);
         if (!randomProp)
             return 0;
 
         for (uint32_t e = PROP_ENCHANTMENT_SLOT_0; e <= PROP_ENCHANTMENT_SLOT_4; ++e)
-            if (DBC::Structures::SpellItemEnchantmentEntry const* enchant = sSpellItemEnchantmentStore.LookupEntry(getEnchantmentId(EnchantmentSlot(e))))
+            if (WDB::Structures::SpellItemEnchantmentEntry const* enchant = sSpellItemEnchantmentStore.lookupEntry(getEnchantmentId(EnchantmentSlot(e))))
                 for (uint8_t f = 0; f < MAX_ITEM_ENCHANTMENT_EFFECTS; ++f)
                     if (enchant->type[f] == ITEM_ENCHANTMENT_TYPE_STAT && ItemModType(enchant->spell[f]) == statType)
                         for (uint8_t k = 0; k < MAX_ITEM_ENCHANTMENT_EFFECTS; ++k)
@@ -1197,14 +1209,39 @@ int32_t Item::getReforgableStat(ItemModType statType) const
 }
 #endif
 
+uint8_t Item::getCharterTypeForEntry() const
+{
+    uint8_t charterType;
+    switch (getEntry())
+    {
+        case CharterEntry::Guild:
+            charterType = CHARTER_TYPE_GUILD;
+            break;
+        case CharterEntry::TwoOnTwo:
+            charterType = CHARTER_TYPE_ARENA_2V2;
+            break;
+        case CharterEntry::ThreeOnThree:
+            charterType = CHARTER_TYPE_ARENA_3V3;
+            break;
+        case CharterEntry::FiveOnFive:
+            charterType = CHARTER_TYPE_ARENA_5V5;
+            break;
+        default:
+            charterType = NUM_CHARTER_TYPES;
+            break;
+    }
+
+    return charterType;
+}
+
 void Item::loadFromDB(Field* fields, Player* plr, bool light)
 {
-    uint32_t itemid = fields[2].GetUInt32();
+    uint32_t itemid = fields[2].asUint32();
 
     m_itemProperties = sMySQLStore.getItemProperties(itemid);
     if (!m_itemProperties)
     {
-        sLogger.failure("Item::loadFromDB: Can't load item %u missing properties!", itemid);
+        sLogger.failure("Item::loadFromDB: Can't load item {} missing properties!", itemid);
         return;
     }
 
@@ -1216,20 +1253,20 @@ void Item::loadFromDB(Field* fields, Player* plr, bool light)
     setEntry(itemid);
     m_owner = plr;
 
-    m_wrappedItemId = fields[3].GetUInt32();
-    setGiftCreatorGuid(fields[4].GetUInt32());
-    setCreatorGuid(fields[5].GetUInt32());
+    m_wrappedItemId = fields[3].asUint32();
+    setGiftCreatorGuid(fields[4].asUint32());
+    setCreatorGuid(fields[5].asUint32());
 
-    uint32_t count = fields[6].GetUInt32();
+    uint32_t count = fields[6].asUint32();
     if (count > m_itemProperties->MaxCount && (m_owner && !m_owner->m_cheats.hasItemStackCheat))
         count = m_itemProperties->MaxCount;
     setStackCount(count);
 
-    setChargesLeft(fields[7].GetUInt32());
+    setChargesLeft(fields[7].asUint32());
 
-    setFlags(fields[8].GetUInt32());
-    uint32_t randomProp = fields[9].GetUInt32();
-    const uint32_t randomSuffix = fields[10].GetUInt32();
+    setFlags(fields[8].asUint32());
+    uint32_t randomProp = fields[9].asUint32();
+    const uint32_t randomSuffix = fields[10].asUint32();
 
     setRandomPropertiesId(randomProp);
 
@@ -1240,16 +1277,16 @@ void Item::loadFromDB(Field* fields, Player* plr, bool light)
         setPropertySeed(0);
 
 #ifdef AE_TBC
-    setTextId(fields[11].GetUInt32());
+    setTextId(fields[11].asUint32());
 #endif
 
     setMaxDurability(m_itemProperties->MaxDurability);
-    setDurability(fields[12].GetUInt32());
+    setDurability(fields[12].asUint32());
 
     if (light)
         return;
 
-    std::string enchant_field = fields[15].GetString();
+    std::string enchant_field = fields[15].asCString();
     if (!enchant_field.empty())
     {
         std::vector<std::string> enchants = AscEmu::Util::Strings::split(enchant_field, ";");
@@ -1268,12 +1305,12 @@ void Item::loadFromDB(Field* fields, Player* plr, bool light)
         }
     }
 
-    m_expiresOnTime = fields[16].GetUInt32();
+    m_expiresOnTime = fields[16].asUint32();
 
     // Refund stuff
     std::pair<time_t, uint32_t> refundentry;
-    refundentry.first = fields[17].GetUInt32();
-    refundentry.second = fields[18].GetUInt32();
+    refundentry.first = fields[17].asUint32();
+    refundentry.second = fields[18].asUint32();
 
     if (refundentry.first != 0 && refundentry.second != 0 && getOwner() != nullptr)
     {
@@ -1282,45 +1319,19 @@ void Item::loadFromDB(Field* fields, Player* plr, bool light)
             m_owner->getItemInterface()->AddRefundable(this, refundentry.second, refundentry.first);
     }
 
-    m_text = fields[19].GetString();
+    m_text = fields[19].asCString();
 
     applyRandomProperties(false);
 
     // Charter stuff
-    if (getEntry() == CharterEntry::Guild)
+    const uint8_t charterType = getCharterTypeForEntry();
+    if (charterType < NUM_CHARTER_TYPES)
     {
         addFlags(ITEM_FLAG_SOULBOUND);
         setStackCount(1);
         setPropertySeed(57813883);
-        if (plr != nullptr && plr->getCharter(CHARTER_TYPE_GUILD))
-            setEnchantmentId(0, plr->getCharter(CHARTER_TYPE_GUILD)->GetID());
-    }
-
-    if (getEntry() == CharterEntry::TwoOnTwo)
-    {
-        addFlags(ITEM_FLAG_SOULBOUND);
-        setStackCount(1);
-        setPropertySeed(57813883);
-        if (plr != nullptr && plr->getCharter(CHARTER_TYPE_ARENA_2V2))
-            setEnchantmentId(0, plr->getCharter(CHARTER_TYPE_ARENA_2V2)->GetID());
-    }
-
-    if (getEntry() == CharterEntry::ThreeOnThree)
-    {
-        addFlags(ITEM_FLAG_SOULBOUND);
-        setStackCount(1);
-        setPropertySeed(57813883);
-        if (plr != nullptr && plr->getCharter(CHARTER_TYPE_ARENA_3V3))
-            setEnchantmentId(0, plr->getCharter(CHARTER_TYPE_ARENA_3V3)->GetID());
-    }
-
-    if (getEntry() == CharterEntry::FiveOnFive)
-    {
-        addFlags(ITEM_FLAG_SOULBOUND);
-        setStackCount(1);
-        setPropertySeed(57813883);
-        if (plr != nullptr && plr->getCharter(CHARTER_TYPE_ARENA_5V5))
-            setEnchantmentId(0, plr->getCharter(CHARTER_TYPE_ARENA_5V5)->GetID());
+        if (plr && plr->getCharter(charterType))
+            setEnchantmentId(0, plr->getCharter(charterType)->getId());
     }
 }
 
@@ -1429,20 +1440,12 @@ void Item::deleteFromDB()
     {
         for (uint32_t i = 0; i < m_itemProperties->ContainerSlots; ++i)
         {
-            if (dynamic_cast<Container*>(this)->GetItem(static_cast<int16_t>(i)) != nullptr)
+            if (dynamic_cast<Container*>(this)->getItem(static_cast<int16_t>(i)) != nullptr)
                 return;
         }
     }
 
     CharacterDatabase.Execute("DELETE FROM playeritems WHERE guid = %u", getGuidLow());
-}
-
-void Item::deleteMe()
-{
-    if (this->m_owner != nullptr)
-        this->m_owner->getItemInterface()->RemoveRefundable(this->getGuid());
-
-    delete this;
 }
 
 const static uint16_t arm_skills[7] =

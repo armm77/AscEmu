@@ -1,18 +1,48 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Management/ObjectMgr.h"
 #include "Spell/SpellClickInfo.hpp"
 #include "Spell/Definitions/TeleportCoords.hpp"
 #include "MySQLStructures.h"
-#include "Objects/GameObject.h"
+#include "Macros/MapsMacros.hpp"
+#include "Movement/Spline/SplineChain.h"
+#include "Objects/GameObjectProperties.hpp"
+#include "Management/QuestProperties.hpp"
+#include "Management/ItemProperties.hpp"
+#include "Objects/Units/Creatures/CreatureDefines.hpp"
+#include "Objects/Units/Players/PlayerDefines.hpp"
 
+class QueryResult;
+class SpellInfo;
+struct SplineChainLink;
 
-//Zyres: Define base tables
+typedef std::pair<uint32_t, uint16_t> ChainKeyType;
+
+// Custom Functions to make par a keyvariable in an unordered map
+struct ChainKeyTypeHash
+{
+    std::size_t operator()(const ChainKeyType& key) const
+    {
+        std::size_t hash = std::hash<uint32_t>{}(key.first);
+        hash ^= std::hash<uint16_t>{}(key.second) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+        return hash;
+    }
+};
+
+// Custom Functions to make par a keyvariable in an unordered map
+struct ChainKeyTypeEqual
+{
+    bool operator()(const ChainKeyType& lhs, const ChainKeyType& rhs) const
+    {
+        return lhs.first == rhs.first && lhs.second == rhs.second;
+    }
+};
+
+// Zyres: Define base tables
 struct MySQLAdditionalTable
 {
     std::string mainTable;
@@ -24,12 +54,10 @@ extern SERVER_DECL std::vector<MySQLAdditionalTable> MySQLAdditionalTables;
 class SERVER_DECL MySQLDataStore
 {
 private:
-
     MySQLDataStore() = default;
     ~MySQLDataStore() = default;
 
 public:
-
     static MySQLDataStore& getInstance();
     void finalize();
 
@@ -38,13 +66,13 @@ public:
     MySQLDataStore& operator=(MySQLDataStore&&) = delete;
     MySQLDataStore& operator=(MySQLDataStore const&) = delete;
 
-    //maps
+    // maps
     typedef std::unordered_map<uint32_t, MySQLStructure::ItemPage> ItemPageContainer;
     typedef std::unordered_map<uint32_t, ItemProperties> ItemPropertiesContainer;
     typedef std::unordered_map<uint32_t, CreatureProperties> CreaturePropertiesContainer;
     typedef std::unordered_map<uint32_t, CreaturePropertiesMovement> CreaturePropertiesMovementContainer;
 
-    typedef std::multimap<uint32_t, MySQLStructure::CreatureAIScripts*> AIScriptsMap;
+    typedef std::multimap<uint32_t, std::unique_ptr<MySQLStructure::CreatureAIScripts>> AIScriptsMap;
 
     typedef std::unordered_map<uint32_t, GameObjectProperties> GameObjectPropertiesContainer;
     typedef std::unordered_map<uint32_t, QuestProperties> QuestPropertiesContainer;
@@ -55,11 +83,14 @@ public:
     typedef std::unordered_map<uint32_t, SpawnGroupTemplateData> SpawnGroupDataContainer;
     typedef std::multimap<uint32_t, SpawnGroupTemplateData*> SpawnGroupLinkContainer;
 
+    typedef std::unordered_map<ChainKeyType, std::vector<SplineChainLink>, ChainKeyTypeHash, ChainKeyTypeEqual> SplineChainContainer;
+
     typedef std::unordered_map<uint32_t, MySQLStructure::CreatureDifficulty> CreatureDifficultyContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::DisplayBoundingBoxes> DisplayBoundingBoxesContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::VendorRestrictions> VendorRestrictionContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::NpcGossipText> NpcGossipTextContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::NpcScriptText> NpcScriptTextContainer;
+    typedef std::unordered_map<uint32_t, std::vector<MySQLStructure::NpcScriptText>> NpcScriptTextByIdContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::GossipMenuOption> GossipMenuOptionContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::Graveyards> GraveyardsContainer;
     typedef std::unordered_map<uint32_t, TeleportCoords> TeleportCoordsContainer;
@@ -76,7 +107,7 @@ public:
 
     typedef std::vector<uint32_t> PlayerXPperLevel;
 
-    typedef std::map<uint32_t, std::list<SpellInfo const*>*> SpellOverrideIdMap;
+    typedef std::map<uint32_t, std::unique_ptr<std::list<SpellInfo const*>>> SpellOverrideIdMap;
 
     typedef std::map<uint32_t, uint32_t> NpcGossipTextIdMap;
 
@@ -91,6 +122,7 @@ public:
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // locales
+    typedef std::vector<MySQLStructure::LocalesAchievementReward> LocalesAchievementRewardContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::LocalesCreature> LocalesCreatureContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::LocalesGameobject> LocalesGameobjectContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::LocalesGossipMenuOption> LocalesGossipMenuOptionContainer;
@@ -98,6 +130,7 @@ public:
     typedef std::unordered_map<uint32_t, MySQLStructure::LocalesItemPages> LocalesItemPagesContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::LocalesNpcScriptText> LocalesNpcScriptTextContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::LocalesNpcGossipText> LocalesNpcGossipTextContainer;
+    typedef std::unordered_map<uint32_t, MySQLStructure::LocalesPointsOfInterest> LocalesPointsOfInterestContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::LocalesQuest> LocalesQuestContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::LocalesWorldbroadcast> LocalesWorldbroadcastContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::LocalesWorldmapInfo> LocalesWorldmapInfoContainer;
@@ -107,7 +140,7 @@ public:
 
     //typedef std::map<uint32_t, std::set<SpellInfo const*>> PetDefaultSpellsMap;     Zyres 2017/07/16 not used
 
-    typedef std::set<MySQLStructure::ProfessionDiscovery*> ProfessionDiscoverySet;
+    typedef std::set<std::unique_ptr<MySQLStructure::ProfessionDiscovery>> ProfessionDiscoverySet;
 
     typedef std::unordered_map<uint32_t, MySQLStructure::TransportData> TransportDataContainer;
     typedef std::unordered_map<uint32_t, MySQLStructure::TransportEntrys> TransportEntryContrainer;
@@ -119,14 +152,14 @@ public:
     typedef std::vector<MySQLStructure::CreatureSpawn*> CreatureSpawnsMap;
     typedef std::vector<MySQLStructure::GameobjectSpawn*> GameobjectSpawnsMap;
 
-    typedef std::vector<MySQLStructure::RecallStruct*> RecallMap;
+    typedef std::vector<std::unique_ptr<MySQLStructure::RecallStruct>> RecallMap;
 
-    //helper
+    // helper
     MySQLStructure::ItemPage const* getItemPage(uint32_t entry);
+    uint32_t getItemPageEntryByText(std::string _text);
     ItemPageContainer const* getItemPagesStore() { return &_itemPagesStore; }
     ItemProperties const* getItemProperties(uint32_t entry);
-    ItemPropertiesContainer const* getItemPropertiesStore() { return &_itemPropertiesStore; }
-    uint32_t const getItemDisplayIdForEntry(uint32_t entry);
+    ItemPropertiesContainer const* getItemPropertiesStore();
     std::string getItemLinkByProto(ItemProperties const* iProto, uint32_t language = 0);
 
     CreatureProperties const* getCreatureProperties(uint32_t entry);
@@ -135,13 +168,13 @@ public:
     CreaturePropertiesMovement const* getCreaturePropertiesMovement(uint32_t entry);
 
     GameObjectProperties const* getGameObjectProperties(uint32_t entry);
-    GameObjectPropertiesContainer const* getGameObjectPropertiesStore() { return &_gameobjectPropertiesStore; }
+    GameObjectPropertiesContainer const* getGameObjectPropertiesStore();
 
     MySQLStructure::GameObjectSpawnExtra const* getGameObjectExtra(uint32_t lowguid) const;
     MySQLStructure::GameObjectSpawnOverrides const* getGameObjectOverride(uint32_t lowguid) const;
 
     QuestProperties const* getQuestProperties(uint32_t entry);
-    QuestPropertiesContainer const* getQuestPropertiesStore() { return &_questPropertiesStore; }
+    QuestPropertiesContainer const* getQuestPropertiesStore();
 
     uint32_t getCreatureDifficulty(uint32_t entry, uint8_t difficulty_type);
     CreatureDifficultyContainer const* getCreatureDifficultyStore() { return &_creatureDifficultyStore; }
@@ -157,6 +190,9 @@ public:
 
     MySQLStructure::NpcScriptText const* getNpcScriptText(uint32_t entry);
     NpcScriptTextContainer const* getNpcScriptTextStore() { return &_npcScriptTextStore; }
+
+    MySQLStructure::NpcScriptText const* getNpcScriptTextById(uint32_t entry, uint8_t index);
+    NpcScriptTextByIdContainer const* getNpcScriptTextStoreById() { return &_npcScriptTextStoreById; }
 
     MySQLStructure::GossipMenuOption const* getGossipMenuOption(uint32_t entry);
     GossipMenuOptionContainer const* getGossipMenuOptionStore() { return &_gossipMenuOptionStore; }
@@ -211,14 +247,18 @@ public:
     MySQLStructure::AreaTrigger const* getMapEntranceTrigger(uint32_t mapId);
     MySQLStructure::AreaTrigger const* getMapGoBackTrigger(uint32_t mapId);
 
-    std::vector<MySQLStructure::CreatureAIScripts>* getCreatureAiScripts(uint32_t entry);
+    std::unique_ptr<std::vector<MySQLStructure::CreatureAIScripts>> getCreatureAiScripts(uint32_t entry);
 
     SpawnGroupTemplateData* getSpawnGroupDataBySpawn(uint32_t spawnId);
     SpawnGroupTemplateData* getSpawnGroupDataByGroup(uint32_t groupId);
     std::vector<Creature*> const getSpawnGroupDataByBoss(uint32_t bossId);
 
+    std::vector<SplineChainLink> const* getSplineChain(uint32_t entry, uint16_t chainId) const;
+    std::vector<SplineChainLink> const* getSplineChain(Creature const* pCreature, uint16_t id) const;
+
     //////////////////////////////////////////////////////////////////////////////////////////
     // locales
+    MySQLStructure::LocalesAchievementReward const* getLocalizedAchievementReward(uint32_t entry, uint32_t gender, uint32_t sessionLocale);
     MySQLStructure::LocalesCreature const* getLocalizedCreature(uint32_t entry, uint32_t sessionLocale);
     MySQLStructure::LocalesGameobject const* getLocalizedGameobject(uint32_t entry, uint32_t sessionLocale);
     MySQLStructure::LocalesGossipMenuOption const* getLocalizedGossipMenuOption(uint32_t entry, uint32_t sessionLocale);
@@ -227,6 +267,7 @@ public:
     MySQLStructure::LocalesItemPages const* getLocalizedItemPages(uint32_t entry, uint32_t sessionLocale);
     MySQLStructure::LocalesNpcScriptText const* getLocalizedNpcScriptText(uint32_t entry, uint32_t sessionLocale);
     MySQLStructure::LocalesNpcGossipText const* getLocalizedNpcGossipText(uint32_t entry, uint32_t sessionLocale) const;
+    MySQLStructure::LocalesPointsOfInterest const* getLocalizedPointsOfInterest(uint32_t entry, uint32_t sessionLocale);
     MySQLStructure::LocalesQuest const* getLocalizedQuest(uint32_t entry, uint32_t sessionLocale);
     MySQLStructure::LocalesWorldbroadcast const* getLocalizedWorldbroadcast(uint32_t entry, uint32_t sessionLocale);
     MySQLStructure::LocalesWorldmapInfo const* getLocalizedWorldmapInfo(uint32_t entry, uint32_t sessionLocale);
@@ -240,8 +281,8 @@ public:
     
     GossipMenuInitMap const* getGossipMenuInitTextId() { return &_gossipMenuInitStore; }
 
-    RecallMap getRecallStore() const { return _recallStore; }
-    MySQLStructure::RecallStruct const* getRecallByName(std::string name);
+    RecallMap const& getRecallStore() const { return _recallStore; }
+    MySQLStructure::RecallStruct const* getRecallByName(std::string const& name) const;
 
     bool isCharacterNameAllowed(std::string charName);
 
@@ -252,15 +293,18 @@ public:
         return false;
     }
 
-    //Config
+    // config
     void loadAdditionalTableConfig();
 
-    //helpers
-    QueryResult* getWorldDBQuery(const char* query, ...);
+    // helpers
+    std::unique_ptr<QueryResult> getWorldDBQuery(const char* query, ...);
 
-    //Loads
+    // loads
     void loadItemPagesTable();
+    void addItemPage(uint32_t _entry, std::string _text, uint32_t _nextPage = 0);
     void loadItemPropertiesTable();
+    void loadItemPropertiesSpellsTable();
+    void loadItemPropertiesStatsTable();
 
     void loadCreaturePropertiesMovementTable();
     void loadCreaturePropertiesTable();
@@ -281,6 +325,8 @@ public:
     void loadSpawnGroupIds();
     void loadCreatureGroupSpawns();
 
+    void loadCreatureSplineChains();
+
     void loadNpcTextTable();
     void loadNpcScriptTextTable();
     void loadGossipMenuOptionTable();
@@ -300,7 +346,7 @@ public:
     void loadItemSetLinkedSetBonusTable();
     void loadCreatureInitialEquipmentTable();
 
-    //player create info
+    // player create info
     void loadPlayerCreateInfoTable();
     void loadPlayerCreateInfoBars();
     void loadPlayerCreateInfoItems();
@@ -325,6 +371,7 @@ public:
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // locales
+    void loadLocalesAchievementReward();
     void loadLocalesCreature();
     void loadLocalesGameobject();
     void loadLocalesGossipMenuOption();
@@ -332,6 +379,7 @@ public:
     void loadLocalesItemPages();
     void loadLocalesNpcScriptText();
     void loadLocalesNpcText();
+    void loadLocalesPointsOfInterest();
     void loadLocalesQuest();
     void loadLocalesWorldbroadcast();
     void loadLocalesWorldmapInfo();
@@ -366,12 +414,16 @@ public:
     SpawnGroupDataContainer _spawnGroupDataStore;
     SpawnGroupLinkContainer _spawnGroupMapStore;
 
+    // Spline Chains
+    SplineChainContainer _splineChainsStore;
+
     AIScriptsMap _creatureAIScriptStore;
     CreatureDifficultyContainer _creatureDifficultyStore;
     DisplayBoundingBoxesContainer _displayBoundingBoxesStore;
     VendorRestrictionContainer _vendorRestrictionsStore;
     NpcGossipTextContainer _npcGossipTextStore;
     NpcScriptTextContainer _npcScriptTextStore;
+    NpcScriptTextByIdContainer _npcScriptTextStoreById;
     GossipMenuOptionContainer _gossipMenuOptionStore;
     GraveyardsContainer _graveyardsStore;
     TeleportCoordsContainer _teleportCoordsStore;
@@ -388,8 +440,8 @@ public:
 
     ItemSetDefinedSetBonusContainer _definedItemSetBonusStore;
 
-    PlayerCreateInfo* _playerCreateInfoStoreNew[DBC_NUM_RACES][MAX_PLAYER_CLASSES] = {0};
-    CreateInfo_ClassLevelStatsVector _playerClassLevelStatsStore[MAX_PLAYER_CLASSES];
+    std::array<std::array<std::unique_ptr<PlayerCreateInfo>, MAX_PLAYER_CLASSES>, DBC_NUM_RACES> _playerCreateInfoStoreNew = {{ nullptr }};
+    std::array<CreateInfo_ClassLevelStatsVector, MAX_PLAYER_CLASSES> _playerClassLevelStatsStore;
     PlayerXPperLevel _playerXPperLevelStore;
 
     SpellOverrideIdMap _spellOverrideIdStore;
@@ -407,6 +459,7 @@ public:
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // locales
+    LocalesAchievementRewardContainer _localesAchievementRewardStore;
     LocalesCreatureContainer _localesCreatureStore;
     LocalesGameobjectContainer _localesGameobjectStore;
     LocalesGossipMenuOptionContainer _localesGossipMenuOptionStore;
@@ -414,6 +467,7 @@ public:
     LocalesItemPagesContainer _localesItemPagesStore;
     LocalesNpcScriptTextContainer _localesNpcScriptTextStore;
     LocalesNpcGossipTextContainer _localesNpcGossipTextStore;
+    LocalesPointsOfInterestContainer _localesPointsOfInterestStore;
     LocalesQuestContainer _localesQuestStore;
     LocalesWorldbroadcastContainer _localesWorldbroadcastStore;
     LocalesWorldmapInfoContainer _localesWorldmapInfoStore;
@@ -430,8 +484,8 @@ public:
     GossipMenuInitMap _gossipMenuInitStore;
     GossipMenuItemsContainer _gossipMenuItemsStores;
 
-    CreatureSpawnsMap _creatureSpawnsStore[MAX_NUM_MAPS + 1];
-    GameobjectSpawnsMap _gameobjectSpawnsStore[MAX_NUM_MAPS + 1];
+    std::array<CreatureSpawnsMap, (MAX_NUM_MAPS + 1)> _creatureSpawnsStore;
+    std::array<GameobjectSpawnsMap, (MAX_NUM_MAPS + 1)> _gameobjectSpawnsStore;
 
     RecallMap _recallStore;
 };

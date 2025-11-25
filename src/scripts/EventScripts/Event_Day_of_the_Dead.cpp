@@ -1,9 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
+#include "Management/AchievementMgr.h"
+#include "Objects/Units/UnitDefines.hpp"
+#include "Objects/Units/Players/Player.hpp"
 
 enum
 {
@@ -34,9 +37,9 @@ void Catrina(Player* pPlayer, Unit* pUnit)
     }
 
 #if VERSION_STRING > TBC
-    if (pPlayer->getAchievementMgr().HasCompleted(ACHIEVEMRNT_DEAD_MANS_PARTY) == false)
+    if (pPlayer->getAchievementMgr()->hasCompleted(ACHIEVEMRNT_DEAD_MANS_PARTY) == false)
     {
-        pPlayer->getAchievementMgr().GMCompleteAchievement(NULL, ACHIEVEMRNT_DEAD_MANS_PARTY);
+        pPlayer->getAchievementMgr()->gmCompleteAchievement(NULL, ACHIEVEMRNT_DEAD_MANS_PARTY);
     }
 #endif
 }

@@ -1,21 +1,26 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Logging/Logger.hpp"
+#include "Storage/WDB/WDBStores.hpp"
 #include "Server/Packets/CmsgAreatrigger.h"
 #include "Server/WorldSession.h"
 #include "Map/Maps/InstanceDefines.hpp"
 #include "Management/Group.h"
-#include "Management/ItemInterface.h"
 #include "Management/QuestMgr.h"
 #include "Storage/MySQLDataStore.hpp"
 #include "Map/Management/MapMgr.hpp"
 #include "Storage/WorldStrings.h"
 #include "Management/Battleground/Battleground.hpp"
-#include "Server/Script/ScriptMgr.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 #include "Server/Packets/SmsgTransferAborted.h"
 #include "Server/Packets/SmsgRaidGroupOnly.h"
+#include "Server/Script/HookInterface.hpp"
+#include "Server/Script/InstanceScript.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -25,17 +30,17 @@ void WorldSession::handleAreaTriggerOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREATRIGGER: %u (triggerId)", srlPacket.triggerId);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREATRIGGER: {} (triggerId)", srlPacket.triggerId);
 
     if (!_player->IsInWorld())
         return;
 
     sQuestMgr.OnPlayerExploreArea(_player, srlPacket.triggerId);
 
-    const auto areaTriggerEntry = sAreaTriggerStore.LookupEntry(srlPacket.triggerId);
+    const auto areaTriggerEntry = sAreaTriggerStore.lookupEntry(srlPacket.triggerId);
     if (areaTriggerEntry == nullptr)
     {
-        sLogger.debug("%u is not part of AreaTrigger.dbc", srlPacket.triggerId);
+        sLogger.debug("{} is not part of AreaTrigger.dbc", srlPacket.triggerId);
         return;
     }
 
@@ -140,8 +145,11 @@ void WorldSession::handleAreaTriggerOpcode(WorldPacket& recvPacket)
             if (_player->isTransferPending())
                 break;
 
-            _player->setMapEntryPoint(areaTrigger->mapId);
-            _player->safeTeleport(areaTrigger->mapId, 0, LocationVector(areaTrigger->x, areaTrigger->y, areaTrigger->z, areaTrigger->o));
+            if (!_player->isOnTaxi())
+            {
+                _player->setMapEntryPoint(areaTrigger->mapId);
+                _player->safeTeleport(areaTrigger->mapId, 0, LocationVector(areaTrigger->x, areaTrigger->y, areaTrigger->z, areaTrigger->o));
+            }
         } break;
         case ATTYPE_QUESTTRIGGER:
         {
@@ -154,7 +162,7 @@ void WorldSession::handleAreaTriggerOpcode(WorldPacket& recvPacket)
         } break;
         case ATTYPE_TELEPORT:
         {
-            if (!_player->isTransferPending())
+            if (!_player->isTransferPending() && !_player->isOnTaxi())
             {
                 _player->setMapEntryPoint(areaTrigger->mapId);
                 _player->safeTeleport(areaTrigger->mapId, 0, LocationVector(areaTrigger->x, areaTrigger->y, areaTrigger->z, areaTrigger->o));

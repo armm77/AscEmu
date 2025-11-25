@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,17 +17,18 @@
  */
 
 #include "Setup.h"
-#include "Objects/Units/Creatures/Summons/Summon.h"
+#include "Objects/Units/Creatures/Summons/Summon.hpp"
 #include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
 #include "Map/Management/MapMgr.hpp"
-#include "Management/Faction.h"
 #include "Objects/Units/Creatures/Pet.h"
-#include "Spell/Spell.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Spell/SpellInfo.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 #include <Spell/Definitions/PowerType.hpp>
 
-#include "Server/Script/CreatureAIScript.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Utilities/Random.hpp"
 
 class ArmyOfTheDeadGhoulAI : public CreatureAIScript
 {
@@ -85,7 +86,7 @@ public:
                 pet->m_baseDamage[1] += ownerBonus;
 
                 const auto unitTarget = pet->getWorldMap()->getUnit(playerOwner->getTargetGuid());
-                if (unitTarget != nullptr && isAttackable(playerOwner, unitTarget))
+                if (unitTarget != nullptr && playerOwner->isValidAttackableTarget(unitTarget))
                 {
                     pet->getAIInterface()->onHostileAction(unitTarget);
                     pet->getAIInterface()->setCurrentTarget(unitTarget);
@@ -120,43 +121,43 @@ public:
                     getCreature()->setMaxPower(POWER_TYPE_MANA, unitOwner->getMaxPower(POWER_TYPE_MANA));
                     getCreature()->setPower(POWER_TYPE_MANA, unitOwner->getPower(POWER_TYPE_MANA));
 
-                    AI_Spell sp1{};
-                    sp1.entryId = 59638;
-                    sp1.spell = sSpellMgr.getSpellInfo(sp1.entryId);
-                    if (!sp1.spell)
+                    auto sp1 = std::make_unique<AI_Spell>();
+                    sp1->entryId = 59638;
+                    sp1->spell = sSpellMgr.getSpellInfo(sp1->entryId);
+                    if (!sp1->spell)
                         return;
 
-                    sp1.spellType = STYPE_DAMAGE;
-                    sp1.agent = AGENT_SPELL;
-                    sp1.spelltargetType = TTYPE_SINGLETARGET;
-                    sp1.cooldown = 0;
-                    sp1.cooldowntime = 0;
-                    sp1.Misc2 = 0;
-                    sp1.procCount = 0;
-                    sp1.procChance = 100;
-                    sp1.minrange = sp1.spell->getMinRange();
-                    sp1.maxrange = sp1.spell->getMaxRange();
+                    sp1->spellType = STYPE_DAMAGE;
+                    sp1->agent = AGENT_SPELL;
+                    sp1->spelltargetType = TTYPE_SINGLETARGET;
+                    sp1->cooldown = 0;
+                    sp1->cooldowntime = 0;
+                    sp1->Misc2 = 0;
+                    sp1->procCount = 0;
+                    sp1->procChance = 100;
+                    sp1->minrange = sp1->spell->getMinRange();
+                    sp1->maxrange = sp1->spell->getMaxRange();
 
-                    getCreature()->getAIInterface()->addSpellToList(&sp1);
+                    getCreature()->getAIInterface()->addSpellToList(std::move(sp1));
 
-                    AI_Spell sp2{};
-                    sp2.entryId = 59637;
-                    sp2.spell = sSpellMgr.getSpellInfo(sp2.entryId);
-                    if (!sp2.spell)
+                    auto sp2 = std::make_unique<AI_Spell>();
+                    sp2->entryId = 59637;
+                    sp2->spell = sSpellMgr.getSpellInfo(sp2->entryId);
+                    if (!sp2->spell)
                         return;
 
-                    sp2.spellType = STYPE_DAMAGE;
-                    sp2.agent = AGENT_SPELL;
-                    sp2.spelltargetType = TTYPE_SINGLETARGET;
-                    sp2.cooldown = 0;
-                    sp2.cooldowntime = 0;
-                    sp2.Misc2 = 0;
-                    sp2.procCount = 0;
-                    sp2.procChance = 100;
-                    sp2.minrange = sp2.spell->getMinRange();
-                    sp2.maxrange = sp2.spell->getMaxRange();
+                    sp2->spellType = STYPE_DAMAGE;
+                    sp2->agent = AGENT_SPELL;
+                    sp2->spelltargetType = TTYPE_SINGLETARGET;
+                    sp2->cooldown = 0;
+                    sp2->cooldowntime = 0;
+                    sp2->Misc2 = 0;
+                    sp2->procCount = 0;
+                    sp2->procChance = 100;
+                    sp2->minrange = sp2->spell->getMinRange();
+                    sp2->maxrange = sp2->spell->getMaxRange();
 
-                    getCreature()->getAIInterface()->addSpellToList(&sp2);
+                    getCreature()->getAIInterface()->addSpellToList(std::move(sp2));
                 }
             }
         }
@@ -311,10 +312,12 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new FrostBroodVanquisherAI(c); }
     explicit FrostBroodVanquisherAI(Creature* pCreature) : CreatureAIScript(pCreature) {}
 
+#if VERSION_STRING >= TBC
     void OnLoad() override
     {
-        getCreature()->setAnimationTier(AnimationTier::Hover);
+        getCreature()->setAnimationFlags(ANIMATION_FLAG_HOVER);
     }
+#endif
 
     void OnRemovePassenger(Unit* _passenger) override
     {

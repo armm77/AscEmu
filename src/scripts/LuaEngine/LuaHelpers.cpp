@@ -1,9 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "LuaHelpers.h"
+#include "LuaHelpers.hpp"
+
+#include <cstdlib>
+#include <string>
 
 int LuaHelpers::ExtractfRefFromCString(lua_State* L, const char* functionName)
 {
@@ -11,7 +14,11 @@ int LuaHelpers::ExtractfRefFromCString(lua_State* L, const char* functionName)
     auto top = lua_gettop(L);
     if (functionName != nullptr)
     {
+#if defined(linux) || defined(__linux) || defined(FreeBSD) || defined(__FreeBSD__) || defined(__APPLE__)
         char* copy = strdup(functionName);
+#else
+        char* copy = _strdup(functionName);
+#endif
         char* token = strtok(copy, ".:");
         if (strpbrk(functionName, ".:") == nullptr)
         {

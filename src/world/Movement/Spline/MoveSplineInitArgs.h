@@ -1,16 +1,17 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "MoveSplineFlag.h"
 #include <vector>
+#include <cstdint>
+#include "MoveSplineFlag.h"
 
 class Unit;
 
-namespace MovementNew {
+namespace MovementMgr {
 
 typedef std::vector<Vector3> PointsArray;
 
@@ -53,4 +54,4 @@ struct MoveSplineInitArgs
 private:
     bool _checkPathBounds() const;
 };
-} // namespace MovementNew
+} // namespace MovementMgr

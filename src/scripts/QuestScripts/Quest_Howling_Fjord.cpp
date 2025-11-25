@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,8 +18,14 @@
  */
 
 #include "Setup.h"
-#include "Management/TaxiMgr.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/ItemInterface.h"
+#include "Management/ObjectMgr.hpp"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Objects/Item.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Server/Script/CreatureAIScript.hpp"
 
 class NorthFleet : public CreatureAIScript
 {
@@ -88,35 +94,17 @@ public:
         {
             case 1:
             {
-                Item* item = sObjectMgr.CreateItem(33634, plr);
-                if (item == nullptr)
-                    return;
-
-                item->setStackCount(10);
-
-                if (!plr->getItemInterface()->AddItemToFreeSlot(item))
-                {
-                    plr->getSession()->SendNotification("No free slots were found in your inventory!");
-                    item->deleteMe();
-                }
-                else
-                {
-                    plr->sendItemPushResultPacket(false, true, false, plr->getItemInterface()->LastSearchResult()->ContainerSlot,
-                        plr->getItemInterface()->LastSearchResult()->Slot, 1, item->getEntry(), item->getPropertySeed(),
-                        item->getRandomPropertiesId(), item->getStackCount());
-
-                }
+                plr->getItemInterface()->AddItemById(33634, 10, 0);
 
                 if (pCreature->getEntry() == 23859)
                 {
-                    TaxiPath* path = sTaxiMgr.GetTaxiPath(745);
-                    plr->startTaxiPath(path, 17759, 0);
+                    plr->activateTaxiPathTo(745, pCreature);
                 }
                 break;
             }
             case 2:
             {
-                plr->getSession()->sendTaxiList(pCreature);
+                plr->getSession()->sendTaxiMenu(pCreature);
                 break;
             }
         }

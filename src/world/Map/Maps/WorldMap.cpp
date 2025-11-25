@@ -1,31 +1,47 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "WorldMap.hpp"
-#include "Objects/DynamicObject.h"
+#include "Objects/DynamicObject.hpp"
+#include "Objects/Units/Creatures/CreatureGroups.h"
 #include "Objects/Units/Creatures/Pet.h"
-#include "Objects/Units/Creatures/Summons/Summon.h"
+#include "Objects/Units/Creatures/Summons/Summon.hpp"
 #include "Objects/Units/Unit.hpp"
 #include "VMapFactory.h"
 #include "MMapFactory.h"
-#include "Map/Cells/CellHandler.hpp"
 #include "Macros/MapsMacros.hpp"
-#include "shared/WoWGuid.h"
+#include "shared/WoWGuid.hpp"
 #include "MapScriptInterface.h"
-#include "Server/Script/ScriptMgr.h"
-#include "Macros/ScriptMacros.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 #include "Map/Management/MapMgr.hpp"
-#include "Management/WorldStatesHandler.h"
 #include "InstanceMap.hpp"
 #include "Server/Packets/SmsgUpdateWorldState.h"
 #include "Server/Packets/SmsgDefenseMessage.h"
 #include "Map/Area/AreaManagementGlobals.hpp"
 #include "Map/Area/AreaStorage.hpp"
-#include "CrashHandler.h"
+#include "Debugging/CrashHandler.h"
+#include "Objects/Transporter.hpp"
+#include "Objects/Units/Creatures/Summons/SummonDefines.hpp"
+#include "Server/DatabaseDefinition.hpp"
+#include "Server/World.h"
+#include "Server/WorldSession.h"
+#include "Spell/Definitions/SummonControlTypes.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Storage/WDB/WDBStores.hpp"
 
 #include <ctime>
+#include <cstdarg>
+
+#include "Logging/Logger.hpp"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Units/Creatures/Corpse.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Objects/Item.hpp"
+#include "Server/EventMgr.h"
+#include "Storage/WDB/WDBStructures.hpp"
 
 using namespace AscEmu::Packets;
 using namespace AscEmu::Threading;
@@ -33,7 +49,7 @@ using namespace AscEmu::Threading;
 extern bool bServerShutdown;
 
 WorldMap::WorldMap(BaseMap* baseMap, uint32_t id, uint32_t expiry, uint32_t InstanceId, uint8_t SpawnMode) : CellHandler<MapCell>(baseMap), eventHolder(InstanceId), worldstateshandler(id),
-    _terrain(new TerrainHolder(id)), m_unloadTimer(expiry), m_baseMap(baseMap)
+    _terrain(std::make_unique<TerrainHolder>(id)), m_unloadTimer(expiry), m_baseMap(baseMap)
 {
     // Map
     setSpawnMode(SpawnMode);
@@ -43,7 +59,7 @@ WorldMap::WorldMap(BaseMap* baseMap, uint32_t id, uint32_t expiry, uint32_t Inst
     m_event_Instanceid = eventHolder.GetInstanceID();
 
     // Create script interface
-    ScriptInterface = new MapScriptInterface(*this);
+    ScriptInterface = std::make_unique<MapScriptInterface>(*this);
 
     // Set up storage arrays
     m_CreatureStorage.resize(getBaseMap()->CreatureSpawnCount, nullptr);
@@ -82,8 +98,8 @@ void WorldMap::initialize()
         getScript()->OnLoad();
 
     // load corpses
-    sObjectMgr.LoadCorpses(this);
-    worldstateshandler.InitWorldStates(sObjectMgr.GetWorldStatesForMap(getBaseMap()->getMapId()));
+    sObjectMgr.loadCorpsesForInstance(this);
+    worldstateshandler.InitWorldStates(sObjectMgr.getWorldStatesForMap(getBaseMap()->getMapId()));
     worldstateshandler.setObserver(this);
 }
 
@@ -92,27 +108,22 @@ WorldMap::~WorldMap()
     m_thread->killAndJoin();
     sEventMgr.RemoveEvents(this);
 
-    if (ScriptInterface != nullptr)
-    {
-        delete ScriptInterface;
-        ScriptInterface = nullptr;
-    }
-
-    delete _terrain;
+    // Prevents a crash on map shutdown -Appled
+    ScriptInterface = nullptr;
 
     // Remove objects
-    if (_cells)
+    if (_cells != nullptr)
     {
         for (uint32_t i = 0; i < Map::Cell::_sizeX; i++)
         {
-            if (_cells[i] != 0)
+            if ((*_cells)[i] != nullptr)
             {
                 for (uint32_t j = 0; j < Map::Cell::_sizeY; j++)
                 {
-                    if (_cells[i][j] != 0)
+                    if ((*(*_cells)[i])[j] != nullptr)
                     {
-                        _cells[i][j]->_unloadpending = false;
-                        _cells[i][j]->removeObjects();
+                        (*(*_cells)[i])[j]->_unloadpending = false;
+                        (*(*_cells)[i])[j]->removeObjects();
                     }
                 }
             }
@@ -160,7 +171,9 @@ WorldMap::~WorldMap()
     Sessions.clear();
 
     activeCreatures.clear();
+    creature_iterator = activeCreatures.begin();
     activeGameObjects.clear();
+    gameObject_iterator = activeGameObjects.begin();
     _sqlids_creatures.clear();
     _sqlids_gameobjects.clear();
     _reusable_guids_creature.clear();
@@ -168,7 +181,7 @@ WorldMap::~WorldMap()
 
     MMAP::MMapFactory::createOrGetMMapManager()->unloadMapInstance(getBaseMap()->getMapId(), getInstanceId());
 
-    sLogger.debug("WorldMap : Instance %u shut down. (%s)", getInstanceId(), getBaseMap()->getMapName().c_str());
+    sLogger.debug("WorldMap : Instance {} shut down. ({})", getInstanceId(), getBaseMap()->getMapName());
 }
 
 void WorldMap::startMapThread()
@@ -186,13 +199,10 @@ void WorldMap::runThread()
         return;
 }
 
-void WorldMap::shutdownMapThread(bool killThreadOnly/* = false*/)
+void WorldMap::shutdownMapThread()
 {
     pInstance = nullptr;
     m_terminateThread = true;
-
-    // Note; map is never deleted if boolean is set to true, only thread is killed and freed
-    sMapMgr.addMapToRemovePool(this, killThreadOnly);
 }
 
 void WorldMap::unsafeKillMapThread()
@@ -300,32 +310,42 @@ void WorldMap::update(uint32_t t_diff)
 
     // Update Creatures
     {
-        for (auto itr = activeCreatures.cbegin(); itr != activeCreatures.cend();)
+        auto diffTime = msTime - m_lastCreatureUpdateTimer;
+        creature_iterator = activeCreatures.begin();
+        for (; creature_iterator != activeCreatures.end();)
         {
-            Creature* ptr = *itr;
-            ++itr;
-            ptr->Update(t_diff);
+            Creature* ptr = *creature_iterator;
+            ++creature_iterator;
+            ptr->Update(diffTime);
         }
+
+        m_lastCreatureUpdateTimer = msTime;
     }
 
     // Update Pets
     {
+        const auto diffTime = msTime - m_lastPetUpdateTimer;
         for (auto itr = m_PetStorage.cbegin(); itr != m_PetStorage.cend();)
         {
             Pet* ptr = itr->second;
             ++itr;
-            ptr->Update(t_diff);
+            ptr->Update(diffTime);
         }
+
+        m_lastPetUpdateTimer = msTime;
     }
 
     // Update Players
     {
+        auto diffTime = msTime - m_lastPlayerUpdateTimer;
         for (auto itr = m_PlayerStorage.cbegin(); itr != m_PlayerStorage.cend();)
         {
             Player* ptr = itr->second;
             ++itr;
-            ptr->Update(t_diff);
+            ptr->Update(diffTime);
         }
+
+        m_lastPlayerUpdateTimer = msTime;
     }
 
     // Dynamic objects are updated every 100ms
@@ -336,7 +356,7 @@ void WorldMap::update(uint32_t t_diff)
         {
             DynamicObject* o = itr->second;
             ++itr;
-            o->UpdateTargets();
+            o->updateTargets();
         }
 
         m_lastDynamicUpdateTimer = msTime;
@@ -346,10 +366,11 @@ void WorldMap::update(uint32_t t_diff)
     diffTime = msTime - m_lastGameObjectUpdateTimer;
     if (diffTime >= 200)
     {
-        for (auto itr = activeGameObjects.cbegin(); itr != activeGameObjects.cend();)
+        gameObject_iterator = activeGameObjects.begin();
+        for (; gameObject_iterator != activeGameObjects.end();)
         {
-            GameObject* gameobject = *itr;
-            ++itr;
+            GameObject* gameobject = *gameObject_iterator;
+            ++gameObject_iterator;
             if (gameobject != nullptr)
                 gameobject->Update(diffTime);
         }
@@ -411,12 +432,12 @@ void WorldMap::update(uint32_t t_diff)
                 break;
 
             _corpseDespawnTimes.pop();
-            if (Corpse* pCorpse = sObjectMgr.GetCorpse(static_cast<uint32_t>(next.guid)))
+            if (auto* const pCorpse = sObjectMgr.getCorpseByGuid(static_cast<uint32_t>(next.guid)))
             {
                 if (pCorpse->getWorldMap() != this)
                     break;
 
-                pCorpse->Despawn();
+                pCorpse->despawn();
             }
             break;
         }
@@ -434,23 +455,21 @@ void WorldMap::processRespawns()
 
     while (!_respawnTimes.empty())
     {
-        RespawnInfo* next = _respawnTimes.top();
+        RespawnInfo* next = _respawnTimes.top().get();
         if (now < next->time) // done for this tick
             break;
 
         if (checkRespawn(next)) // see if we're allowed to respawn
         {
             // ok, respawn
-            _respawnTimes.pop();
             getRespawnMapForType(next->type).erase(next->spawnId);
             doRespawn(next->type, next->obj, next->spawnId, next->cellX, next->cellY);
-            delete next;
+            _respawnTimes.pop();
         }
         else if (!next->time) // just remove respawn entry without rescheduling
         {
-            _respawnTimes.pop();
             getRespawnMapForType(next->type).erase(next->spawnId);
-            delete next;
+            _respawnTimes.pop();
         }
         else
         {
@@ -479,8 +498,10 @@ void WorldMap::unloadAll(bool onShutdown/* = false*/)
     if (onShutdown)
         return;
 
-    sMapMgr.removeInstance(getInstanceId());
-    shutdownMapThread();
+    if (getInstanceId() == 0)
+        sMapMgr.addMapToRemovePool(this);
+    else
+        sMapMgr.removeInstance(getInstanceId());
 }
 
 void WorldMap::initVisibilityDistance()
@@ -517,7 +538,7 @@ void WorldMap::removeAllPlayers()
 {
     if (getPlayerCount())
     {
-        for (PlayerStorageMap::iterator itr = m_PlayerStorage.begin(); itr != m_PlayerStorage.end();)
+        for (auto itr = m_PlayerStorage.begin(); itr != m_PlayerStorage.end();)
         {
             Player* player = itr->second;
             ++itr;
@@ -560,13 +581,13 @@ void WorldMap::PushObject(Object* obj)
         //Zyres: this was an old ASSERT MapMgr for map x is not allowed to push objects for mapId z
         if (obj->GetMapId() != getBaseMap()->getMapId())
         {
-            sLogger.failure("WorldMap::PushObject manager for mapId %u tried to push object for mapId %u, return!", getBaseMap()->getMapId(), obj->GetMapId());
+            sLogger.failure("WorldMap::PushObject manager for mapId {} tried to push object for mapId {}, return!", getBaseMap()->getMapId(), obj->GetMapId());
             return;
         }
 
         if (obj->GetPositionY() > Map::Terrain::_maxY || obj->GetPositionY() < Map::Terrain::_minY)
         {
-            sLogger.failure("WorldMap::PushObject not allowed to push object to y: %f (max %f/min %f), return!", obj->GetPositionY(), Map::Terrain::_maxY, Map::Terrain::_minY);
+            sLogger.failure("WorldMap::PushObject not allowed to push object to y: {} (max {}/min {}), return!", obj->GetPositionY(), Map::Terrain::_maxY, Map::Terrain::_minY);
             return;
         }
 
@@ -617,7 +638,7 @@ void WorldMap::PushObject(Object* obj)
         }
 
         // Build update-block for player
-        ByteBuffer* buf = 0;
+        std::unique_ptr<ByteBuffer> buf;
         uint32_t count;
         Player* plObj = nullptr;
 
@@ -625,7 +646,7 @@ void WorldMap::PushObject(Object* obj)
         {
             plObj = static_cast<Player*>(obj);
 
-            sLogger.debug("Creating player " I64FMT " for himself.", obj->getGuid());
+            sLogger.debug("Creating player {} for himself.", std::to_string(obj->getGuid()));
             ByteBuffer pbuf(10000);
             count = plObj->buildCreateUpdateBlockForPlayer(&pbuf, plObj);
             plObj->getUpdateMgr().pushCreationData(&pbuf, count);
@@ -646,17 +667,21 @@ void WorldMap::PushObject(Object* obj)
                 MapCell* cell = getCell(posX, posY);
                 if (cell)
                 {
-                    updateInRangeSet(obj, plObj, cell, &buf);
+                    updateInRangeSet(obj, plObj, cell, buf);
                 }
             }
         }
 
         // Forced Cells
         for (auto& cell : m_forcedcells)
-            updateInRangeSet(obj, plObj, cell, &buf);
+            updateInRangeSet(obj, plObj, cell, buf);
 
         //Add to the cell's object list
         objCell->addObject(obj);
+
+        // Add Object
+        if (getScript())
+            getScript()->addObject(obj);
 
         obj->SetMapCell(objCell);
         //Add to the mapmanager's object list
@@ -717,23 +742,21 @@ void WorldMap::PushObject(Object* obj)
             if (_mapWideStaticObjects.size())
             {
                 uint32_t globalcount = 0;
-                if (!buf)
-                    buf = new ByteBuffer(300);
+                if (buf == nullptr)
+                    buf = std::make_unique<ByteBuffer>(300);
 
                 for (auto _mapWideStaticObject : _mapWideStaticObjects)
                 {
-                    count = _mapWideStaticObject->buildCreateUpdateBlockForPlayer(buf, plObj);
+                    count = _mapWideStaticObject->buildCreateUpdateBlockForPlayer(buf.get(), plObj);
                     globalcount += count;
                 }
                 /*VLack: It seems if we use the same buffer then it is a BAD idea to try and push created data one by one, add them at once!
                        If you try to add them one by one, then as the buffer already contains data, they'll end up repeating some object.
                        Like 6 object updates for Deeprun Tram, but the built package will contain these entries: 2AFD0, 2AFD0, 2AFD1, 2AFD0, 2AFD1, 2AFD2*/
                 if (globalcount > 0)
-                    plObj->getUpdateMgr().pushCreationData(buf, globalcount);
+                    plObj->getUpdateMgr().pushCreationData(buf.get(), globalcount);
             }
         }
-
-        delete buf;
     }
     else
     {
@@ -760,7 +783,7 @@ void WorldMap::PushStaticObject(Object* obj)
             break;
 
         default:
-            sLogger.debug("WorldMap::PushStaticObject called for invalid type %u.", obj->GetTypeFromGUID());
+            sLogger.debug("WorldMap::PushStaticObject called for invalid type {}.", obj->GetTypeFromGUID());
             break;
     }
 
@@ -779,7 +802,7 @@ void WorldMap::RemoveObject(Object* obj, bool free_guid)
 
     if (obj->GetMapId() != getBaseMap()->getMapId())
     {
-        sLogger.failure("WorldMap::RemoveObject tried to remove object with map %u but WorldMap is for map %u!", obj->GetMapId(), getBaseMap()->getMapId());
+        sLogger.failure("WorldMap::RemoveObject tried to remove object with map {} but WorldMap is for map {}!", obj->GetMapId(), getBaseMap()->getMapId());
         return;
     }
 
@@ -850,7 +873,8 @@ void WorldMap::RemoveObject(Object* obj, bool free_guid)
             break;
         default:
         {
-            sLogger.debug("WorldMap::RemoveObject called for invalid type %u.", obj->GetTypeFromGUID());
+            if (!obj->isPlayer())
+                sLogger.debug("WorldMap::RemoveObject called for invalid type {} (not player).", obj->GetTypeFromGUID());
             break;
         }
     }
@@ -1022,7 +1046,7 @@ void WorldMap::updateAllCells(bool apply, uint32_t areamask)
     getTerrain()->getCellLimits(StartX, EndX, StartY, EndY);
 
     if (!areamask)
-        sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Updating all cells for map %03u, server might lag.", getBaseMap()->getMapId());
+        sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Updating all cells for map {:03}, server might lag.", getBaseMap()->getMapId());
 
     for (uint32_t x = StartX; x < EndX; x++)
     {
@@ -1049,7 +1073,7 @@ void WorldMap::updateAllCells(bool apply, uint32_t areamask)
                 {   // Cell doesn't exist, create it.
                     cellInfo = create(x, y);
                     cellInfo->init(x, y, this);
-                    sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Created cell [%u,%u] on map %u (instance %u).", x, y, getBaseMap()->getMapId(), getInstanceId());
+                    sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Created cell [{},{}] on map {} (instance {}).", x, y, getBaseMap()->getMapId(), getInstanceId());
                 }
 
                 spawns = _map->getSpawnsList(x, y);
@@ -1069,7 +1093,7 @@ void WorldMap::updateAllCells(bool apply, uint32_t areamask)
     }
 
     if (!areamask)
-        sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Cell updating success for map %03u", getBaseMap()->getMapId());
+        sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Cell updating success for map {:03}", getBaseMap()->getMapId());
 }
 
 void WorldMap::updateAllCells(bool apply)
@@ -1093,7 +1117,7 @@ void WorldMap::updateAllCells(bool apply)
                 {   // Cell doesn't exist, create it.
                     cellInfo = create(x, y);
                     cellInfo->init(x, y, this);
-                    sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Created cell [%u,%u] on map %u (instance %u).", x, y, getBaseMap()->getMapId(), getInstanceId());
+                    sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Created cell [{},{}] on map {} (instance {}).", x, y, getBaseMap()->getMapId(), getInstanceId());
                 }
 
                 spawns = _map->getSpawnsList(cellInfo->getPositionX(), cellInfo->getPositionY());
@@ -1111,7 +1135,7 @@ void WorldMap::updateAllCells(bool apply)
             }
         }
     }
-    sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Cell updating success for map %03u", getBaseMap()->getMapId());
+    sLogger.debugFlag(AscEmu::Logging::LF_MAP_CELL, "Cell updating success for map {:03}", getBaseMap()->getMapId());
 }
 
 void WorldMap::updateCellActivity(uint32_t x, uint32_t y, uint32_t radius)
@@ -1136,14 +1160,14 @@ void WorldMap::updateCellActivity(uint32_t x, uint32_t y, uint32_t radius)
                     objCell = create(posX, posY);
                     objCell->init(posX, posY, this);
 
-                    sLogger.debug("WorldMap : Cell [%u,%u] on map %u (instance %u) is now active.", posX, posY, getBaseMap()->getMapId(), getInstanceId());
+                    sLogger.debug("WorldMap : Cell [{},{}] on map {} (instance {}) is now active.", posX, posY, getBaseMap()->getMapId(), getInstanceId());
                     objCell->setActivity(true);
 
                     getTerrain()->loadTile(static_cast<int32_t>(posX) / 8, static_cast<int32_t>(posY) / 8);
 
                     if (!objCell->isLoaded())
                     {
-                        sLogger.debug("WorldMap : Loading objects for Cell [%u][%u] on map %u (instance %u)...", posX, posY, getBaseMap()->getMapId(), getInstanceId());
+                        sLogger.debug("WorldMap : Loading objects for Cell [{}][{}] on map {} (instance {})...", posX, posY, getBaseMap()->getMapId(), getInstanceId());
 
                         sp = _map->getSpawnsList(posX, posY);
                         if (sp)
@@ -1159,14 +1183,14 @@ void WorldMap::updateCellActivity(uint32_t x, uint32_t y, uint32_t radius)
                     if (objCell->isIdlePending())
                         objCell->cancelPendingIdle();
 
-                    sLogger.debug("Cell [%u,%u] on map %u (instance %u) is now active.", posX, posY, getBaseMap()->getMapId(), getInstanceId());
+                    sLogger.debug("Cell [{},{}] on map {} (instance {}) is now active.", posX, posY, getBaseMap()->getMapId(), getInstanceId());
 
                     getTerrain()->loadTile(static_cast<int32_t>(posX) / 8, static_cast<int32_t>(posY) / 8);
                     objCell->setActivity(true);
 
                     if (!objCell->isLoaded())
                     {
-                        sLogger.debug("Loading objects for Cell [%u][%u] on map %u (instance %u)...", posX, posY, getBaseMap()->getMapId(), getInstanceId());
+                        sLogger.debug("Loading objects for Cell [{}][{}] on map {} (instance {})...", posX, posY, getBaseMap()->getMapId(), getInstanceId());
                         sp = _map->getSpawnsList(posX, posY);
                         if (sp)
                             objCell->loadObjects(sp);
@@ -1184,7 +1208,7 @@ void WorldMap::updateCellActivity(uint32_t x, uint32_t y, uint32_t radius)
 
 void WorldMap::setCellIdle(uint16_t x, uint16_t y, MapCell* cell)
 {
-    sLogger.debug("Cell [%u,%u] on map %u (instance %u) is now idle.", x, y, getBaseMap()->getMapId(), getInstanceId());
+    sLogger.debug("Cell [{},{}] on map {} (instance {}) is now idle.", x, y, getBaseMap()->getMapId(), getInstanceId());
     cell->setActivity(false);
 
     _terrain->unloadTile(static_cast<int32_t>(x) / 8, static_cast<int32_t>(y) / 8);
@@ -1196,7 +1220,7 @@ void WorldMap::unloadCell(uint32_t x, uint32_t y)
     if (c == nullptr || isCellActive(x, y) || !c->isUnloadPending())
         return;
 
-    sLogger.debug("Unloading Cell [%u][%u] on map %u (instance %u)...", x, y, getBaseMap()->getMapId(), getInstanceId());
+    sLogger.debug("Unloading Cell [{}][{}] on map {} (instance {})...", x, y, getBaseMap()->getMapId(), getInstanceId());
 
     c->unload();
 }
@@ -1228,7 +1252,7 @@ bool WorldMap::isCellActive(uint32_t x, uint32_t y)
     return false;
 }
 
-void WorldMap::updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, ByteBuffer** buf)
+void WorldMap::updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, std::unique_ptr<ByteBuffer>& buf)
 {
     if (cell == nullptr)
         return;
@@ -1265,13 +1289,13 @@ void WorldMap::updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, ByteB
 
                     if (plObj2->canSee(obj) && !plObj2->isVisibleObject(obj->getGuid()))
                     {
-                        if (!*buf)
-                            *buf = new ByteBuffer(2500);
+                        if (buf == nullptr)
+                            buf = std::make_unique<ByteBuffer>(2500);
 
-                        count = obj->buildCreateUpdateBlockForPlayer(*buf, plObj2);
-                        plObj2->getUpdateMgr().pushCreationData(*buf, count);
+                        count = obj->buildCreateUpdateBlockForPlayer(buf.get(), plObj2);
+                        plObj2->getUpdateMgr().pushCreationData(buf.get(), count);
                         plObj2->addVisibleObject(obj->getGuid());
-                        (*buf)->clear();
+                        buf->clear();
                     }
                 }
                 else if (curObj->isCreatureOrPlayer() && static_cast<Unit*>(curObj)->m_playerControler != nullptr)
@@ -1280,13 +1304,13 @@ void WorldMap::updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, ByteB
 
                     if (plObj2->canSee(obj) && !plObj2->isVisibleObject(obj->getGuid()))
                     {
-                        if (!*buf)
-                            *buf = new ByteBuffer(2500);
+                        if (buf == nullptr)
+                            buf = std::make_unique<ByteBuffer>(2500);
 
-                        count = obj->buildCreateUpdateBlockForPlayer(*buf, plObj2);
-                        plObj2->getUpdateMgr().pushCreationData(*buf, count);
+                        count = obj->buildCreateUpdateBlockForPlayer(buf.get(), plObj2);
+                        plObj2->getUpdateMgr().pushCreationData(buf.get(), count);
                         plObj2->addVisibleObject(obj->getGuid());
-                        (*buf)->clear();
+                        buf->clear();
                     }
                 }
 
@@ -1294,13 +1318,13 @@ void WorldMap::updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, ByteB
                 {
                     if (plObj->canSee(curObj) && !plObj->isVisibleObject(curObj->getGuid()))
                     {
-                        if (!*buf)
-                            *buf = new ByteBuffer(2500);
+                        if (buf == nullptr)
+                            buf = std::make_unique<ByteBuffer>(2500);
 
-                        count = curObj->buildCreateUpdateBlockForPlayer(*buf, plObj);
-                        plObj->getUpdateMgr().pushCreationData(*buf, count);
+                        count = curObj->buildCreateUpdateBlockForPlayer(buf.get(), plObj);
+                        plObj->getUpdateMgr().pushCreationData(buf.get(), count);
                         plObj->addVisibleObject(curObj->getGuid());
-                        (*buf)->clear();
+                        buf->clear();
                     }
                 }
             }
@@ -1319,13 +1343,13 @@ void WorldMap::updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, ByteB
                     }
                     else if (cansee && !isvisible)
                     {
-                        if (!*buf)
-                            *buf = new ByteBuffer(2500);
+                        if (buf == nullptr)
+                            buf = std::make_unique<ByteBuffer>(2500);
 
-                        count = obj->buildCreateUpdateBlockForPlayer(*buf, plObj2);
-                        plObj2->getUpdateMgr().pushCreationData(*buf, count);
+                        count = obj->buildCreateUpdateBlockForPlayer(buf.get(), plObj2);
+                        plObj2->getUpdateMgr().pushCreationData(buf.get(), count);
                         plObj2->addVisibleObject(obj->getGuid());
-                        (*buf)->clear();
+                        buf->clear();
                     }
                 }
                 else if (curObj->isCreatureOrPlayer() && static_cast<Unit*>(curObj)->m_playerControler != nullptr)
@@ -1340,13 +1364,13 @@ void WorldMap::updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, ByteB
                     }
                     else if (cansee && !isvisible)
                     {
-                        if (!*buf)
-                            *buf = new ByteBuffer(2500);
+                        if (buf == nullptr)
+                            buf = std::make_unique<ByteBuffer>(2500);
 
-                        count = obj->buildCreateUpdateBlockForPlayer(*buf, plObj2);
-                        plObj2->getUpdateMgr().pushCreationData(*buf, count);
+                        count = obj->buildCreateUpdateBlockForPlayer(buf.get(), plObj2);
+                        plObj2->getUpdateMgr().pushCreationData(buf.get(), count);
                         plObj2->addVisibleObject(obj->getGuid());
-                        (*buf)->clear();
+                        buf->clear();
                     }
                 }
 
@@ -1361,13 +1385,13 @@ void WorldMap::updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, ByteB
                     }
                     else if (cansee && !isvisible)
                     {
-                        if (!*buf)
-                            *buf = new ByteBuffer(2500);
+                        if (buf == nullptr)
+                            buf = std::make_unique<ByteBuffer>(2500);
 
-                        count = curObj->buildCreateUpdateBlockForPlayer(*buf, plObj);
-                        plObj->getUpdateMgr().pushCreationData(*buf, count);
+                        count = curObj->buildCreateUpdateBlockForPlayer(buf.get(), plObj);
+                        plObj->getUpdateMgr().pushCreationData(buf.get(), count);
                         plObj->addVisibleObject(curObj->getGuid());
-                        (*buf)->clear();
+                        buf->clear();
                     }
                 }
             }
@@ -1385,7 +1409,6 @@ void WorldMap::changeObjectLocation(Object* obj)
         return;
 
     Player* plObj = nullptr;
-    ByteBuffer* buf = nullptr;
 
     if (obj->isPlayer())
         plObj = static_cast<Player*>(obj);
@@ -1516,18 +1539,16 @@ void WorldMap::changeObjectLocation(Object* obj)
         startY = cellY > 5 ? cellY - 6 : 0;
     }
 
+    std::unique_ptr<ByteBuffer> buf;
     for (uint32_t posX = startX; posX <= endX; ++posX)
     {
         for (uint32_t posY = startY; posY <= endY; ++posY)
         {
             MapCell* cell = getCell(posX, posY);
             if (cell)
-                updateInRangeSet(obj, plObj, cell, &buf);
+                updateInRangeSet(obj, plObj, cell, buf);
         }
     }
-
-    if (buf)
-        delete buf;
 }
 
 void WorldMap::changeFarsightLocation(Player* plr, DynamicObject* farsight)
@@ -1669,7 +1690,7 @@ Creature* WorldMap::createAndSpawnCreature(uint32_t pEntry, LocationVector pos)
 
 Creature* WorldMap::getCreature(uint32_t guid)
 {
-    if (guid > m_CreatureHighGuid)
+    if (guid == 0 || guid > m_CreatureHighGuid)
         return nullptr;
 
     return m_CreatureStorage[guid];
@@ -1687,10 +1708,15 @@ Pet* WorldMap::getPet(uint32_t guid)
     return itr != m_PetStorage.end() ? itr->second : nullptr;
 }
 
-Summon* WorldMap::summonCreature(uint32_t entry, LocationVector pos, DBC::Structures::SummonPropertiesEntry const* properties /*= nullptr*/, uint32_t duration /*= 0*/, Object* summoner /*= nullptr*/, uint32_t spellId /*= 0*/)
+Summon* WorldMap::summonCreature(uint32_t entry, LocationVector pos, WDB::Structures::SummonPropertiesEntry const* properties /*= nullptr*/, uint32_t duration /*= 0*/, Object* summoner /*= nullptr*/, uint32_t spellId /*= 0*/)
 {
-    // Generate a new Guid
-    uint64_t guid = generateCreatureGuid(entry, false);
+    // Generate always a new guid for totems, otherwise the totem bar will get messed up
+    const auto isTotemSummon = properties != nullptr &&
+        (properties->ControlType == SUMMON_CONTROL_TYPE_WILD ||
+            properties->ControlType == SUMMON_CONTROL_TYPE_GUARDIAN ||
+            properties->ControlType == SUMMON_CATEGORY_UNK) &&
+        properties->Type == SUMMONTYPE_TOTEM;
+    uint64_t guid = generateCreatureGuid(entry, !isTotemSummon);
 
     // Phase
     uint32_t phase = 1;
@@ -1766,9 +1792,11 @@ Summon* WorldMap::summonCreature(uint32_t entry, LocationVector pos, DBC::Struct
         return nullptr;
     }
 
-    summon->Load(cp, summonerUnit, pos, duration, spellId);
-    summon->setPhase(phase);
+    summon->load(cp, summonerUnit, pos, duration, spellId);
+    summon->setPhase(PHASE_SET, phase);
     summon->PushToWorld(this);
+    // This is needed to CastSpells or Move Right at Spawn
+    updateObjects();
 
     // Delay this a bit to make sure its Spawned
     sEventMgr.AddEvent(static_cast<Creature*>(summon), &Creature::InitSummon, static_cast<Object*>(summonerUnit), EVENT_UNK, 100, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
@@ -1815,12 +1843,12 @@ GameObject* WorldMap::createAndSpawnGameObject(uint32_t entryID, LocationVector 
         return nullptr;
     }
 
-    sLogger.debug("CreateAndSpawnGameObject: By Entry '%u'", entryID);
+    sLogger.debug("CreateAndSpawnGameObject: By Entry '{}'", entryID);
 
     GameObject* go = createGameObject(entryID);
 
     // Setup game object
-    go->create(entryID, this, go->GetPhase(), pos, QuaternionData(), GO_STATE_CLOSED, sObjectMgr.GenerateGameObjectSpawnID());
+    go->create(entryID, this, go->GetPhase(), pos, QuaternionData(), GO_STATE_CLOSED, sObjectMgr.generateGameObjectSpawnId());
     go->setScale(scale);
     go->InitAI();
     go->PushToWorld(this);
@@ -1855,7 +1883,7 @@ GameObject* WorldMap::createAndSpawnGameObject(uint32_t entryID, LocationVector 
 
 GameObject* WorldMap::getGameObject(uint32_t guid)
 {
-    if (guid > m_GOHighGuid)
+    if (guid == 0 || guid > m_GOHighGuid)
         return nullptr;
 
     return m_GameObjectStorage[guid];
@@ -1884,7 +1912,7 @@ Unit* WorldMap::getUnit(const uint64_t& guid)
         return nullptr;
 
     WoWGuid wowGuid;
-    wowGuid.Init(guid);
+    wowGuid.init(guid);
 
     switch (wowGuid.getHigh())
     {
@@ -1906,7 +1934,7 @@ Object* WorldMap::getObject(const uint64_t& guid)
         return nullptr;
 
     WoWGuid wowGuid;
-    wowGuid.Init(guid);
+    wowGuid.init(guid);
 
     switch (wowGuid.getHigh())
     {
@@ -1971,7 +1999,7 @@ void WorldMap::sendPvPCaptureMessage(int32_t ZoneMask, uint32_t ZoneId, const ch
         Player* plr = itr->second;
         ++itr;
 
-        if ((ZoneMask != ZONE_MASK_ALL && plr->GetZoneId() != static_cast<uint32_t>(ZoneMask)))
+        if ((ZoneMask != ZONE_MASK_ALL && plr->getZoneId() != static_cast<uint32_t>(ZoneMask)))
             continue;
 
         plr->getSession()->SendPacket(SmsgDefenseMessage(ZoneId, msgbuf).serialise().get());
@@ -1995,7 +2023,7 @@ void WorldMap::sendPacketToPlayersInZone(uint32_t zone, WorldPacket* packet) con
     {
         Player* p = itr.second;
 
-        if ((p->getSession() != nullptr) && (p->GetZoneId() == zone))
+        if ((p->getSession() != nullptr) && (p->getZoneId() == zone))
             p->getSession()->SendPacket(packet);
     }
 }
@@ -2026,16 +2054,16 @@ void WorldMap::callScriptUpdate()
 void WorldMap::loadRespawnTimes()
 {
     // Load Saved Respawns
-    QueryResult* result = CharacterDatabase.Query("SELECT type, spawnId, respawnTime FROM respawn WHERE mapId = %u AND instanceId = %u", getBaseMap()->getMapId(), getInstanceId());
+    auto result = CharacterDatabase.Query("SELECT type, spawnId, respawnTime FROM respawn WHERE mapId = %u AND instanceId = %u", getBaseMap()->getMapId(), getInstanceId());
     if (!result)
         return;
 
     do
     {
         Field* fields = result->Fetch();
-        SpawnObjectType type = SpawnObjectType(fields[0].GetUInt16());
-        uint32_t spawnId = fields[1].GetUInt32();
-        uint64_t respawnTime = fields[2].GetUInt64();
+        SpawnObjectType type = SpawnObjectType(fields[0].asUint16());
+        uint32_t spawnId = fields[1].asUint32();
+        uint64_t respawnTime = fields[2].asUint64();
 
         if (type == SPAWN_TYPE_CREATURE)
         {
@@ -2063,7 +2091,7 @@ void WorldMap::loadRespawnTimes()
         }
         else
         {
-            sLogger.debug("Loading saved respawn time of %" PRIu64 " for spawnid (%u,%u) - invalid spawn type, ignoring", respawnTime, uint32_t(type), spawnId);
+            sLogger.debug("Loading saved respawn time of %" PRIu64 " for spawnid ({},{}) - invalid spawn type, ignoring", respawnTime, uint32_t(type), spawnId);
         }
 
     } while (result->NextRow());
@@ -2114,7 +2142,7 @@ void WorldMap::saveRespawnTime(SpawnObjectType type, uint32_t spawnId, uint32_t 
     if (startup)
     {
         if (!success)
-            sLogger.failure("Attempt to load saved respawn %" PRIu64 " for (%u,%u) failed - duplicate respawn? Skipped.", respawnTime, uint32_t(type), spawnId);
+            sLogger.failure("Attempt to load saved respawn %" PRIu64 " for ({},{}) failed - duplicate respawn? Skipped.", respawnTime, uint32_t(type), spawnId);
     }
     else if (success)
     {
@@ -2131,7 +2159,7 @@ bool WorldMap::addRespawn(RespawnInfo const& info)
 {
     if (!info.spawnId)
     {
-        sLogger.failure("Attempt to insert respawn info for zero spawn id (type %u)", uint32_t(info.type));
+        sLogger.failure("Attempt to insert respawn info for zero spawn id (type {})", uint32_t(info.type));
         return false;
     }
 
@@ -2143,7 +2171,7 @@ bool WorldMap::addRespawn(RespawnInfo const& info)
         auto it = bySpawnIdMap.find(info.spawnId);
         if (it != bySpawnIdMap.end()) // spawnid already has a respawn scheduled
         {
-            RespawnInfo* const existing = it->second;
+            RespawnInfo const* existing = it->second;
             if (info.time <= existing->time) // delete existing in this case
                 deleteRespawn(existing);
             else
@@ -2152,28 +2180,13 @@ bool WorldMap::addRespawn(RespawnInfo const& info)
     }
     else
     {
-        sLogger.failure("Invalid respawn info for spawn id (%u,%u) being inserted", uint32(info.type), info.spawnId);
+        sLogger.failure("Invalid respawn info for spawn id ({},{}) being inserted", uint32_t(info.type), info.spawnId);
     }
 
-    RespawnInfo* ri = new RespawnInfo(info);
-    _respawnTimes.emplace(ri);
-    bySpawnIdMap.emplace(ri->spawnId, ri);
+    auto ri = std::make_unique<RespawnInfo>(info);
+    bySpawnIdMap.emplace(ri->spawnId, ri.get());
+    _respawnTimes.emplace(std::move(ri));
     return true;
-}
-
-static void pushRespawnInfoFrom(std::vector<RespawnInfo*>& data, RespawnInfoMap const& map)
-{
-    data.reserve(data.size() + map.size());
-    for (auto const& pair : map)
-        data.push_back(pair.second);
-}
-
-void WorldMap::getRespawnInfo(std::vector<RespawnInfo*>& respawnData, SpawnObjectTypeMask types) const
-{
-    if (types & SPAWN_TYPEMASK_CREATURE)
-        pushRespawnInfoFrom(respawnData, _creatureRespawnTimesBySpawnId);
-    if (types & SPAWN_TYPEMASK_GAMEOBJECT)
-        pushRespawnInfoFrom(respawnData, _gameObjectRespawnTimesBySpawnId);
 }
 
 RespawnInfo* WorldMap::getRespawnInfo(SpawnObjectType type, uint32_t spawnId) const
@@ -2199,7 +2212,7 @@ void WorldMap::removeRespawnTime(SpawnObjectType type,uint32_t spawnId)
         deleteRespawn(info);
 }
 
-void WorldMap::deleteRespawn(RespawnInfo* info)
+void WorldMap::deleteRespawn(RespawnInfo const* info)
 {
     // Delete from all relevant containers to ensure consistency
     ASSERT(info);
@@ -2211,14 +2224,11 @@ void WorldMap::deleteRespawn(RespawnInfo* info)
     ASSERT(it != range.second);
     spawnMap.erase(it);
 
-    // respawn heap
-    _respawnTimes.remove(info);
-
     // database
     deleteRespawnFromDB(info->type, info->spawnId);
 
-    // then cleanup the object
-    delete info;
+    // respawn heap and cleanup the object
+    _respawnTimes.remove(info);
 }
 
 void WorldMap::deleteRespawnTimesInDB(uint32_t mapId, uint32_t instanceId)
@@ -2250,7 +2260,7 @@ bool WorldMap::checkRespawn(RespawnInfo* info)
         }
         default:
         {
-            sLogger.failure("Invalid spawn type %u with spawnId %u on map %u", uint32_t(info->type), info->spawnId, getBaseMap()->getMapId());
+            sLogger.failure("Invalid spawn type {} with spawnId {} on map {}", uint32_t(info->type), info->spawnId, getBaseMap()->getMapId());
             return true;
         }
     }
@@ -2325,7 +2335,7 @@ void WorldMap::doRespawn(SpawnObjectType type, Object* object, uint32_t spawnId,
         }
         default:
         {
-            sLogger.failure("Invalid spawn type %u (spawnid %u) on map %u", static_cast<uint32_t>(type), spawnId, getBaseMap()->getMapId());
+            sLogger.failure("Invalid spawn type {} (spawnid {}) on map {}", static_cast<uint32_t>(type), spawnId, getBaseMap()->getMapId());
         }
     }
 }
@@ -2333,9 +2343,7 @@ void WorldMap::doRespawn(SpawnObjectType type, Object* object, uint32_t spawnId,
 void WorldMap::addCorpseDespawn(uint64_t guid, time_t time)
 {
     const auto now = Util::getTimeNow();
-
-    CorpseInfo info(now + time, guid);
-    _corpseDespawnTimes.emplace(info);
+    _corpseDespawnTimes.emplace(now + time, guid);
 }
 
 void WorldMap::updateObjects()
@@ -2443,7 +2451,7 @@ void WorldMap::pushToProcessed(Player* plr)
 
 MapScriptInterface* WorldMap::getInterface()
 {
-    return ScriptInterface;
+    return ScriptInterface.get();
 }
 
 WorldStatesHandler& WorldMap::getWorldStatesHandler()
@@ -2521,8 +2529,13 @@ float WorldMap::getUpdateDistance(Object* curObj, Object* obj, Player* plObj)
     static float no_distance = 0.0f;
 
     // unlimited distance for people on same boat
+#if VERSION_STRING < Cata
     if (curObj->isPlayer() && obj->isPlayer() && plObj != nullptr && plObj->obj_movement_info.hasMovementFlag(MOVEFLAG_TRANSPORT) && plObj->obj_movement_info.transport_guid == curObj->obj_movement_info.transport_guid)
         return no_distance;
+#else
+    if (curObj->isPlayer() && obj->isPlayer() && plObj != nullptr && plObj->obj_movement_info.transport_guid == curObj->obj_movement_info.transport_guid)
+        return no_distance;
+#endif
     // unlimited distance for transporters (only up to 2 cells +/- anyway.)
     if (curObj->GetTypeFromGUID() == HIGHGUID_TYPE_TRANSPORTER)
         return no_distance;
@@ -2532,7 +2545,7 @@ float WorldMap::getUpdateDistance(Object* curObj, Object* obj, Player* plObj)
         return no_distance;
 
     // unlimited distance in Instances/Raids
-    if (getBaseMap()->getMapInfo()->isInstanceMap())
+    if (getBaseMap()->isInstanceMap())
         return no_distance;
 
     //If the object announcing its position is a transport, or other special object, then deleting it from visible objects should be avoided. - By: VLack
@@ -2552,7 +2565,7 @@ bool WorldMap::isRegularDifficulty()
     return getDifficulty() == InstanceDifficulty::Difficulties::DUNGEON_NORMAL;
 }
 
-DBC::Structures::MapDifficulty const* WorldMap::getMapDifficulty()
+WDB::Structures::MapDifficulty const* WorldMap::getMapDifficulty()
 {
     return getMapDifficultyData(getBaseMap()->getMapId(), getDifficulty());
 }
@@ -2640,7 +2653,7 @@ uint32_t WorldMap::getAreaId(uint32_t phaseMask, LocationVector const& pos)
     if (hasVmapArea && G3D::fuzzyGe(pos.z, vmapZ - GROUND_HEIGHT_TOLERANCE) && (G3D::fuzzyLt(pos.z, gridMapHeight - GROUND_HEIGHT_TOLERANCE) || vmapZ > gridMapHeight))
     {
         // wmo found
-        if (DBC::Structures::WMOAreaTableEntry const* wmoEntry = GetWMOAreaTableEntryByTriple(rootId, adtId, groupId))
+        if (WDB::Structures::WMOAreaTableEntry const* wmoEntry = GetWMOAreaTableEntryByTriple(rootId, adtId, groupId))
             areaId = wmoEntry->areaId;
 
         if (!areaId)
@@ -2708,7 +2721,7 @@ ZLiquidStatus WorldMap::getLiquidStatus(uint32_t phaseMask, LocationVector pos, 
                     liquid_type = 15;
 
                 uint32_t liquidFlagType = 0;
-                if (DBC::Structures::LiquidTypeEntry const* liq = sLiquidTypeStore.LookupEntry(liquid_type))
+                if (WDB::Structures::LiquidTypeEntry const* liq = sLiquidTypeStore.lookupEntry(liquid_type))
                     liquidFlagType = liq->Type;
 
                 if (liquid_type && liquid_type < 21)
@@ -2733,7 +2746,7 @@ ZLiquidStatus WorldMap::getLiquidStatus(uint32_t phaseMask, LocationVector pos, 
                         }
 #endif
 
-                        if (DBC::Structures::LiquidTypeEntry const* liq = sLiquidTypeStore.LookupEntry(overrideLiquid))
+                        if (WDB::Structures::LiquidTypeEntry const* liq = sLiquidTypeStore.lookupEntry(overrideLiquid))
                         {
                             liquid_type = overrideLiquid;
                             liquidFlagType = liq->Type;
@@ -2785,6 +2798,159 @@ ZLiquidStatus WorldMap::getLiquidStatus(uint32_t phaseMask, LocationVector pos, 
     return result;
 }
 
+void WorldMap::getFullTerrainStatusForPosition(uint32_t phaseMask, float x, float y, float z, PositionFullTerrainStatus& data, uint8_t reqLiquidType, float collisionHeight) const
+{
+    if (!getTerrain())
+        return;
+
+    VMAP::IVMapManager* vmgr = VMAP::VMapFactory::createOrGetVMapManager();
+    VMAP::AreaAndLiquidData vmapData;
+    VMAP::AreaAndLiquidData dynData;
+    VMAP::AreaAndLiquidData* wmoData = nullptr;
+
+    TerrainTile* gmap = getTerrain()->getTile(x, y);
+
+    vmgr->getAreaAndLiquidData(getBaseMap()->getMapId(), x, y, z, reqLiquidType, vmapData);
+    _dynamicTree.getAreaAndLiquidData(x, y, z, phaseMask, reqLiquidType, dynData);
+
+    uint32_t gridAreaId = 0;
+    float gridMapHeight = INVALID_HEIGHT;
+    if (gmap)
+    {
+        gridAreaId = gmap->m_map.getArea(x, y);
+        gridMapHeight = gmap->m_map.getHeight(x, y);
+    }
+
+    bool useGridLiquid = true;
+
+    // floorZ is the height we are closer to example we stand on an wmo
+    data.floorZ = VMAP_INVALID_HEIGHT;
+    if (gridMapHeight > INVALID_HEIGHT && G3D::fuzzyGe(z, gridMapHeight - GROUND_HEIGHT_TOLERANCE))
+        data.floorZ = gridMapHeight;
+    if (vmapData.floorZ > VMAP_INVALID_HEIGHT &&
+        G3D::fuzzyGe(z, vmapData.floorZ - GROUND_HEIGHT_TOLERANCE) &&
+        (G3D::fuzzyLt(z, gridMapHeight - GROUND_HEIGHT_TOLERANCE) || vmapData.floorZ > gridMapHeight))
+    {
+        data.floorZ = vmapData.floorZ;
+        wmoData = &vmapData;
+    }
+
+    // When spawning and despawning Wmos the provided area/liquid from beneath them wont get detected properly
+    // example: Lich King platform
+    if (dynData.floorZ > VMAP_INVALID_HEIGHT &&
+        G3D::fuzzyGe(z, dynData.floorZ - GROUND_HEIGHT_TOLERANCE) &&
+        (G3D::fuzzyLt(z, gridMapHeight - GROUND_HEIGHT_TOLERANCE) || dynData.floorZ > gridMapHeight) &&
+        (G3D::fuzzyLt(z, vmapData.floorZ - GROUND_HEIGHT_TOLERANCE) || dynData.floorZ > vmapData.floorZ))
+    {
+        data.floorZ = dynData.floorZ;
+        wmoData = &dynData;
+    }
+
+    if (wmoData)
+    {
+        if (wmoData->areaInfo)
+        {
+            data.areaInfo.emplace(wmoData->areaInfo->adtId, wmoData->areaInfo->rootId, wmoData->areaInfo->groupId, wmoData->areaInfo->mogpFlags);
+            // wmo found
+            WDB::Structures::WMOAreaTableEntry const* wmoEntry = GetWMOAreaTableEntryByTriple(wmoData->areaInfo->rootId, wmoData->areaInfo->adtId, wmoData->areaInfo->groupId);
+            data.outdoors = (wmoData->areaInfo->mogpFlags & 0x8) != 0;
+            if (wmoEntry)
+            {
+                data.areaId = wmoEntry->areaId;
+                if (wmoEntry->flags & 4)
+                    data.outdoors = true;
+                else if (wmoEntry->flags & 2)
+                    data.outdoors = false;
+            }
+
+            if (!data.areaId)
+                data.areaId = gridAreaId;
+
+            useGridLiquid = !isInWMOInterior(wmoData->areaInfo->mogpFlags);
+        }
+    }
+    else
+    {
+        data.outdoors = true;
+        data.areaId = gridAreaId;
+        if (WDB::Structures::AreaTableEntry const* areaEntry = sAreaStore.lookupEntry(data.areaId))
+            data.outdoors = (areaEntry->flags & (MapManagement::AreaManagement::AreaFlags::AREA_FLAG_INSIDE | MapManagement::AreaManagement::AreaFlags::AREA_FLAG_OUTSIDE)) != MapManagement::AreaManagement::AreaFlags::AREA_FLAG_INSIDE;
+    }
+
+    if (!data.areaId)
+        data.areaId = getBaseMap()->getMapEntry()->linked_zone;
+
+    WDB::Structures::AreaTableEntry const* areaEntry = sAreaStore.lookupEntry(data.areaId);
+
+    // liquid processing
+    data.liquidStatus = LIQUID_MAP_NO_WATER;
+    if (wmoData && wmoData->liquidInfo && wmoData->liquidInfo->level > wmoData->floorZ)
+    {
+        uint32_t liquidType = wmoData->liquidInfo->type;
+        if (getBaseMap()->getMapId() == 530 && liquidType == 2) // gotta love blizzard hacks
+            liquidType = 15;
+
+        uint32_t liquidFlagType = 0;
+        if (WDB::Structures::LiquidTypeEntry const* liquidData = sLiquidTypeStore.lookupEntry(liquidType))
+            liquidFlagType = liquidData->Type;
+
+        if (liquidType && liquidType < 21 && areaEntry)
+        {
+#if VERSION_STRING > Classic
+            uint32_t overrideLiquid = areaEntry->liquid_type_override[liquidFlagType];
+            if (!overrideLiquid && areaEntry->zone)
+            {
+                WDB::Structures::AreaTableEntry const* zoneEntry = sAreaStore.lookupEntry(areaEntry->zone);
+                if (zoneEntry)
+                    overrideLiquid = zoneEntry->liquid_type_override[liquidFlagType];
+            }
+#else
+            uint32_t overrideLiquid = areaEntry->liquid_type_override;
+            if(!overrideLiquid && areaEntry->zone)
+            {
+                WDB::Structures::AreaTableEntry const* zoneEntry = sAreaStore.lookupEntry(areaEntry->zone);
+                if (zoneEntry)
+                    overrideLiquid = zoneEntry->liquid_type_override;
+            }
+#endif
+            if (WDB::Structures::LiquidTypeEntry const* overrideData = sLiquidTypeStore.lookupEntry(overrideLiquid))
+            {
+                liquidType = overrideLiquid;
+                liquidFlagType = overrideData->Type;
+            }
+        }
+
+        data.liquidInfo.emplace();
+        data.liquidInfo->level = wmoData->liquidInfo->level;
+        data.liquidInfo->depth_level = wmoData->floorZ;
+        data.liquidInfo->entry = liquidType;
+        data.liquidInfo->type_flags = 1 << liquidFlagType;
+
+        float delta = wmoData->liquidInfo->level - z;
+        if (delta > collisionHeight)
+            data.liquidStatus = LIQUID_MAP_UNDER_WATER;
+        else if (delta > 0.0f)
+            data.liquidStatus = LIQUID_MAP_IN_WATER;
+        else if (delta > -0.1f)
+            data.liquidStatus = LIQUID_MAP_WATER_WALK;
+        else
+            data.liquidStatus = LIQUID_MAP_ABOVE_WATER;
+    }
+    // look up liquid data from grid map
+    if (gmap && useGridLiquid)
+    {
+        LiquidData gridMapLiquid;
+        ZLiquidStatus gridMapStatus = gmap->m_map.getLiquidStatus(LocationVector(x, y, z), reqLiquidType, &gridMapLiquid, collisionHeight);
+        if (gridMapStatus != LIQUID_MAP_NO_WATER && (!wmoData || gridMapLiquid.level > wmoData->floorZ))
+        {
+            if (getBaseMap()->getMapId() == 530 && gridMapLiquid.entry == 2)
+                gridMapLiquid.entry = 15;
+            data.liquidInfo = gridMapLiquid;
+            data.liquidStatus = gridMapStatus;
+        }
+    }
+}
+
 float WorldMap::getWaterLevel(float x, float y)
 {
     if (TerrainTile* gmap = getTerrain()->getTile(x, y))
@@ -2830,6 +2996,17 @@ bool WorldMap::getObjectHitPos(uint32_t phasemask, LocationVector pos1, Location
     rz = resultPos.z;
     return result;
 }
+
+float WorldMap::getGameObjectFloor(uint32_t phasemask, LocationVector pos, float maxSearchDist /*= 50.0f*/) const
+{
+    return _dynamicTree.getHeight(pos.x, pos.y, pos.z, maxSearchDist, phasemask);
+}
+
+float WorldMap::getHeight(uint32_t phasemask, LocationVector const& pos, bool vmap /*= true*/, float maxSearchDist /*= 50.0f*/) const
+{
+    return std::max<float>(getHeight(pos, vmap, maxSearchDist), getGameObjectFloor(phasemask, pos, maxSearchDist));
+}
+
 
 float WorldMap::getWaterOrGroundLevel(uint32_t phasemask, LocationVector const& pos, float* ground /*= nullptr*/, bool /*swim = false*/, float collisionHeight /*= 2.03128f*/)
 {
@@ -2921,11 +3098,21 @@ void WorldMap::removeObjectFromActiveSet(Object* obj)
     switch (obj->getObjectTypeId())
     {
         case TYPEID_UNIT:
+        {
+            // Prevent Deletion of Current Update Iterator
+            if (creature_iterator != activeCreatures.end() && (*creature_iterator)->getGuid() == obj->getGuid())
+                ++creature_iterator;
+
             activeCreatures.erase(static_cast<Creature*>(obj));
-            break;
+        } break;
         case TYPEID_GAMEOBJECT:
+        {
+            // Prevent Deletion of Current Update Iterator
+            if (gameObject_iterator != activeGameObjects.end() && (*gameObject_iterator)->getGuid() == obj->getGuid())
+                ++gameObject_iterator;
+
             activeGameObjects.erase(static_cast<GameObject*>(obj));
-            break;
+        } break;
     }
 }
 

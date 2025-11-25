@@ -1,12 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "MovementGenerator.h"
+
+#include <sstream>
+
 #include "Objects/Units/Creatures/Creature.h"
 #include "MovementGenerators/IdleMovementGenerator.h"
-#include "MovementDefines.h"
+#include "Movement/MovementDefines.h"
 #include "PathGenerator.h"
 #include "MovementGenerators/RandomMovementGenerator.h"
 #include "Objects/Units/Creatures/AIInterface.h"

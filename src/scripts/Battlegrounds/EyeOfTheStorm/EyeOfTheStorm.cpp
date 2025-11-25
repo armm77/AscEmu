@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -17,13 +17,28 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Setup.h"
 #include "EyeOfTheStorm.h"
+
+#include "CommonDefines.hpp"
+#include "Chat/ChatDefines.hpp"
 #include "Management/HonorHandler.h"
-#include "Storage/MySQLDataStore.hpp"
-#include "Management/WorldStates.h"
-#include "Server/MainServerDefines.h"
-#include "Map/Management/MapMgr.hpp"
+#include "Management/WorldStates.hpp"
+#include "Map/Maps/BattleGroundMap.hpp"
+#include "Objects/GameObjectProperties.hpp"
+#include "Server/Master.h"
+#include "Server/WorldSessionLog.hpp"
 #include "Spell/SpellMgr.hpp"
+#include "Management/Battleground/BattlegroundDefines.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Spell/Spell.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "CommonTime.hpp"
+#include "Utilities/Random.hpp"
+#include "Utilities/Util.hpp"
 
 static float EOTSBuffCoordinates[4][4] =
 {
@@ -408,7 +423,7 @@ void EyeOfTheStorm::HookFlagDrop(Player* plr, GameObject* /*obj*/)
     if (!m_dropFlag->IsInWorld())
         return;
 
-    std::map<uint32_t, uint32_t>::iterator itr = plr->m_forcedReactions.find(1059);
+    std::map<uint32_t, Standing>::iterator itr = plr->m_forcedReactions.find(1059);
     if (itr != plr->m_forcedReactions.end())
     {
         return;
@@ -427,7 +442,6 @@ void EyeOfTheStorm::HookFlagDrop(Player* plr, GameObject* /*obj*/)
 
 void EyeOfTheStorm::HookFlagStand(Player* /*plr*/, GameObject* /*obj*/)
 {
-
 }
 
 bool EyeOfTheStorm::HookSlowLockOpen(GameObject* /*pGo*/, Player* pPlayer, Spell* /*pSpell*/)

@@ -1,17 +1,20 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
-
-#include "GossipMenu.hpp"
-#include "Storage/MySQLDataStore.hpp"
-#include "Storage/MySQLStructures.h"
-#include "Objects/Item.hpp"
 #include "GossipScript.hpp"
-
-#include "Server/Script/ScriptMgr.h"
+#include "GossipMenu.hpp"
+#include "Management/ObjectMgr.hpp"
+#include "Management/QuestMgr.h"
+#include "Objects/GameObject.h"
+#include "Storage/MySQLDataStore.hpp"
+#include "Objects/Item.hpp"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/World.h"
+#include "Server/WorldSession.h"
+#include "Server/Script/ScriptMgr.hpp"
 
 void GossipScript::destroy()
 {
@@ -23,40 +26,7 @@ GossipScript* GossipScript::getInterface(Creature* creature)
     if (const auto script = sScriptMgr.get_creature_gossip(creature->getEntry()))
         return script;
 
-    if (creature->isSpiritHealer())
-        return &sScriptMgr.spirithealerScript_;
-    if (creature->isInnkeeper())
-        return &sScriptMgr.innkeeperScript_;
-    if (creature->isBanker())
-        return &sScriptMgr.bankerScript_;
-    if (creature->isClassTrainer())
-        return &sScriptMgr.classtrainerScript_;
-    if (creature->isTrainer())
-    {
-        if (const auto trainer = creature->GetTrainer())
-        {
-            if (trainer->TrainerType == TRAINER_TYPE_PET)
-                return &sScriptMgr.pettrainerScript_;
-
-            return &sScriptMgr.trainerScript_;
-        }
-    }
-    else if (creature->isTabardDesigner())
-        return &sScriptMgr.tabardScript_;
-    else if (creature->isTaxi())
-        return &sScriptMgr.flightmasterScript_;
-    else if (creature->isStableMaster())
-        return &sScriptMgr.stablemasterScript_;
-    else if (creature->isBattleMaster())
-        return &sScriptMgr.battlemasterScript_;
-    else if (creature->isAuctioneer())
-        return &sScriptMgr.auctioneerScript_;
-    else if (creature->isCharterGiver())
-        return &sScriptMgr.chartergiverScript_;
-    else if (creature->isVendor())
-        return &sScriptMgr.vendorScript_;
-
-    return &sScriptMgr.genericScript_;
+    return nullptr;
 }
 
 GossipScript* GossipScript::getInterface(Item* item)
@@ -167,6 +137,8 @@ void GossipFlightMaster::onHello(Object* object, Player* player)
 
         GossipMenu menu(object->getGuid(), gossipTextId, player->getSession()->language);
 
+        player->getSession()->sendLearnNewTaxiNode(creature);
+
         menu.addItem(GOSSIP_ICON_FLIGHTMASTER, FLIGHTMASTER, 1);
 
         sQuestMgr.FillQuestMenu(creature, player, menu);
@@ -178,7 +150,7 @@ void GossipFlightMaster::onHello(Object* object, Player* player)
 void GossipFlightMaster::onSelectOption(Object* object, Player* player, uint32_t /*Id*/, const char* /*EnteredCode*/, uint32_t /*gossipId*/)
 {
     if (const auto creature = dynamic_cast<Creature*>(object))
-        player->getSession()->sendTaxiList(creature);
+        player->getSession()->sendTaxiMenu(creature);
 }
 
 void GossipAuctioneer::onHello(Object* object, Player* player)
@@ -367,7 +339,7 @@ void GossipPetTrainer::onHello(Object* object, Player* player)
 
         menu.addItem(GOSSIP_ICON_TRAINER, BEASTTRAINING, 1);
 
-        if (player->getClass() == ::HUNTER && player->getFirstPetFromSummons() != nullptr)
+        if (player->getClass() == ::HUNTER && player->getPet() != nullptr)
             menu.addItem(GOSSIP_ICON_CHAT, PETTRAINER_TALENTRESET, 2);
 
         sQuestMgr.FillQuestMenu(creature, player, menu);

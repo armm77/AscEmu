@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2009 WhyScripts Team <http://www.whydb.org/>
  * Copyright (C) 2006-2008 U2 Team <http://www.undzwei.eu/>
  * Copyright (C) 2007-2008 Yelly Team
@@ -19,6 +19,17 @@
  */
 
 #include "Setup.h"
+#include "Management/ItemInterface.h"
+#include "Management/QuestLogEntry.hpp"
+#include "Management/QuestMgr.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Server/WorldSession.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/QuestScript.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // quest #8304 - Dearest Natalia

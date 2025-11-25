@@ -1,14 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "GuildLog.hpp"
 #include "GuildNewsLog.hpp"
-#include "WoWGuid.h"
-#include "Server/MainServerDefines.h"
-#include "Objects/Object.h"
-
+#include "WoWGuid.hpp"
+#include "Objects/Object.hpp"
+#include "Server/DatabaseDefinition.hpp"
 
 GuildNewsLogEntry::GuildNewsLogEntry(uint32_t guildId, uint32_t guid, GuildNews type, uint32_t playerGuid, uint32_t flags, uint32_t value) :
     GuildLogEntry(guildId, guid), mType(type), mPlayerGuid(playerGuid), mFlags(flags), mValue(value)
@@ -56,7 +55,6 @@ void GuildNewsLogEntry::setSticky(bool isSticky)
     }
 }
 
-
 void GuildNewsLogEntry::saveGuildLogToDB() const
 {
     CharacterDatabase.Execute("DELETE FROM guild_news_log WHERE guildId = %u AND logGuid = %u", mGuildId, getGUID());
@@ -68,7 +66,7 @@ void GuildNewsLogEntry::saveGuildLogToDB() const
 void GuildNewsLogEntry::writeGuildLogPacket(WorldPacket& data, ByteBuffer&) const
 {
     data.writeBits(0, 26);
-    ObjectGuid guid = getPlayerGuid();
+    WoWGuid guid = getPlayerGuid();
 
     data.writeBit(guid[7]);
     data.writeBit(guid[0]);

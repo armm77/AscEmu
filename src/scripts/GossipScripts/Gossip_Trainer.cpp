@@ -1,14 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
-#include "Server/WorldSession.h"
-#include "Objects/Units/Creatures/Creature.h"
-#include "Management/Gossip/GossipScript.hpp"
-#include "Server/Script/ScriptMgr.h"
 #include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Objects/Object.hpp"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
 
 class MasterHammersmith : public GossipScript
 {
@@ -41,7 +41,7 @@ public:
                     textid = 20005;
                 else
                 {
-                    //pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Make good use of this knowledge." );
+                    //pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Make good use of this knowledge.");
                     textid = 20006;
                     dynamic_cast<Creature*>(pObject)->castSpell(plr, 39099, true);
                     plr->modCoinage(-600);
@@ -66,7 +66,7 @@ public:
                     unlearnGold = 1000000;
 
                 plr->modCoinage(-unlearnGold);
-                plr->removeSpell(17040, false, false, 0);
+                plr->removeSpell(17040, false);
                 textid = 20009;
             }
         }
@@ -107,7 +107,7 @@ public:
                     textid = 20005;
                 else
                 {
-                    //pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Make good use of this knowledge." );
+                    //pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Make good use of this knowledge.");
                     textid = 20006;
                     dynamic_cast<Creature*>(pObject)->castSpell(plr, 39097, true);
                     plr->modCoinage(-600);
@@ -132,7 +132,7 @@ public:
                     unlearnGold = 1000000;
 
                 plr->modCoinage(-unlearnGold);
-                plr->removeSpell(17039, false, false, 0);
+                plr->removeSpell(17039, false);
                 textid = 20009;
             }
         }
@@ -170,7 +170,7 @@ public:
                     textid = 20005;
                 else
                 {
-                    //pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Make good use of this knowledge." );
+                    //pCreature->SendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Make good use of this knowledge.");
                     textid = 20006;
                     dynamic_cast<Creature*>(pObject)->castSpell(plr, 39098, true);
                     plr->modCoinage(-600);
@@ -195,7 +195,7 @@ public:
                     unlearnGold = 1000000;
 
                 plr->modCoinage(-unlearnGold);
-                plr->removeSpell(17041, false, false, 0);
+                plr->removeSpell(17041, false);
                 textid = 20009;
             }
         }

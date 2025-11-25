@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -17,20 +17,26 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Setup.h"
 #include "WarsongGulch.h"
-#include "Management/HonorHandler.h"
-#include "Management/WorldStates.h"
-#include "Server/MainServerDefines.h"
-#include "Map/Management/MapMgr.hpp"
-#include "Spell/SpellMgr.hpp"
-#include "Objects/GameObject.h"
-#include "Server/WorldSession.h"
+
 #include "Chat/ChatDefines.hpp"
-#include "WarsongGulchDefinitions.h"
+#include "Management/HonorHandler.h"
+#include "Management/WorldStates.hpp"
+#include "Map/Maps/BattleGroundMap.hpp"
+#include "Objects/GameObjectProperties.hpp"
+#include "Server/Master.h"
+#include "Server/WorldSession.h"
+#include "Server/WorldSessionLog.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Management/Battleground/BattlegroundDefines.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Spell/Spell.hpp"
 
 WarsongGulch::WarsongGulch(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t) : Battleground(mgr, id, lgroup, t)
 {
-
     m_zoneId = 3277;
     m_scores[0] = m_scores[1] = 0;
     m_time_left = TIME_LEFT;
@@ -318,7 +324,7 @@ void WarsongGulch::HookFlagDrop(Player* plr, GameObject* obj)
         return;
     }
 
-    std::map<uint32_t, uint32_t>::iterator itr = plr->m_forcedReactions.find(1059);
+    std::map<uint32_t, Standing>::iterator itr = plr->m_forcedReactions.find(1059);
     if (itr != plr->m_forcedReactions.end())
     {
         return;
@@ -390,7 +396,7 @@ void WarsongGulch::HookFlagStand(Player* plr, GameObject* obj)
         return;
     }
 
-    std::map<uint32_t, uint32_t>::iterator itr = plr->m_forcedReactions.find(1059);
+    std::map<uint32_t, Standing>::iterator itr = plr->m_forcedReactions.find(1059);
     if (itr != plr->m_forcedReactions.end())
     {
         return;

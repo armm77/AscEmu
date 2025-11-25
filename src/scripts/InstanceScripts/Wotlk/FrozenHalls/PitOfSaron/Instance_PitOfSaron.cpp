@@ -1,11 +1,17 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Instance_PitOfSaron.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Movement/MovementManager.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Utilities/Random.hpp"
 
 class InstancePitOfSaronScript : public InstanceScript
 {
@@ -49,7 +55,7 @@ public:
         addAISpell(SPELL_THROWSARONITE, 20.0f, TARGET_RANDOM_DESTINATION, 2, 45);
         addAISpell(SPELL_PERMAFROST, 5.0f, TARGET_SELF, 0, 2);
 
-        if (_isHeroic())
+        if (isHeroic())
         {
             // Phased Spells
             auto chllingWave = addAISpell(H_SPELL_CHILLING_WAVE, 25.0f, TARGET_ATTACKING, 0, 14);
@@ -86,7 +92,7 @@ public:
             if (GameObject * pObject = getNearestGameObject(401006)) //forgemaster's anvil (TEMP)
                 getCreature()->setFacing(getCreature()->calcRadAngle(getCreature()->GetPositionX(), getCreature()->GetPositionY(), pObject->GetPositionX(), pObject->GetPositionY()));
 
-            if (_isHeroic())
+            if (isHeroic())
                 getCreature()->castSpell(getCreature(), H_SPELL_FORGE_BLADE, false);
             else
                 getCreature()->castSpell(getCreature(), SPELL_FROZEBLADE, false);
@@ -106,7 +112,7 @@ public:
             if (GameObject * pObject = getNearestGameObject(401006)) //forgemaster's anvil (TEMP)
                 getCreature()->setFacing(getCreature()->calcRadAngle(getCreature()->GetPositionX(), getCreature()->GetPositionY(), pObject->GetPositionX(), pObject->GetPositionY()));
             
-            if (_isHeroic())
+            if (isHeroic())
                 getCreature()->castSpell(getCreature(), H_SPELL_FORGE_MACE, false);
             else
                 getCreature()->castSpell(getCreature(), SPELL_FROZEMACE, false);
@@ -138,7 +144,7 @@ public:
         mConfusion = addAISpell(SPELL_CONFUSION, 0.0f, TARGET_SELF);
         mExplosionBarageKrick = addAISpell(SPELL_EXPLOSIVE_BARRAGE_KRICK, 0.0f, TARGET_SELF);
 
-        if (_isHeroic())
+        if (isHeroic())
         {
             mToxicWaste = addAISpell(H_SPELL_TOXIC_WASTE, 0.0f, TARGET_ATTACKING);
             mPoisonNova = addAISpell(H_SPELL_POISON_NOVA, 0.0f, TARGET_SELF);

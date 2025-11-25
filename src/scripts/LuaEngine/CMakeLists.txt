@@ -1,46 +1,34 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
 if (NOT BUILD_LUAENGINE)
     message("\tLuaEngine was skipped because BUILD_LUAENGINE is unchecked.")
     return()
 endif ()
 
-# set up our project name
-project(LuaEngine CXX)
+# set up our project name.
+set(LIBRARY_NAME LuaEngine)
 
-# SRCS - contains the source files that compose this project.
-set(SRCS
-    GameobjectFunctions.cpp
-    LUAEngine.cpp
-    LuaGlobal.cpp
-    LuaHelpers.cpp
-    # required for linker
+file(GLOB SRC_LOCAL_DIR *.cpp *.h *.hpp)
+
+# required for linker.
+set(SRC_LUAENGINE
     ../../world/Server/ServerState.cpp
     ../../world/Spell/SpellCastTargets.cpp
-    ../../shared/Util.cpp
+    ../../shared/Utilities/Util.cpp
 )
 
-set(HEADERS
-    AuraFunctions.h
-    FunctionTables.h
-    GameobjectFunctions.h
-    GlobalFunctions.h
-    ItemFunctions.h
-    LUAEngine.h
-    LUAFunctions.h
-    LuaGlobal.h
-    LuaHelpers.h
-    LuaMacros.h
-    LuaSqlApi.h
-    PacketFunctions.h
-    SpellFunctions.h
-    TaxiFunctions.h
-    UnitFunctions.h
+set(LUAENGINE_SRCS
+    ${SRC_LUAENGINE}
+    ${SRC_LOCAL_DIR}
 )
 
-include_directories(
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(${LIBRARY_NAME} SHARED ${LUAENGINE_SRCS})
+
+target_include_directories(${LIBRARY_NAME} PUBLIC 
     ${OPENSSL_INCLUDE_DIR}
-    ${PCRE_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Detour/Include
     ${CMAKE_SOURCE_DIR}/src/collision
     ${CMAKE_SOURCE_DIR}/src/collision/Management
@@ -55,19 +43,19 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/dep/utf8cpp
 )
 
-add_library(${PROJECT_NAME} SHARED ${SRCS} ${HEADERS})
-target_link_libraries(${PROJECT_NAME} world lualib)
-
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${ASCEMU_SCRIPTLIB_PATH} LIBRARY DESTINATION ${ASCEMU_SCRIPTLIB_PATH})
-
-if (USE_PCH)
-    target_precompile_headers(${PROJECT_NAME}
-    PRIVATE
-    LuaGlobal.h
-    LUAEngine.h
-    LuaHelpers.h
+# include library dependencies.
+target_link_libraries(${LIBRARY_NAME}
+  PUBLIC
+    world
+    lualib
 )
+
+# generate precompiled header.
+if (AE_USE_PCH)
+    message(STATUS "Generate PCH for ${LIBRARY_NAME}")
+    target_precompile_headers(${LIBRARY_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pchLuaEngine.hpp)
 endif ()
 
-unset(sources)
-unset(headers)
+install(TARGETS ${LIBRARY_NAME} RUNTIME DESTINATION ${ASCEMU_SCRIPTLIB_PATH} LIBRARY DESTINATION ${ASCEMU_SCRIPTLIB_PATH})
+
+unset(LUAENGINE_SRCS)

@@ -1,25 +1,25 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-//
+#include <algorithm>
+#include <iterator>
+
 #include "MovementManager.h"
 #include "Objects/Units/Unit.hpp"
 #include "AbstractFollower.h"
 #include "Objects/Units/Creatures/Creature.h"
-#include "Objects/Object.h"
+#include "Objects/Object.hpp"
 #include "Management/G3DPosition.hpp"
 #include "Spline/MoveSpline.h"
 #include "Spline/MoveSplineInit.h"
 #include "Objects/Units/Players/Player.hpp"
 #include "PathGenerator.h"
 #include "WaypointDefines.h"
-#include <algorithm>
-#include <iterator>
-
-
+#include "Logging/Logger.hpp"
 #include "Map/Management/MapMgr.hpp"
+#include "Map/Maps/WorldMap.hpp"
 #include "MovementGenerators/ChaseMovementGenerator.h"
 #include "MovementGenerators/ConfusedMovementGenerator.h"
 #include "MovementGenerators/FleeingMovementGenerator.h"
@@ -32,6 +32,10 @@ This file is released under the MIT license. See README-MIT for more information
 #include "MovementGenerators/RandomMovementGenerator.h"
 #include "MovementGenerators/SplineChainMovementGenerator.h"
 #include "MovementGenerators/WaypointMovementGenerator.h"
+#include "MovementGenerators/FlightPathMovementGenerator.h"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Storage/MySQLDataStore.hpp"
+#include "Utilities/TimeTracker.hpp"
 
 namespace FactorySelector
 {
@@ -299,7 +303,7 @@ void MovementManager::update(uint32_t diff)
 
     if (empty())
     {
-        sLogger.failure("MovementManager: update called without Initializing! (%u)", _owner->getGuid());
+        sLogger.failure("MovementManager: update called without Initializing! ({})", _owner->getGuid());
         return;
     }
 
@@ -559,21 +563,20 @@ void MovementManager::moveTargetedHome()
 
     clear();
 
-    uint64_t ownerGuid = owner->isCharmed() ? owner->getCharmGuid() : owner->getCreatedByGuid();
-    Unit* target = owner->getWorldMapCreature(ownerGuid);
-    if (!target)
+    auto* target = owner->getUnitOwner();
+    if (target == nullptr)
     {
         add(new HomeMovementGenerator<Creature>());
     }
     else
     {
-        add(new FollowMovementGenerator(target, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE));
+        owner->getAIInterface()->handleEvent(EVENT_FOLLOWOWNER, nullptr, 0);
     }
 }
 
 void MovementManager::moveRandom(float wanderDistance)
 {
-    if (_owner->getObjectTypeId() == TYPEID_UNIT)
+    if (_owner->isCreature())
     {
         add(new RandomMovementGenerator<Creature>(wanderDistance), MOTION_SLOT_DEFAULT);
     }
@@ -599,7 +602,7 @@ void MovementManager::moveChase(Unit* target, Optional<ChaseRange> dist, Optiona
 
 void MovementManager::moveConfused()
 {
-    if (_owner->getObjectTypeId() == TYPEID_PLAYER)
+    if (_owner->isPlayer())
     {
         add(new ConfusedMovementGenerator<Player>());
     }
@@ -614,7 +617,7 @@ void MovementManager::moveFleeing(Unit* enemy, uint32_t time)
     if (!enemy)
         return;
 
-    if (_owner->getObjectTypeId() == TYPEID_UNIT)
+    if (_owner->isCreature())
     {
         if (time)
             add(new TimedFleeingMovementGenerator(enemy->getGuid(), time));
@@ -632,7 +635,7 @@ void MovementManager::movePoint(uint32_t id, LocationVector const& pos, bool gen
 
 void MovementManager::movePoint(uint32_t id, float x, float y, float z, bool generatePath, Optional<float> finalOrient)
 {
-    if (_owner->getObjectTypeId() == TYPEID_PLAYER)
+    if (_owner->isPlayer())
     {
         add(new PointMovementGenerator<Player>(id, x, y, z, generatePath, 0.0f, finalOrient));
     }
@@ -655,7 +658,7 @@ void MovementManager::moveCloserAndStop(uint32_t id, Unit* target, float distanc
     else
     {
         // We are already close enough. We just need to turn toward the target without changing position.
-        MovementNew::MoveSplineInit init(_owner);
+        MovementMgr::MoveSplineInit init(_owner);
         init.MoveTo(_owner->GetPositionX(), _owner->GetPositionY(), _owner->GetPositionZ());
         init.SetFacing(target);
         add(new GenericMovementGenerator(std::move(init), EFFECT_MOTION_TYPE, id));
@@ -664,9 +667,11 @@ void MovementManager::moveCloserAndStop(uint32_t id, Unit* target, float distanc
 
 void MovementManager::moveLand(uint32_t id, LocationVector const& pos, Optional<float> velocity /*= {}*/)
 {
-    MovementNew::MoveSplineInit init(_owner);
+    MovementMgr::MoveSplineInit init(_owner);
     init.MoveTo(positionToVector3(pos), false);
-    init.SetAnimation(AnimationTier::Ground);
+#if VERSION_STRING >= WotLK
+    init.SetAnimation(ANIMATION_FLAG_GROUND);
+#endif
     if (velocity)
         init.SetVelocity(*velocity);
     add(new GenericMovementGenerator(std::move(init), EFFECT_MOTION_TYPE, id));
@@ -674,26 +679,28 @@ void MovementManager::moveLand(uint32_t id, LocationVector const& pos, Optional<
 
 void MovementManager::moveTakeoff(uint32_t id, LocationVector const& pos, Optional<float> velocity /*= {}*/)
 {
-    MovementNew::MoveSplineInit init(_owner);
+    MovementMgr::MoveSplineInit init(_owner);
     init.MoveTo(positionToVector3(pos), false);
-    init.SetAnimation(AnimationTier::Hover);
+#if VERSION_STRING >= WotLK
+    init.SetAnimation(ANIMATION_FLAG_HOVER);
+#endif
     if (velocity)
         init.SetVelocity(*velocity);
     add(new GenericMovementGenerator(std::move(init), EFFECT_MOTION_TYPE, id));
 }
 
-void MovementManager::moveCharge(float x, float y, float z, float speed /*= SPEED_CHARGE*/, uint32_t id /*= EVENT_CHARGE*/, bool generatePath /*= false*/)
+void MovementManager::moveCharge(LocationVector const& pos, float speed /*= SPEED_CHARGE*/, uint32_t id /*= EVENT_CHARGE*/, bool generatePath /*= false*/)
 {
-    if (_owner->getObjectTypeId() == TYPEID_PLAYER)
+    if (_owner->isPlayer())
     {
-        PointMovementGenerator<Player>* movement = new PointMovementGenerator<Player>(id, x, y, z, generatePath, speed);
+        PointMovementGenerator<Player>* movement = new PointMovementGenerator<Player>(id, pos.x, pos.y, pos.z, generatePath, speed);
         movement->Priority = MOTION_PRIORITY_HIGHEST;
         movement->BaseUnitState = UNIT_STATE_CHARGING;
         add(movement);
     }
     else
     {
-        PointMovementGenerator<Creature>* movement = new PointMovementGenerator<Creature>(id, x, y, z, generatePath, speed);
+        PointMovementGenerator<Creature>* movement = new PointMovementGenerator<Creature>(id, pos.x, pos.y, pos.z, generatePath, speed);
         movement->Priority = MOTION_PRIORITY_HIGHEST;
         movement->BaseUnitState = UNIT_STATE_CHARGING;
         add(movement);
@@ -704,10 +711,10 @@ void MovementManager::moveCharge(PathGenerator const& path, float speed /*= SPEE
 {
     G3D::Vector3 dest = path.getActualEndPosition();
 
-    moveCharge(dest.x, dest.y, dest.z, speed, EVENT_CHARGE_PREPATH);
+    moveCharge(LocationVector(dest.x, dest.y, dest.z), speed, EVENT_CHARGE_PREPATH);
 
     // Charge movement is not started when using EVENT_CHARGE_PREPATH
-    MovementNew::MoveSplineInit init(_owner);
+    MovementMgr::MoveSplineInit init(_owner);
     init.MovebyPath(path.getPath());
     init.SetVelocity(speed);
     init.Launch();
@@ -716,24 +723,26 @@ void MovementManager::moveCharge(PathGenerator const& path, float speed /*= SPEE
 void MovementManager::moveKnockbackFrom(float srcX, float srcY, float speedXY, float speedZ)
 {
     // This function may make players fall below map
-    if (_owner->getObjectTypeId() == TYPEID_PLAYER)
+    if (_owner->isPlayer())
         return;
 
     if (speedXY < 0.01f)
         return;
 
     LocationVector dest = _owner->GetPosition();
-    float moveTimeHalf = speedZ / MovementNew::gravity;
+    float moveTimeHalf = speedZ / MovementMgr::gravity;
     float dist = 2 * moveTimeHalf * speedXY;
-    float max_height = -MovementNew::computeFallElevation(moveTimeHalf, false, -speedZ);
+    float max_height = -MovementMgr::computeFallElevation(moveTimeHalf, false, -speedZ);
 
     // Use a mmap raycast to get a valid destination.
     _owner->movePositionToFirstCollision(dest, dist, _owner->getRelativeAngle(srcX, srcY) + float(M_PI));
 
-    MovementNew::MoveSplineInit init(_owner);
+    MovementMgr::MoveSplineInit init(_owner);
     init.MoveTo(dest.getPositionX(), dest.getPositionY(), dest.getPositionZ(), false);
     init.SetParabolic(max_height, 0);
+#if VERSION_STRING >= WotLK
     init.SetOrientationFixed(true);
+#endif
     init.SetVelocity(speedXY);
 
     GenericMovementGenerator* movement = new GenericMovementGenerator(std::move(init), EFFECT_MOTION_TYPE, 0);
@@ -744,12 +753,12 @@ void MovementManager::moveKnockbackFrom(float srcX, float srcY, float speedXY, f
 void MovementManager::moveJumpTo(float angle, float speedXY, float speedZ)
 {
     // This function may make players fall below map
-    if (_owner->getObjectTypeId() == TYPEID_PLAYER)
+    if (_owner->isPlayer())
         return;
 
     float x, y, z = _owner->GetPositionZ();
 
-    float moveTimeHalf = speedZ / MovementNew::gravity;
+    float moveTimeHalf = speedZ / MovementMgr::gravity;
     float dist = 2 * moveTimeHalf * speedXY;
 
     _owner->getNearPoint2D(nullptr, x, y, dist, _owner->GetOrientation() + angle);
@@ -768,10 +777,10 @@ void MovementManager::moveJump(float x, float y, float z, float o, float speedXY
     if (speedXY < 0.01f)
         return;
 
-    float moveTimeHalf = speedZ / MovementNew::gravity;
-    float max_height = -MovementNew::computeFallElevation(moveTimeHalf, false, -speedZ);
+    float moveTimeHalf = speedZ / MovementMgr::gravity;
+    float max_height = -MovementMgr::computeFallElevation(moveTimeHalf, false, -speedZ);
 
-    MovementNew::MoveSplineInit init(_owner);
+    MovementMgr::MoveSplineInit init(_owner);
     init.MoveTo(x, y, z, false);
     init.SetParabolic(max_height, 0);
     init.SetVelocity(speedXY);
@@ -790,7 +799,7 @@ void MovementManager::moveCirclePath(float x, float y, float z, float radius, bo
     LocationVector const& pos = { x, y, z, 0.0f };
     float angle = pos.getAbsoluteAngle(_owner->GetPositionX(), _owner->GetPositionY());
 
-    MovementNew::MoveSplineInit init(_owner);
+    MovementMgr::MoveSplineInit init(_owner);
 
     // add the owner's current position as starting point as it gets removed after entering the cycle
     init.Path().push_back(G3D::Vector3(_owner->GetPositionX(), _owner->GetPositionY(), _owner->GetPositionZ()));
@@ -820,7 +829,9 @@ void MovementManager::moveCirclePath(float x, float y, float z, float radius, bo
     {
         init.SetFly();
         init.SetCyclic();
-        init.SetAnimation(AnimationTier::Hover);
+#if VERSION_STRING >= WotLK
+        init.SetAnimation(ANIMATION_FLAG_HOVER);
+#endif
     }
     else
     {
@@ -833,8 +844,8 @@ void MovementManager::moveCirclePath(float x, float y, float z, float radius, bo
 
 void MovementManager::moveSmoothPath(uint32_t pointId, LocationVector const* pathPoints, size_t pathSize, bool walk)
 {
-    MovementNew::MoveSplineInit init(_owner);
-    MovementNew::PointsArray path;
+    MovementMgr::MoveSplineInit init(_owner);
+    MovementMgr::PointsArray path;
     path.reserve(pathSize);
     std::transform(pathPoints, pathPoints + pathSize, std::back_inserter(path), [](LocationVector const& point)
         {
@@ -842,7 +853,9 @@ void MovementManager::moveSmoothPath(uint32_t pointId, LocationVector const* pat
         });
 
     init.MovebyPath(path);
+#if VERSION_STRING >= WotLK
     init.SetSmooth();
+#endif
     init.SetWalk(walk);
 
     // This code is not correct
@@ -851,21 +864,21 @@ void MovementManager::moveSmoothPath(uint32_t pointId, LocationVector const* pat
     add(new GenericMovementGenerator(std::move(init), EFFECT_MOTION_TYPE, pointId));
 }
 
-void MovementManager::moveAlongSplineChain(uint32_t /*pointId*/, uint16_t /*dbChainId*/, bool /*walk*/)
+void MovementManager::moveAlongSplineChain(uint32_t pointId, uint16_t dbChainId, bool walk)
 {
     Creature* owner = _owner->ToCreature();
     if (!owner)
     {
         return;
     }
-    // todo
-    /* 
-    std::vector<SplineChainLink> const* chain = GetSplineChain(owner, dbChainId);
+
+    std::vector<SplineChainLink> const* chain = sMySQLStore.getSplineChain(owner, dbChainId);
     if (!chain)
     {
         return;
     }
-    MoveAlongSplineChain(pointId, *chain, walk);*/
+
+    moveAlongSplineChain(pointId, *chain, walk);
 }
 
 void MovementManager::moveAlongSplineChain(uint32_t pointId, std::vector<SplineChainLink> const& chain, bool walk)
@@ -901,16 +914,15 @@ void MovementManager::moveFall(uint32_t id/* = 0*/)
     _owner->obj_movement_info.setFallTime(0);
 
     // Don't run spline movement for players
-    if (_owner->getObjectTypeId() == TYPEID_PLAYER)
+    if (_owner->isPlayer())
         return;
 
-    auto posY = _owner->GetPositionY();
 #if VERSION_STRING >= WotLK
-    posY += _owner->getHoverHeight();
+    tz += _owner->getHoverHeight();
 #endif
 
-    MovementNew::MoveSplineInit init(_owner);
-    init.MoveTo(_owner->GetPositionX(), posY, _owner->GetPositionZ(), false);
+    MovementMgr::MoveSplineInit init(_owner);
+    init.MoveTo(_owner->GetPositionX(), _owner->GetPositionY(), tz, false);
     init.SetFall();
 
     GenericMovementGenerator* movement = new GenericMovementGenerator(std::move(init), EFFECT_MOTION_TYPE, id);
@@ -918,24 +930,45 @@ void MovementManager::moveFall(uint32_t id/* = 0*/)
     add(movement);
 }
 
-void MovementManager::moveSeekAssistance(float x, float y, float z)
+void MovementManager::moveSeekAssistance(LocationVector const& pos)
 {
     if (Creature* creature = _owner->ToCreature())
     {
-        // todo
-        //creature->AttackStop();
-        //creature->CastStop();
-        //creature->DoNotReacquireSpellFocusTarget();
         creature->getAIInterface()->setReactState(REACT_PASSIVE);
-        add(new AssistanceMovementGenerator(EVENT_ASSIST_MOVE, x, y, z));
+        add(new AssistanceMovementGenerator(EVENT_ASSIST_MOVE, pos.x, pos.y, pos.z));
     }
 }
 
 void MovementManager::moveSeekAssistanceDistract(uint32_t time)
 {
-    if (_owner->getObjectTypeId() == TYPEID_UNIT)
+    if (_owner->isCreature())
     {
         add(new AssistanceDistractMovementGenerator(time, _owner->GetOrientation()));
+    }
+}
+
+void MovementManager::moveTaxiFlight(uint32_t path, uint32_t pathnode)
+{
+    if (_owner->isPlayer())
+    {
+        if (path < sTaxiPathNodesByPath.size())
+        {
+            bool hasExisting = hasMovementGenerator([](MovementGenerator const* gen) { return gen->getMovementGeneratorType() == FLIGHT_MOTION_TYPE; });
+            if (hasExisting)
+            {
+                sLogger.failure("MoveTaxiFlight:: {} already has a Flightpath Movement Generator", _owner->ToPlayer()->getName());
+                return;
+            }
+
+            sLogger.debug("MoveTaxiFlight:: {} taxi to (Path {} node {}).", _owner->ToPlayer()->getName(), path, pathnode);
+            FlightPathMovementGenerator* movement = new FlightPathMovementGenerator(pathnode);
+            movement->loadPath(_owner->ToPlayer());
+            add(movement);
+        }
+        else
+        {
+            sLogger.failure("MoveTaxiFlight:: {} attempted taxi to (non-existing Path {} node {}).", _owner->ToPlayer()->getName(), path, pathnode);
+        }
     }
 }
 
@@ -967,13 +1000,13 @@ void MovementManager::moveRotate(uint32_t id, uint32_t time, RotateDirection dir
 
 void MovementManager::moveFormation(Unit* leader, float range, float angle, uint32_t point1, uint32_t point2)
 {
-    if (_owner->getObjectTypeId() == TYPEID_UNIT && leader)
+    if (_owner->isCreature() && leader)
     {
         add(new FormationMovementGenerator(leader, range, angle, point1, point2), MOTION_SLOT_DEFAULT);
     }
 }
 
-void MovementManager::launchMoveSpline(MovementNew::MoveSplineInit&& init, uint32_t id/*= 0*/, MovementGeneratorPriority priority/* = MOTION_PRIORITY_NORMAL*/, MovementGeneratorType type/*= EFFECT_MOTION_TYPE*/)
+void MovementManager::launchMoveSpline(MovementMgr::MoveSplineInit&& init, uint32_t id/*= 0*/, MovementGeneratorPriority priority/* = MOTION_PRIORITY_NORMAL*/, MovementGeneratorType type/*= EFFECT_MOTION_TYPE*/)
 {
     if (isInvalidMovementGeneratorType(type))
     {

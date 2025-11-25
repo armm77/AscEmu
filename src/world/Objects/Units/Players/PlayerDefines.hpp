@@ -1,29 +1,33 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
+#include "AEVersion.hpp"
 #include "Macros/ItemMacros.hpp"
 #include "Macros/PlayerMacros.hpp"
 #include "Management/Skill.hpp"
-#include "Map/Maps/InstanceDefines.hpp"
-#include <WorldConf.h>
-#include <CommonTypes.hpp>
+#include "CommonTypes.hpp"
 
+#include <array>
 #include <ctime>
 #include <string>
 #include <map>
 #include <unordered_map>
 #include <mutex>
 #include <set>
+#include <unordered_set>
 #include <list>
+#include <memory>
+
+#include "Utilities/utf8String.hpp"
 
 class Player;
 class Item;
 
-namespace DBC::Structures
+namespace WDB::Structures
 {
     struct SkillLineEntry;
 }
@@ -32,6 +36,7 @@ struct OnHitSpell;
 class SpellInfo;
 class Aura;
 class Group;
+class Field;
 
 enum PlayerTeam : uint8_t
 {
@@ -249,29 +254,57 @@ enum RankTitles : uint16_t
     PVPTITLE_END                            = 143
 };
 
-/*
-Exalted             1,000     Access to racial mounts. Capped at 999.7
-Revered             21,000    Heroic mode keys for Outland dungeons
-Honored             12,000    10% discount from faction vendors
-Friendly            6,000
-Neutral             3,000
-Unfriendly          3,000     Cannot buy, sell or interact.
-Hostile             3,000     You will always be attacked on sight
-Hated               36,000
-*/
-enum Standing
+enum class Standing : uint8_t
 {
-    STANDING_HATED,
-    STANDING_HOSTILE,
-    STANDING_UNFRIENDLY,
-    STANDING_NEUTRAL,
-    STANDING_FRIENDLY,
-    STANDING_HONORED,
-    STANDING_REVERED,
-    STANDING_EXALTED
+    HATED,              // Hated         36,000
+    HOSTILE,            // Hostile       3,000     You will always be attacked on sight
+    UNFRIENDLY,         // Unfriendly    3,000     Cannot buy, sell or interact.
+    NEUTRAL,            // Neutral       3,000
+    FRIENDLY,           // Friendly      6,000
+    HONORED,            // Honored       12,000    10% discount from faction vendors
+    REVERED,            // Revered       21,000    Heroic mode keys for Outland dungeons
+    EXALTED             // Exalted       1,000     Access to racial mounts. Capped at 999.7
 };
 
-enum PlayerFlags
+namespace StandingValues
+{
+    enum Values : int32_t
+    {
+        NEUTRAL         = 0,                    // 0/3000 Neutral
+
+        UNFRIENDLY      = NEUTRAL - 3000,       // 0/3000 Unfriendly
+        HOSTILE         = UNFRIENDLY - 3000,    // 0/3000 Hostile
+        HATED           = HOSTILE - 36000,      // 0/36000 Hated
+
+        FRIENDLY        = NEUTRAL + 3000,       // 0/6000 Friendly
+        HONORED         = FRIENDLY + 6000,      // 0/12000 Honored
+        REVERED         = HONORED + 12000,      // 0/21000 Revered
+        EXALTED         = REVERED + 21000,      // 0/1000 Exalted
+        MAX_EXALTED     = EXALTED + 999,        // 999/1000 Exalted
+    };
+}
+
+static inline constexpr Standing getReputationRankFromStanding(int32_t value)
+{
+    if (value >= StandingValues::EXALTED)
+        return Standing::EXALTED;
+    if (value >= StandingValues::REVERED)
+        return Standing::REVERED;
+    if (value >= StandingValues::HONORED)
+        return Standing::HONORED;
+    if (value >= StandingValues::FRIENDLY)
+        return Standing::FRIENDLY;
+    if (value >= StandingValues::NEUTRAL)
+        return Standing::NEUTRAL;
+    if (value > StandingValues::UNFRIENDLY)
+        return Standing::UNFRIENDLY;
+    if (value > StandingValues::HOSTILE)
+        return Standing::HOSTILE;
+
+    return Standing::HATED;
+}
+
+enum PlayerFlags : uint32_t
 {
     PLAYER_FLAG_NONE                    = 0x00000000,
     PLAYER_FLAG_PARTY_LEADER            = 0x00000001, // (TODO: implement for all versions) Informs players outside of your group who is your group leader
@@ -281,34 +314,57 @@ enum PlayerFlags
     PLAYER_FLAG_DEATH_WORLD_ENABLE      = 0x00000010, // Adds death glow to the world
     PLAYER_FLAG_RESTING                 = 0x00000020, // Applies rested state on your character portrait
     PLAYER_FLAG_ADMIN                   = 0x00000040, // Unknown effect in 3.3.5a
-    PLAYER_FLAG_FREE_FOR_ALL_PVP        = 0x00000080, // Unknown in 3.3.5a, pre-wotlk FFA-pvp tag
+#if VERSION_STRING < WotLK
+    PLAYER_FLAG_FREE_FOR_ALL_PVP        = 0x00000080, // Applies FFA-pvp tag
+#else
+    PLAYER_FLAG_UNK8                    = 0x00000080,
+#endif
     PLAYER_FLAG_PVP_GUARD_ATTACKABLE    = 0x00000100, // Player will be attacked by neutral guards
     PLAYER_FLAG_PVP_TOGGLE              = 0x00000200, // Toggles PvP combat on/off
     PLAYER_FLAG_NOHELM                  = 0x00000400, // Hides helm
     PLAYER_FLAG_NOCLOAK                 = 0x00000800, // Hides cloak
     PLAYER_FLAG_PLAYED_3_HOURS          = 0x00001000, // Obsolete: "You have more than 3 hours of online time. You will receive 1/2 money and XP during this period."
     PLAYER_FLAG_PLAYED_5_HOURS          = 0x00002000, // Obsolete: "You have more than 5 hours of online time. You will not be able to gain loot, XP, or complete quests."
-    PLAYER_FLAG_UNK1                    = 0x00004000,
-    // TBC flags begin (needs verification)
+#if VERSION_STRING > Classic
+    PLAYER_FLAG_UNK15                   = 0x00004000,
+#if VERSION_STRING == TBC
+    PLAYER_FLAG_UNK16                   = 0x00008000,
+#else
     PLAYER_FLAG_DEVELOPER               = 0x00008000, // <Dev> tag ingame
+#endif
+#if VERSION_STRING == TBC
     PLAYER_FLAG_SANCTUARY               = 0x00010000, // Makes player unattackable, added in sanctuary areas
-    PLAYER_FLAG_UNK2                    = 0x00020000, // Toggles 'Taxi Time Test' and FPS counter, unused
-    // WoTLK flags begin
+#else
+    PLAYER_FLAG_UNK17                   = 0x00010000,
+#endif
+    PLAYER_FLAG_TAXI_TIME_TEST          = 0x00020000, // Toggles 'Taxi Time Test' and FPS counter, unused
+#if VERSION_STRING == TBC
+    PLAYER_FLAG_UNK19                   = 0x00040000,
+#else
     PLAYER_FLAG_PVP_TIMER               = 0x00040000, // PvP timer after toggling manually PvP combat state off
-    PLAYER_FLAG_UNK3                    = 0x00080000,
-    PLAYER_FLAG_UNK4                    = 0x00100000,
-    PLAYER_FLAG_UNK5                    = 0x00200000,
-    PLAYER_FLAG_UNK6                    = 0x00400000,
+#endif
+    PLAYER_FLAG_UNK20                   = 0x00080000,
+    PLAYER_FLAG_UNK21                   = 0x00100000,
+    PLAYER_FLAG_UNK22                   = 0x00200000,
+    PLAYER_FLAG_UNK23                   = 0x00400000,
+#if VERSION_STRING > TBC
     PLAYER_FLAG_PREVENT_SPELL_CAST      = 0x00800000, // Prevents spell casting but excludes auto attack, used by Bladestorm for example
+#if VERSION_STRING < Mop
     PLAYER_FLAG_PREVENT_MELEE_SPELLS    = 0x01000000, // Prevents melee spell casting and includes auto attack, unused?
+#else
+    PLAYER_FLAG_BATTLE_PET              = 0x01000000, // Related to Battle Pets
+#endif
     PLAYER_FLAG_NO_XP                   = 0x02000000, // (TODO: implement this and remove variable from player class) Disables XP gain and hides XP bar
-    // Cataclysm flags begin (needs verification)
-    PLAYER_FLAG_UNK7                    = 0x04000000,
-    PLAYER_FLAGS_AUTO_DECLINE_GUILD     = 0x08000000,
-    PLAYER_FLAGS_GUILD_LVL_ENABLED      = 0x10000000,
-    PLAYER_FLAGS_VOID_UNLOCKED          = 0x20000000,
-    PLAYER_FLAG_UNK9                    = 0x40000000,
-    PLAYER_FLAG_UNK10                   = 0x80000000
+    PLAYER_FLAG_UNK27                   = 0x04000000,
+#if VERSION_STRING > WotLK
+    PLAYER_FLAG_DECLINE_GUILD_INVITES   = 0x08000000, // Automatically declines guild invites
+    PLAYER_FLAG_GUILD_LVL_ENABLED       = 0x10000000, // ??
+    PLAYER_FLAG_VOID_STORAGE_UNLOCKED   = 0x20000000, // Player has bought Void Storage
+    PLAYER_FLAG_UNK31                   = 0x40000000,
+    PLAYER_FLAG_UNK32                   = 0x80000000
+#endif
+#endif
+#endif
 };
 
 enum CustomizeFlags
@@ -423,13 +479,48 @@ enum ModType
     MOD_SPELL     = 2
 };
 
-enum DrunkenState
+// byte value (PLAYER_BYTES_3, 1)
+enum PlayerBytes3_DrunkValue : uint8_t
 {
-    DRUNKEN_SOBER    = 0,
-    DRUNKEN_TIPSY    = 1,
-    DRUNKEN_DRUNK    = 2,
-    DRUNKEN_SMASHED  = 3
+    DRUNKEN_SOBER                      = 0x00,
+    DRUNKEN_TIPSY                      = 0x01,
+    DRUNKEN_DRUNK                      = 0x02,
+    DRUNKEN_SMASHED                    = 0x03
 };
+
+// byte value (PLAYER_FIELD_BYTES, 0)
+enum PlayerFieldBytes_MiscFlags : uint8_t
+{
+    PLAYER_MISC_FLAG_NONE              = 0x00,
+    PLAYER_MISC_FLAG_UNK1              = 0x01,
+    PLAYER_MISC_FLAG_UNK2              = 0x02,
+    PLAYER_MISC_FLAG_UNK3              = 0x04,
+    PLAYER_MISC_FLAG_SHOW_RELEASE_TIME = 0x08, // Displays time when spirit is released
+    PLAYER_MISC_FLAG_UNK5              = 0x10,
+    PLAYER_MISC_FLAG_UNK6              = 0x20,
+    PLAYER_MISC_FLAG_UNK7              = 0x40,
+    PLAYER_MISC_FLAG_UNK8              = 0x80,
+    PLAYER_MISC_FLAG_ALL               = 0xFF
+};
+
+#if VERSION_STRING < Mop
+// byte value
+// classic - tbc (PLAYER_FIELD_BYTES2, 1)
+// wotlk - cata (PLAYER_FIELD_BYTES2, 3)
+enum PlayerFieldBytes2_AuraVision : uint8_t
+{
+    AURA_VISION_NONE                   = 0x00,
+    AURA_VISION_UNK1                   = 0x01,
+    AURA_VISION_UNK2                   = 0x02,
+    AURA_VISION_UNK3                   = 0x04,
+    AURA_VISION_UNK4                   = 0x08,
+    AURA_VISION_UNK5                   = 0x10,
+    AURA_VISION_STEALTH                = 0x20,
+    AURA_VISION_INVISIBILITY           = 0x40,
+    AURA_VISION_UNK8                   = 0x80,
+    AURA_VISION_ALL                    = 0xFF
+};
+#endif
 
 /**
     TalentTree table
@@ -505,7 +596,6 @@ static const uint32_t TalentTreesPerClass[MAX_PLAYER_CLASSES][3] =
     { 752, 750, 748 },  // DRUID        - balance - feral/combat - restoration -
 #endif
 };
-
 
 enum RestState
 {
@@ -654,12 +744,21 @@ enum PlayerCombatRating : uint8_t
     CR_WEAPON_SKILL_OFFHAND             = 21,
     CR_WEAPON_SKILL_RANGED              = 22,   // Not used
     CR_EXPERTISE                        = 23,
+#if VERSION_STRING >= WotLK
     CR_ARMOR_PENETRATION                = 24,
+#endif
 #if VERSION_STRING >= Cata
     CR_MASTERY                          = 25,
-    MAX_PCR                             = 26
+#endif
+#if VERSION_STRING >= Mop
+    CR_PVP_POWER                        = 26,
+#endif
+
+#if VERSION_STRING == Classic
+    // TODO: sort out fields properly for classic
+    MAX_PCR                             = 20
 #else
-    MAX_PCR                             = 25
+    MAX_PCR
 #endif
 };
 
@@ -947,15 +1046,27 @@ struct PlayerCreateInfo
     CreateInfo_LevelstatsVector level_stats;
 };
 
+struct CharCreate
+{
+    utf8_string name;
+    uint8_t _race;
+    uint8_t _class;
+    uint8_t gender;
+    uint8_t skin;
+    uint8_t face;
+    uint8_t hairStyle;
+    uint8_t hairColor;
+    uint8_t facialHair;
+    uint8_t outfitId;
+};
+
 //////////////////////////////////////////////////////////////////////////////////////////
 // CachedCharacterInfo
-//\todo: It is mostly used to handle offline player data for groups, somehow it is used to
-// determine if a player is online or not.
-
 class SERVER_DECL CachedCharacterInfo
 {
 public:
-
+    CachedCharacterInfo();
+    CachedCharacterInfo(Field const* fields);
     ~CachedCharacterInfo();
 
     uint32_t guid = 0;
@@ -992,33 +1103,83 @@ struct FactionReputation
     int32_t standing;
     uint8_t flag;
     int32_t baseStanding;
-    int32_t CalcStanding() { return standing - baseStanding; }
-    bool Positive() { return standing >= 0; }
+
+    inline constexpr int32_t calcStanding() const { return standing - baseStanding; }
+    inline constexpr bool isPositive() const { return standing >= 0; }
+    inline constexpr bool canToggleAtWar() const { return !(flag & FACTION_FLAG_DISABLE_ATWAR); }
+    inline constexpr bool isAtWar() const { return flag & FACTION_FLAG_AT_WAR; }
+    inline constexpr bool isForcedInvisible() const { return flag & FACTION_FLAG_FORCED_INVISIBLE; }
+    inline constexpr bool isVisible() const { return flag & FACTION_FLAG_VISIBLE; }
+    inline constexpr bool isHidden() const { return flag & FACTION_FLAG_HIDDEN; }
+    inline constexpr bool isInactive() const { return flag & FACTION_FLAG_INACTIVE; }
+
+    inline constexpr bool setAtWar(bool set)
+    {
+        if (set && !isAtWar())
+            flag |= FACTION_FLAG_AT_WAR;
+        else if (!set && isAtWar())
+            flag &= ~FACTION_FLAG_AT_WAR;
+        else
+            return false;
+        return true;
+    }
+
+    inline constexpr bool setVisible(bool set)
+    {
+        if (isForcedInvisible() || isHidden())
+            return false;
+        if (set && !isVisible())
+            flag |= FACTION_FLAG_VISIBLE;
+        else if (!set && isVisible())
+            flag &= ~FACTION_FLAG_VISIBLE;
+        else
+            return false;
+        return true;
+    }
+
+    inline constexpr bool setInactive(bool set)
+    {
+        if (set && !isInactive())
+            flag |= FACTION_FLAG_INACTIVE;
+        else if (!set && isInactive())
+            flag &= ~FACTION_FLAG_INACTIVE;
+        else
+            return false;
+        return true;
+    }
 };
 
-struct PlayerPet
+// TODO: use posssibly more describe naming
+#if VERSION_STRING >= Mop
+static inline constexpr uint16_t PLAYER_REPUTATION_COUNT = 256;
+#else
+static inline constexpr uint8_t PLAYER_REPUTATION_COUNT = 128;
+#endif
+
+struct PetCache
 {
-    std::string name;
+    uint8_t number = 0; // Refers to Pet::m_petId
+    uint8_t type = 0;
+    utf8_string name;
     uint32_t entry = 0;
+    uint32_t model = 0;
+    uint32_t level = 0;
     uint32_t xp = 0;
+    uint8_t slot = 0;
     bool active = false;
     bool alive = false;
-    char stablestate = 0;
-    uint32_t number = 0;
-    uint32_t level = 0;
-    uint32_t happinessupdate = 0;
     std::string actionbar;
     time_t reset_time = 0;
     uint32_t reset_cost = 0;
     uint32_t spellid = 0;
-    uint32_t petstate = 0;
+    uint8_t petstate = 0;
     uint32_t talentpoints = 0;
     uint32_t current_power = 0;
     uint32_t current_hp = 0;
     uint32_t current_happiness = 0;
-    uint32_t renamable = 0;
-    uint32_t type = 0;
+    bool renamable = false;
 };
+typedef std::map<uint8_t, std::unique_ptr<PetCache>> PetCacheMap;
 
 struct WeaponModifier
 {
@@ -1048,7 +1209,7 @@ struct PlayerSkillFieldPosition
 
 struct PlayerSkill
 {
-    DBC::Structures::SkillLineEntry const* Skill = nullptr;
+    WDB::Structures::SkillLineEntry const* Skill = nullptr;
 
     uint16_t CurrentValue = 0;
     uint16_t MaximumValue = 0;
@@ -1075,11 +1236,9 @@ struct PlayerCooldown
 class PlayerSpec
 {
 public:
-
     PlayerSpec()
     {
-        tp = 0;
-        for (uint8_t i = 0; i < PLAYER_ACTION_BUTTON_COUNT; i++)
+        for (uint8_t i = 0; i < PLAYER_ACTION_BUTTON_COUNT; ++i)
         {
             mActions[i].Action = 0;
             mActions[i].Type = 0;
@@ -1087,51 +1246,70 @@ public:
         }
     }
 
-    void SetTP(uint32_t points) { tp = points; }
+    void setTalentPoints(uint32_t points) { mTalentPoints = points; }
+    uint32_t getTalentPoints() const { return mTalentPoints; }
 
-    uint32_t GetTP() const { return tp; }
+    // Note; does not set free talent points
+    void clearTalents() { mTalents.clear(); }
 
-    void Reset()
+    void addTalent(uint32_t talentId, uint8_t rankId)
     {
-        tp += static_cast<uint32_t>(talents.size());
-        talents.clear();
-    }
-
-    void AddTalent(uint32_t talentid, uint8_t rankid)
-    {
-        auto itr = talents.find(talentid);
-        if (itr != talents.end())
-            itr->second = rankid;
+        const auto itr = mTalents.find(talentId);
+        if (itr != mTalents.cend())
+            itr->second = rankId;
         else
-            talents.insert(std::make_pair(talentid, rankid));
+            mTalents.insert({ talentId, rankId });
     }
-    bool HasTalent(uint32_t talentid, uint8_t rankid)
+
+    bool hasTalent(uint32_t talentid, uint8_t rankid) const
     {
-        auto itr = talents.find(talentid);
-        if (itr != talents.end())
+        const auto itr = mTalents.find(talentid);
+        if (itr != mTalents.cend())
             return itr->second == rankid;
 
         return false;
     }
 
-    std::map<uint32_t, uint8_t> talents;
 #ifdef FT_GLYPHS
-    uint16_t glyphs[GLYPHS_COUNT] = { 0 };
-#endif
-    ActionButton mActions[PLAYER_ACTION_BUTTON_COUNT];
-private:
+    uint16_t getGlyph(uint16_t slot) const
+    {
+        if (slot >= GLYPHS_COUNT)
+            return 0;
 
-    uint32_t tp;
+        return mGlyphs[slot];
+    }
+
+    void setGlyph(uint16_t glyphId, uint16_t slot)
+    {
+        if (slot >= GLYPHS_COUNT)
+            return;
+
+        mGlyphs[slot] = glyphId;
+    }
+
+    std::array<uint16_t, GLYPHS_COUNT> const& getGlyphs() const { return mGlyphs; }
+#endif
+
+    std::map<uint32_t, uint8_t> const& getTalents() const { return mTalents; }
+    ActionButton& getActionButton(uint8_t slot) { return mActions[slot]; }
+    ActionButton const& getActionButton(uint8_t slot) const { return mActions[slot]; }
+
+private:
+    uint32_t mTalentPoints = 0;
+    std::map<uint32_t, uint8_t> mTalents;
+
+#ifdef FT_GLYPHS
+    std::array<uint16_t, GLYPHS_COUNT> mGlyphs = { 0 };
+#endif
+    std::array<ActionButton, PLAYER_ACTION_BUTTON_COUNT> mActions = { ActionButton() };
 };
 
-typedef std::set<uint32_t>                            SpellSet;
-typedef std::list<classScriptOverride*>             ScriptOverrideList;
-typedef std::map<uint32_t, ScriptOverrideList* >      SpellOverrideMap;
-typedef std::map<uint32_t, FactionReputation*>        ReputationMap;
-typedef std::map<SpellInfo const*, std::pair<uint32_t, uint32_t> >StrikeSpellMap;
-typedef std::map<uint32_t, OnHitSpell >               StrikeSpellDmgMap;
-typedef std::map<uint16_t, PlayerSkill>               SkillMap;
-typedef std::map<uint32_t, PlayerCooldown>            PlayerCooldownMap;
+typedef std::unordered_set<uint32_t>                            SpellSet;
+typedef std::list<std::unique_ptr<classScriptOverride>>         ScriptOverrideList;
+typedef std::map<uint32_t, std::shared_ptr<ScriptOverrideList>> SpellOverrideMap;
+typedef std::map<uint32_t, std::unique_ptr<FactionReputation>>  ReputationMap;
+typedef std::map<uint16_t, PlayerSkill>                         SkillMap;
+typedef std::map<uint32_t, PlayerCooldown>                      PlayerCooldownMap;
 
 struct PlayerCheat
 {

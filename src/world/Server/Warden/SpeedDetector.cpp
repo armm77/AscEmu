@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,11 +18,14 @@
  *
  */
 
-
 #include "Server/Warden/SpeedDetector.h"
-#include "Server/MainServerDefines.h"
+
+#include "Logging/Logger.hpp"
 #include "Server/World.h"
 #include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Server/WorldSession.h"
+#include "Server/WorldSessionLog.hpp"
 
 SpeedCheatDetector::SpeedCheatDetector()
 {
@@ -38,7 +41,7 @@ SpeedCheatDetector::SpeedCheatDetector()
 void SpeedCheatDetector::EventSpeedChange()
 {
 #ifdef _DEBUG
-    sLogger.debug("Speedchange Event occurred prevspeed=%f", last_used_speed);
+    sLogger.debug("Speedchange Event occurred prevspeed={}", last_used_speed);
 #endif
     //    last_stamp = 0;
     //to reset or not to reset, this is the question

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -29,7 +29,7 @@ namespace AscEmu::Packets
         uint32_t money{};
         uint32_t cod{};
 #else
-        ObjectGuid gobjGuid;
+        WoWGuid gobjGuid;
         uint64_t money{};
         uint64_t cod{};
 #endif
@@ -91,7 +91,7 @@ namespace AscEmu::Packets
 
             gobjGuid[0] = packet.readBit();
 
-            ObjectGuid itemGUIDs[12];
+            WoWGuid itemGUIDs[12];
 
             for (uint8_t i = 0; i < itemCount; ++i)
             {

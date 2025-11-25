@@ -1,12 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Instance_TheVioletHold.hpp"
 #include "Portal_Common.hpp"
-#include "Objects/Units/Creatures/Summons/Summon.h"
-#include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "CommonTime.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Common Portal AI
@@ -14,13 +14,14 @@ CommonPortalAI::CommonPortalAI(Creature* pCreature) : CreatureAIScript(pCreature
 {
     // Instance Script
     mInstance = getInstanceScript();
+    portalLocation = 0;
 }
 
 CreatureAIScript* CommonPortalAI::Create(Creature* pCreature) { return new CommonPortalAI(pCreature); }
 
 void CommonPortalAI::OnLoad()
 {
-    getCreature()->getAIInterface()->setImmuneToNPC(true);
+    getCreature()->getAIInterface()->setIgnoreCreatureCombat(true);
     getCreature()->castSpell(getCreature(), SPELL_PORTAL_PERIODIC, true);
     getCreature()->setUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
 }

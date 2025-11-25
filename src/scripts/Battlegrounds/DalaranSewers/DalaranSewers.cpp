@@ -1,11 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Setup.h"
 #include "DalaranSewers.h"
-#include "Map/Management/MapMgr.hpp"
+
+#include "Map/Maps/BattleGroundMap.hpp"
 #include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
 #include "Server/Master.h"
 
 DalaranSewers::DalaranSewers(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t, uint32_t players_per_side) :

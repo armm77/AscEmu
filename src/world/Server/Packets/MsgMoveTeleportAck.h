@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,6 +7,7 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include <cstdint>
 
+#include "AEVersion.hpp"
 #include "ManagedPacket.h"
 #include "WorldPacket.h"
 
@@ -16,42 +17,56 @@ namespace AscEmu::Packets
     {
     public:
         WoWGuid guid;
+        LocationVector lv;
+        MovementInfo mi;
         uint32_t flags;
         uint32_t time;
 
-        MsgMoveTeleportAck() : MsgMoveTeleportAck(0, 0)
+        MsgMoveTeleportAck() : MsgMoveTeleportAck(WoWGuid(), LocationVector(), MovementInfo())
         {
         }
 
-        MsgMoveTeleportAck(uint32_t flags, uint32_t time) :
-            ManagedPacket(MSG_MOVE_TELEPORT_ACK, 8),
-            flags(flags),
-            time(time)
+        MsgMoveTeleportAck(WoWGuid guid, LocationVector lv, MovementInfo mi) :
+            ManagedPacket(MSG_MOVE_TELEPORT_ACK, 4 + 4 + 8),
+            guid(guid),
+            lv(lv),
+            mi(mi)
         {
         }
 
     protected:
-        bool internalSerialise(WorldPacket& /*packet*/) override
+        bool internalSerialise(WorldPacket& packet) override
         {
-            return false;
+#if VERSION_STRING < TBC
+            packet << guid;
+            packet << uint32_t(2);
+            packet << uint32_t(0);
+            packet << uint8_t(0);
+            packet << float(0);
+            packet << lv.x;
+            packet << lv.y;
+            packet << lv.z;
+            packet << lv.o;
+            packet << uint16_t(2);
+            packet << uint8_t(0);
+#elif VERSION_STRING <= WotLK
+            mi.position = lv;
+            packet << guid;
+            packet << uint32_t(0);
+            mi.writeMovementInfo(packet, 0, false);
+#endif
+            return true;
         }
 
         bool internalDeserialise(WorldPacket& packet) override
         {
-#if VERSION_STRING <= TBC
-            uint64_t rawGuid;
-            packet >> rawGuid;
-            guid.Init(rawGuid);
-#endif
+#if VERSION_STRING <= WotLK
+            packet >> guid >> flags >> time;
 
-#if VERSION_STRING == WotLK
-            packet >> guid;
-#endif
-
-#if VERSION_STRING >= Cata
+#else // Cata and Mop
             packet >> flags >> time;
 
-            ObjectGuid cataGuid;
+            WoWGuid cataGuid;
             cataGuid[5] = packet.readBit();
             cataGuid[0] = packet.readBit();
             cataGuid[1] = packet.readBit();
@@ -70,7 +85,7 @@ namespace AscEmu::Packets
             packet.ReadByteSeq(cataGuid[3]);
             packet.ReadByteSeq(cataGuid[0]);
 
-            guid.Init(cataGuid);
+            guid.init(cataGuid);
 #endif
             return true;
         }

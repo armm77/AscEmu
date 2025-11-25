@@ -1,12 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Instance_TheSteamvault.h"
-#include "Management/Faction.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Movement/MovementManager.h"
+#include "Objects/GameObject.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Utilities/Random.hpp"
 
 class TheSteamvaultInstanceScript : public InstanceScript
 {

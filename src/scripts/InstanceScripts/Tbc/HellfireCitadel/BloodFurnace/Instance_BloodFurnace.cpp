@@ -1,18 +1,74 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Instance_BloodFurnace.h"
 
-#include "Server/Script/CreatureAIScript.h"
+#include "Objects/GameObject.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+
+enum BloodFurnanceEncounter
+{
+    DATA_THE_MAKER = 0,
+    DATA_BROGGOK = 1,
+    DATA_KELIDAN_THE_BREAKER = 2
+};
 
 class BloodFurnaceInstanceScript : public InstanceScript
 {
 public:
     explicit BloodFurnaceInstanceScript(WorldMap* pMapMgr) : InstanceScript(pMapMgr){}
     static InstanceScript* Create(WorldMap* pMapMgr) { return new BloodFurnaceInstanceScript(pMapMgr); }
+
+    void OnEncounterStateChange(uint32_t entry, uint32_t state) override
+    {
+        switch (entry)
+        {
+            case DATA_BROGGOK:
+            {
+                if (state == Performed)
+                {
+                    if (m_broggokDoorGUID)
+                        if (GetGameObjectByGuid(m_broggokDoorGUID))
+                            GetGameObjectByGuid(m_broggokDoorGUID)->setState(GO_STATE_OPEN);
+                }
+            } break;
+            case DATA_KELIDAN_THE_BREAKER:
+            {
+                if (state == Performed)
+                {
+                    if (m_theMakerDoorGUID)
+                        if (GetGameObjectByGuid(m_theMakerDoorGUID))
+                            GetGameObjectByGuid(m_theMakerDoorGUID)->setState(GO_STATE_OPEN);
+                }
+            } break;
+            default:
+                break;
+        }
+
+    }
+
+    void OnGameObjectPushToWorld(GameObject* pGameObject)
+    {
+        switch (pGameObject->getEntry())
+        {
+            case GO_BROGGOK:
+                m_broggokDoorGUID = pGameObject->getGuidLow();
+                break;
+            case GO_THE_MAKER:
+                m_theMakerDoorGUID = pGameObject->getGuidLow();
+                break;
+            default:
+                break;
+        }
+    }
+
+    uint32_t m_broggokDoorGUID = 0;
+    uint32_t m_theMakerDoorGUID = 0;
+
 };
 
 class KelidanTheBreakerAI : public CreatureAIScript
@@ -21,7 +77,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new KelidanTheBreakerAI(c); }
     explicit KelidanTheBreakerAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
         {
             mShadowBoltVolley = addAISpell(KELIDAN_SHADOW_BOLT_VOLLEY_H, 25.0f, TARGET_SELF, 0, 6);
             mFireNova = addAISpell(KELIDAN_FIRE_NOVA_H, 15.0f, TARGET_ATTACKING, 0, 12);
@@ -58,7 +114,7 @@ public:
         {
             if (_isTimerFinished(mBurningNovaTimerId))
             {
-                if (_isHeroic())
+                if (isHeroic())
                     _castAISpell(mVortex);
 
                 _castAISpell(mBurningNova);
@@ -75,61 +131,9 @@ public:
     uint32_t mBurningNovaTimerId;
 };
 
-class BroggokAI : public CreatureAIScript
-{
-public:
-    static CreatureAIScript* Create(Creature* c) { return new BroggokAI(c); }
-    explicit BroggokAI(Creature* pCreature) : CreatureAIScript(pCreature)
-    {
-        addAISpell(POISON_BOLT, 12.0f, TARGET_SELF, 0, 15);
-        addAISpell(SLIME_SPRAY, 10.0f, TARGET_SELF, 0, 25);
-
-        auto poisonCloud = addAISpell(POISON_CLOUD, 8.0f, TARGET_RANDOM_DESTINATION, 0, 40);
-        poisonCloud->setMinMaxDistance(0.0f, 40.0f);
-    }
-
-    void OnDied(Unit* /*pKiller*/) override
-    {
-        GameObject* pDoor = getNearestGameObject(456.157349f, 34.248005f, 9.559463f, GO_BROGGOK);
-        if (pDoor)
-            pDoor->setState(GO_STATE_OPEN);
-    }
-};
-
-class TheMakerAI : public CreatureAIScript
-{
-public:
-    static CreatureAIScript* Create(Creature* c) { return new TheMakerAI(c); }
-    explicit TheMakerAI(Creature* pCreature) : CreatureAIScript(pCreature)
-    {
-        addAISpell(DOMINATION, 8.0f, TARGET_RANDOM_SINGLE);
-        addAISpell(ACID_SPRAY, 10.0f, TARGET_SELF);
-
-        auto throwBreaker = addAISpell(THROW_BEAKER, 20.0f, TARGET_RANDOM_DESTINATION);
-        throwBreaker->setMinMaxDistance(0.0f, 40.0f);
-
-        addEmoteForEvent(Event_OnCombatStart, 4849);    // My work must not be interrupted!
-        addEmoteForEvent(Event_OnCombatStart, 4850);    // Perhaps I can find a use for you...
-        addEmoteForEvent(Event_OnCombatStart, 4851);    // Anger...hate... These are tools I can use.
-
-        addEmoteForEvent(Event_OnTargetDied, 4852);     // Let's see what I can make of you!
-        addEmoteForEvent(Event_OnTargetDied, 4853);     // It is pointless to resist.
-        addEmoteForEvent(Event_OnDied, 4854);           // Stay away from... Me!
-    }
-
-    void OnDied(Unit* /*pKiller*/) override
-    {
-        GameObject* pDoor = getNearestGameObject(327.155487f, 149.753418f, 9.559869f, GO_THE_MAKER);
-        if (pDoor)
-            pDoor->setState(GO_STATE_OPEN);
-    }
-};
-
 void SetupBloodFurnace(ScriptMgr* mgr)
 {
     mgr->register_instance_script(MAP_HC_BLOOD_FURNANCE, &BloodFurnaceInstanceScript::Create);
 
     mgr->register_creature_script(CN_KELIDAN_THE_BREAKER, &KelidanTheBreakerAI::Create);
-    mgr->register_creature_script(CN_BROGGOK, &BroggokAI::Create);
-    mgr->register_creature_script(CN_THE_MAKER, &TheMakerAI::Create);
 }

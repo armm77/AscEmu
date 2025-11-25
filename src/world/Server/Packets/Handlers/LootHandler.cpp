@@ -1,8 +1,7 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
-
 
 #include "Server/Packets/CmsgLoot.h"
 #include "Server/Packets/SmsgLootMoneyNotify.h"
@@ -13,17 +12,24 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgLootMasterGive.h"
 #include "Server/WorldSession.h"
 #include "Objects/GameObject.h"
-#include "Macros/ScriptMacros.hpp"
 #include "Map/Management/MapMgr.hpp"
-#include "WoWGuid.h"
+#include "WoWGuid.hpp"
+#include "Logging/Logger.hpp"
+#include "Management/Group.h"
 #include "Objects/Units/Creatures/Creature.h"
 #include "Management/ItemInterface.h"
-#include "Management/ObjectMgr.h"
-#include "Server/Definitions.h"
-#include "Server/Packets/SmsgLootRemoved.h"
-#include "Server/Script/CreatureAIScript.h"
-#include "Spell/Definitions/LockTypes.hpp"
-#include "Spell/Spell.Legacy.h"
+#include "Management/Loot/LootMgr.hpp"
+#include "Management/Loot/LootRoll.hpp"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Item.hpp"
+#include "Objects/Units/Creatures/Corpse.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/World.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/HookInterface.hpp"
+#include "Spell/Spell.hpp"
+#include "Storage/MySQLDataStore.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -51,7 +57,7 @@ Loot* WorldSession::getItemLootFromHighGuidType(WoWGuid wowGuid)
         case HighGuid::Item:
         {
             if (const auto item = _player->getItemInterface()->GetItemByGUID(wowGuid.getRawGuid()))
-                return item->m_loot;
+                return item->m_loot.get();
 
             return nullptr;
         }
@@ -82,7 +88,7 @@ void WorldSession::handleAutostoreLootItemOpcode(WorldPacket& recvPacket)
     Item* lootItem = nullptr;
 
     WoWGuid wowGuid;
-    wowGuid.Init(_player->getLootGuid());
+    wowGuid.init(_player->getLootGuid());
 
     auto loot = getItemLootFromHighGuidType(wowGuid);
     if (loot == nullptr)
@@ -172,7 +178,7 @@ Loot* WorldSession::getMoneyLootFromHighGuidType(WoWGuid wowGuid)
         case HighGuid::Item:
         {
             if (const auto item = _player->getItemInterface()->GetItemByGUID(wowGuid.getRawGuid()))
-                return item->m_loot;
+                return item->m_loot.get();
 
             return nullptr;
         }
@@ -185,7 +191,7 @@ Loot* WorldSession::getMoneyLootFromHighGuidType(WoWGuid wowGuid)
         }
         case HighGuid::Corpse:
         {
-            if (auto corpse = sObjectMgr.GetCorpse(wowGuid.getGuidLowPart()))
+            if (auto corpse = sObjectMgr.getCorpseByGuid(wowGuid.getGuidLowPart()))
                 return &corpse->loot;
 
             return nullptr;
@@ -204,7 +210,7 @@ void WorldSession::handleLootMoneyOpcode(WorldPacket& /*recvPacket*/)
     Unit* pt = nullptr;
 
     WoWGuid wowGuid;
-    wowGuid.Init(_player->getLootGuid());
+    wowGuid.init(_player->getLootGuid());
 
     auto loot = getItemLootFromHighGuidType(wowGuid);
     if (loot == nullptr)
@@ -252,7 +258,7 @@ void WorldSession::handleLootMoneyOpcode(WorldPacket& /*recvPacket*/)
                 _player->modCoinage(money);
                 _player->getSession()->SendPacket(SmsgLootMoneyNotify(money, 1).serialise().get());
 #if VERSION_STRING > TBC
-                _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, money, 0, 0);
+                _player->updateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, money);
 #endif
             }
             sHookInterface.OnLoot(_player, pt, money, 0);
@@ -260,24 +266,24 @@ void WorldSession::handleLootMoneyOpcode(WorldPacket& /*recvPacket*/)
     }
     else
     {
-        if (Group* party = _player->getGroup())
+        if (const auto group = _player->getGroup())
         {
             std::vector<Player*> groupMembers;
 
-            groupMembers.reserve(party->MemberCount());
+            groupMembers.reserve(group->MemberCount());
 
-            party->getLock().Acquire();
-            for (uint32_t i = 0; i < party->GetSubGroupCount(); i++)
+            group->getLock().lock();
+            for (uint32_t i = 0; i < group->GetSubGroupCount(); i++)
             {
-                auto subGroup = party->GetSubGroup(i);
+                auto subGroup = group->GetSubGroup(i);
                 for (auto groupMemberPlayerInfo : subGroup->getGroupMembers())
                 {
-                    if (Player* loggedInPlayer = sObjectMgr.GetPlayer(groupMemberPlayerInfo->guid))
-                        if (loggedInPlayer->GetZoneId() == _player->GetZoneId() && _player->GetInstanceID() == loggedInPlayer->GetInstanceID())
+                    if (Player* loggedInPlayer = sObjectMgr.getPlayer(groupMemberPlayerInfo->guid))
+                        if (loggedInPlayer->getZoneId() == _player->getZoneId() && _player->GetInstanceID() == loggedInPlayer->GetInstanceID())
                             groupMembers.push_back(loggedInPlayer);
                 }
             }
-            party->getLock().Release();
+            group->getLock().unlock();
 
             if (groupMembers.empty())
                 return;
@@ -297,7 +303,7 @@ void WorldSession::handleLootMoneyOpcode(WorldPacket& /*recvPacket*/)
                     player->getSession()->SendPacket(SmsgLootMoneyNotify(sharedMoney, groupMembers.size() <= 1).serialise().get());
 
 #if VERSION_STRING > TBC
-                    player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, sharedMoney, 0, 0);
+                    player->updateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, sharedMoney);
 #endif
                 }
             }
@@ -337,8 +343,8 @@ void WorldSession::handleLootOpcode(WorldPacket& recvPacket)
                     {
                         for (auto groupMemberPlayerInfo : subGroup->getGroupMembers())
                         {
-                            if (Player* loggedInPlayer = sObjectMgr.GetPlayer(groupMemberPlayerInfo->guid))
-                                if (_player->GetZoneId() == loggedInPlayer->GetZoneId())
+                            if (Player* loggedInPlayer = sObjectMgr.getPlayer(groupMemberPlayerInfo->guid))
+                                if (_player->getZoneId() == loggedInPlayer->getZoneId())
                                     onlineGroupMembers.push_back(loggedInPlayer->getGuid());
                         }
                     }
@@ -428,7 +434,7 @@ void WorldSession::doLootRelease(WoWGuid lguid)
     }
     else if (lguid.isCorpse())        // ONLY remove insignia at BG
     {
-        Corpse* corpse = sObjectMgr.GetCorpse(lguid.getGuidLow());
+        auto* corpse = sObjectMgr.getCorpseByGuid(lguid.getGuidLow());
         if (!corpse || !corpse->IsWithinDistInMap(_player, 5.0f))
             return;
 
@@ -448,7 +454,6 @@ void WorldSession::doLootRelease(WoWGuid lguid)
             {
                 if (item->m_loot->isLooted())
                 {
-                    delete item->m_loot;
                     item->m_loot = nullptr;
                 }
             }
@@ -460,11 +465,11 @@ void WorldSession::doLootRelease(WoWGuid lguid)
     }
     else if (lguid.isPlayer())
     {
-        if (auto player = sObjectMgr.GetPlayer(lguid.getGuidLow()))
+        if (auto lootablePlayer = sObjectMgr.getPlayer(lguid.getGuidLow()))
         {
-            player->m_lootableOnCorpse = false;
-            player->loot.items.clear();
-            player->removeDynamicFlags(U_DYN_FLAG_LOOTABLE);
+            lootablePlayer->m_lootableOnCorpse = false;
+            lootablePlayer->loot.items.clear();
+            lootablePlayer->removeDynamicFlags(U_DYN_FLAG_LOOTABLE);
         }
     }
     else
@@ -536,7 +541,7 @@ void WorldSession::handleLootMasterGiveOpcode(WorldPacket& recvPacket)
     Loot* loot = nullptr;
 
     WoWGuid lootGuid;
-    lootGuid.Init(_player->getLootGuid());
+    lootGuid.init(_player->getLootGuid());
 
     if (lootGuid.isUnit())
     {
@@ -562,7 +567,7 @@ void WorldSession::handleLootMasterGiveOpcode(WorldPacket& recvPacket)
 
     if (loot && srlPacket.slot >= loot->items.size())
     {
-        sLogger.debug("AutoLootItem: Player %s might be using a hack! (slot %u, size %u)", _player->getName().c_str(), srlPacket.slot, static_cast<uint32_t>(loot->items.size()));
+        sLogger.debug("AutoLootItem: Player {} might be using a hack! (slot {}, size {})", _player->getName(), srlPacket.slot, static_cast<uint32_t>(loot->items.size()));
         return;
     }
 

@@ -1,13 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Instance_ShadowLabyrinth.h"
-#include "Management/Faction.h"
-#include "Server/Script/CreatureAIScript.h"
-#include "Macros/ScriptMacros.hpp"
+
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
 
 class ShadowLabyrinthInstanceScript : public InstanceScript
 {
@@ -372,7 +372,7 @@ public:
         resonance->setAttackStopTimer(1000);
         resonanceTimerId = 0;
 
-        if (getCreature()->getWorldMap() != NULL && !_isHeroic() && getCreature()->getHealthPct() >= 41)
+        if (getCreature()->getWorldMap() != NULL && !isHeroic() && getCreature()->getHealthPct() >= 41)
         {
             getCreature()->setHealthPct(40);
         }
@@ -384,7 +384,7 @@ public:
     {
         SonicBoomTimerId = _addTimer(5000);
 
-        if (getCreature()->getWorldMap() != NULL && !_isHeroic() && getCreature()->getHealthPct() >= 41)
+        if (getCreature()->getWorldMap() != NULL && !isHeroic() && getCreature()->getHealthPct() >= 41)
         {
             getCreature()->setHealthPct(40);
         }
@@ -393,7 +393,7 @@ public:
 
     void OnCombatStop(Unit* /*mTarget*/) override
     {
-        if (getCreature()->getWorldMap() != NULL && !_isHeroic() && getCreature()->getHealthPct() >= 41)
+        if (getCreature()->getWorldMap() != NULL && !isHeroic() && getCreature()->getHealthPct() >= 41)
         {
             getCreature()->setHealthPct(40);
         }

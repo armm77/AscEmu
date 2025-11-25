@@ -1,10 +1,20 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/ItemInterface.h"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Item.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Master.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Random.hpp"
 
 enum
 {
@@ -233,15 +243,14 @@ public:
         {
             if (pPlayer->getItemInterface()->GetItemCount(32971, false) == 0)
             {
-                auto itm = sObjectMgr.CreateItem(32971, pPlayer);
+                auto itm = sObjectMgr.createItem(32971, pPlayer);
                 if (itm == nullptr)
                     return;
 
-                auto result = pPlayer->getItemInterface()->SafeAddItem(itm, slotresult.ContainerSlot, slotresult.Slot);
+                const auto [result, returnedItem] = pPlayer->getItemInterface()->SafeAddItem(std::move(itm), slotresult.ContainerSlot, slotresult.Slot);
                 if (!result)
                 {
-                    DLLLogDetail("Error while adding item %u to player %s", itm->getEntry(), pPlayer->getName().c_str());
-                    itm->deleteMe();
+                    DLLLogDetail("Error while adding item %u to player %s", returnedItem->getEntry(), pPlayer->getName().c_str());
                 }
             }
             else

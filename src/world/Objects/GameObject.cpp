@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -19,14 +19,20 @@
  *
  */
 
-#include "Management/GameEvent.h"
-#include "Storage/MySQLDataStore.hpp"
-#include "Server/MainServerDefines.h"
-#include <G3D/Quat.h>
-#include "Map/Cells/MapCell.hpp"
-#include "Management/Faction.h"
-#include "Spell/SpellMgr.hpp"
+#include "GameObject.h"
+#include "GameObjectModel.h"
 #include "Data/WoWGameObject.hpp"
+
+#include "Management/GameEvent.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include <G3D/Quat.h>
+#include "Management/Loot/LootMgr.hpp"
+#include "GameObjectProperties.hpp"
+#include "Data/Flags.hpp"
+#include "Logging/Logger.hpp"
+#include "Management/ObjectMgr.hpp"
+#include "Map/Cells/MapCell.hpp"
+#include "Spell/SpellMgr.hpp"
 #include "Management/Battleground/Battleground.hpp"
 #include "Server/Packets/SmsgGameobjectCustomAnim.h"
 #include "Server/Packets/SmsgGameobjectPagetext.h"
@@ -35,11 +41,28 @@
 #include "Server/Packets/SmsgFishNotHooked.h"
 #include "Server/Packets/SmsgEnableBarberShop.h"
 #include "Server/Packets/SmsgDestructibleBuildingDamage.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Server/Script/ScriptMgr.hpp"
 #include "Map/Maps/MapScriptInterface.h"
-#include "GameObjectModel.h"
+#include "Storage/WDB/WDBStores.hpp"
 #include "Management/QuestLogEntry.hpp"
 #include "Server/Definitions.h"
+#include "Objects/Transporter.hpp"
+#include "Server/DatabaseDefinition.hpp"
+#include "Management/QuestMgr.h"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Server/EventMgr.h"
+#include "Server/World.h"
+#include "Server/WorldSession.h"
+#include "Server/Script/EventScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Units/Players/Player.hpp"
+#include "Utilities/Narrow.hpp"
+#include "Utilities/Random.hpp"
 
 // MIT
 
@@ -102,8 +125,6 @@ GameObject::~GameObject()
 {
     sEventMgr.RemoveEvents(this);
 
-    delete m_model;
-
     if (myScript)
     {
         myScript->Destroy();
@@ -142,17 +163,17 @@ void GameObject::setParentRotation(QuaternionData const& rotation)
     write(gameObjectData()->rotation[3], rotation.w);
 }
 
+QuaternionData const& GameObject::getLocalRotation() const { return m_localRotation; }
+int64_t GameObject::getPackedLocalRotation() const { return m_packedRotation; }
+
 #if VERSION_STRING < WotLK
 uint32_t GameObject::getDynamicFlags() const { return gameObjectData()->dynamic; }
 void GameObject::setDynamicFlags(uint32_t dynamicFlags) { write(gameObjectData()->dynamic, dynamicFlags); }
 #elif VERSION_STRING < Mop
-uint32_t GameObject::getDynamicField() const { return gameObjectData()->dynamic; }
-uint16_t GameObject::getDynamicFlags() const { return gameObjectData()->dynamic_field_parts.dyn_flag; }
-int16_t GameObject::getDynamicPathProgress() const { return gameObjectData()->dynamic_field_parts.path_progress; }
-void GameObject::setDynamicField(uint32_t dynamic) { write(gameObjectData()->dynamic, dynamic); }
-void GameObject::setDynamicField(uint16_t dynamicFlags, int16_t pathProgress) { setDynamicField(static_cast<uint32_t>(pathProgress) << 16 | dynamicFlags); }
-void GameObject::setDynamicFlags(uint16_t dynamicFlags) { setDynamicField(dynamicFlags, getDynamicPathProgress()); }
-void GameObject::setDynamicPathProgress(int16_t pathProgress) { setDynamicField(getDynamicFlags(), pathProgress); }
+uint16_t GameObject::getDynamicFlags() const { return gameObjectData()->dynamic.dynamic_field_parts.dyn_flag; }
+int16_t GameObject::getDynamicPathProgress() const { return gameObjectData()->dynamic.dynamic_field_parts.path_progress; }
+void GameObject::setDynamicFlags(uint16_t dynamicFlags) { write(gameObjectData()->dynamic.dynamic_field_parts.dyn_flag, dynamicFlags); }
+void GameObject::setDynamicPathProgress(int16_t pathProgress) { write(gameObjectData()->dynamic.dynamic_field_parts.path_progress, pathProgress); }
 #endif
 
 uint32_t GameObject::getFactionTemplate() const { return gameObjectData()->faction_template; }
@@ -167,7 +188,7 @@ uint8_t GameObject::getState() const
 #if VERSION_STRING <= TBC
     return gameObjectData()->state;
 #elif VERSION_STRING >= WotLK
-    return gameObjectData()->bytes_1_gameobject.state;
+    return gameObjectData()->bytes_1.bytes_1_gameobject.state;
 #endif
 }
 void GameObject::setState(uint8_t state)
@@ -175,7 +196,7 @@ void GameObject::setState(uint8_t state)
 #if VERSION_STRING <= TBC
     write(gameObjectData()->state, static_cast<uint32_t>(state));
 #elif VERSION_STRING >= WotLK
-    write(gameObjectData()->bytes_1_gameobject.state, state);
+    write(gameObjectData()->bytes_1.bytes_1_gameobject.state, state);
 #endif
 }
 
@@ -184,7 +205,7 @@ uint8_t GameObject::getGoType() const
 #if VERSION_STRING <= TBC
     return gameObjectData()->type;
 #elif VERSION_STRING >= WotLK
-    return gameObjectData()->bytes_1_gameobject.type;
+    return gameObjectData()->bytes_1.bytes_1_gameobject.type;
 #endif
 }
 void GameObject::setGoType(uint8_t type)
@@ -192,7 +213,7 @@ void GameObject::setGoType(uint8_t type)
 #if VERSION_STRING <= TBC
     write(gameObjectData()->type, static_cast<uint32_t>(type));
 #elif VERSION_STRING >= WotLK
-    write(gameObjectData()->bytes_1_gameobject.type, type);
+    write(gameObjectData()->bytes_1.bytes_1_gameobject.type, type);
 #endif
 }
 
@@ -202,7 +223,7 @@ uint8_t GameObject::getArtKit() const
 #if VERSION_STRING <= TBC
     return gameObjectData()->art_kit;
 #elif VERSION_STRING >= WotLK
-    return gameObjectData()->bytes_1_gameobject.art_kit;
+    return gameObjectData()->bytes_1.bytes_1_gameobject.art_kit;
 #endif
 }
 void GameObject::setArtKit(uint8_t artkit)
@@ -210,17 +231,17 @@ void GameObject::setArtKit(uint8_t artkit)
 #if VERSION_STRING <= TBC
     write(gameObjectData()->art_kit, static_cast<uint32_t>(artkit));
 #elif VERSION_STRING >= WotLK
-    write(gameObjectData()->bytes_1_gameobject.art_kit, artkit);
+    write(gameObjectData()->bytes_1.bytes_1_gameobject.art_kit, artkit);
 #endif
 }
 #else
 uint8_t GameObject::getArtKit() const
 {
-    return gameObjectData()->bytes_2_gameobject.art_kit;
+    return gameObjectData()->bytes_2.bytes_2_gameobject.art_kit;
 }
 void GameObject::setArtKit(uint8_t artkit)
 {
-    write(gameObjectData()->bytes_2_gameobject.art_kit, artkit);
+    write(gameObjectData()->bytes_2.bytes_2_gameobject.art_kit, artkit);
 }
 #endif
 
@@ -230,7 +251,7 @@ uint8_t GameObject::getAnimationProgress() const
 #if VERSION_STRING <= TBC
     return gameObjectData()->animation_progress;
 #elif VERSION_STRING >= WotLK
-    return gameObjectData()->bytes_1_gameobject.animation_progress;
+    return gameObjectData()->bytes_1.bytes_1_gameobject.animation_progress;
 #endif
 }
 void GameObject::setAnimationProgress(uint8_t progress)
@@ -238,17 +259,17 @@ void GameObject::setAnimationProgress(uint8_t progress)
 #if VERSION_STRING <= TBC
     write(gameObjectData()->animation_progress, static_cast<uint32_t>(progress));
 #elif VERSION_STRING >= WotLK
-    write(gameObjectData()->bytes_1_gameobject.animation_progress, progress);
+    write(gameObjectData()->bytes_1.bytes_1_gameobject.animation_progress, progress);
 #endif
 }
 #else
 uint8_t GameObject::getAnimationProgress() const
 {
-    return gameObjectData()->bytes_2_gameobject.animation_progress;
+    return gameObjectData()->bytes_2.bytes_2_gameobject.animation_progress;
 }
 void GameObject::setAnimationProgress(uint8_t progress)
 {
-    write(gameObjectData()->bytes_2_gameobject.animation_progress, progress);
+    write(gameObjectData()->bytes_2.bytes_2_gameobject.animation_progress, progress);
 }
 #endif
 
@@ -266,7 +287,23 @@ Unit* GameObject::getUnitOwner()
     return nullptr;
 }
 
+Unit const* GameObject::getUnitOwner() const
+{
+    if (getCreatedByGuid() != 0)
+        return getWorldMapUnit(getCreatedByGuid());
+
+    return nullptr;
+}
+
 Player* GameObject::getPlayerOwner()
+{
+    if (getCreatedByGuid() != 0)
+        return getWorldMapPlayer(getCreatedByGuid());
+
+    return nullptr;
+}
+
+Player const* GameObject::getPlayerOwner() const
 {
     if (getCreatedByGuid() != 0)
         return getWorldMapPlayer(getCreatedByGuid());
@@ -278,13 +315,13 @@ bool GameObject::loadFromDB(MySQLStructure::GameobjectSpawn* spawn, WorldMap* ma
 {
     if (!spawn)
     {
-        sLogger.failure("Gameobject (spawnId: %u) not found in table gameobject_spawns, cant load.");
+        sLogger.failure("Gameobject (spawnId: {}) not found in table gameobject_spawns, cant load.");
         return false;
     }
 
     if (!map || !map->getBaseMap())
     {
-        sLogger.failure("Gameobject (spawnId: %u) invalid WorldMap or base data Invalid, cant load.");
+        sLogger.failure("Gameobject (spawnId: {}) invalid WorldMap or base data Invalid, cant load.");
         return false;
     }
 
@@ -328,9 +365,13 @@ void GameObject::deleteFromDB()
 {
     if (m_spawn != nullptr)
     {
-        WorldDatabase.Execute("DELETE FROM gameobject_spawns WHERE id = %u AND min_build <= %u AND max_build >= %u ", m_spawn->id, VERSION_STRING, VERSION_STRING);
-        WorldDatabase.Execute("DELETE FROM gameobject_spawns_extra WHERE id = %u AND min_build <= %u AND max_build >= %u ", m_spawn->id, VERSION_STRING, VERSION_STRING);
-        WorldDatabase.Execute("DELETE FROM gameobject_spawns_overrides WHERE id = %u AND min_build <= %u AND max_build >= %u ", m_spawn->id, VERSION_STRING, VERSION_STRING);
+        std::string tableOrigine = m_spawn->origine;
+        std::string tableExtra = tableOrigine + "_extra";
+        std::string tableOverrides = tableOrigine + "_overrides";
+
+        WorldDatabase.Execute("DELETE FROM %s WHERE id = %u AND min_build <= %u AND max_build >= %u ", tableOrigine.c_str(), m_spawn->id, VERSION_STRING, VERSION_STRING);
+        WorldDatabase.Execute("DELETE FROM %s WHERE id = %u AND min_build <= %u AND max_build >= %u ", tableExtra.c_str(), m_spawn->id, VERSION_STRING, VERSION_STRING);
+        WorldDatabase.Execute("DELETE FROM %s WHERE id = %u AND min_build <= %u AND max_build >= %u ", tableOverrides.c_str(), m_spawn->id, VERSION_STRING, VERSION_STRING);
     }
 }
 
@@ -338,14 +379,14 @@ void GameObject::saveToDB(bool newSpawn)
 {
     if (m_spawn == nullptr)
     {
-        sLogger.failure("Saving to Database failed for GameObject with entry %u spawnId %u, no SpawnData available", getEntry(), getSpawnId());
+        sLogger.failure("Saving to Database failed for GameObject with entry {} spawnId {}, no SpawnData available", getEntry(), getSpawnId());
         return;
     }
     std::stringstream ss;
 
     if (newSpawn)
     {
-        ss << "INSERT INTO gameobject_spawns VALUES("
+        ss << "INSERT INTO " << m_spawn->origine << " VALUES("
            << m_spawn->id << ","
            << VERSION_STRING << ","
            << VERSION_STRING << ","
@@ -366,7 +407,7 @@ void GameObject::saveToDB(bool newSpawn)
     }
     else
     {
-        ss << "UPDATE gameobject_spawns SET "
+        ss << "UPDATE  " << m_spawn->origine << " SET "
             << "phase = "
             << GetPhase() << ","
             << "position_x = "
@@ -407,13 +448,13 @@ bool GameObject::create(uint32_t entry, WorldMap* map, uint32_t phase, LocationV
     gameobject_properties = sMySQLStore.getGameObjectProperties(entry);
     if (gameobject_properties == nullptr)
     {
-        sLogger.failure("Something tried to create a GameObject with invalid entry %u", entry);
+        sLogger.failure("Something tried to create a GameObject with invalid entry {}", entry);
         return false;
     }
 
     if (gameobject_properties->type == GAMEOBJECT_TYPE_MO_TRANSPORT)
     {
-        sLogger.failure("Gameobject (GUID: %u Entry: %u) not created: gameobject type GAMEOBJECT_TYPE_MO_TRANSPORT cannot be manually created.", getGuidLow(), entry);
+        sLogger.failure("Gameobject (GUID: {} Entry: {}) not created: gameobject type GAMEOBJECT_TYPE_MO_TRANSPORT cannot be manually created.", getGuidLow(), entry);
         return false;
     }
 
@@ -424,6 +465,8 @@ bool GameObject::create(uint32_t entry, WorldMap* map, uint32_t phase, LocationV
     m_phase = phase;
 
     setLocalRotation(rotation.x, rotation.y, rotation.z, rotation.w);
+
+#if VERSION_STRING > TBC
     MySQLStructure::GameObjectSpawnExtra const* gameObjectAddon = sMySQLStore.getGameObjectExtra(getSpawnId());
 
     // For most of gameobjects is (0, 0, 0, 1) quaternion, there are only some transports with not standard rotation
@@ -432,6 +475,24 @@ bool GameObject::create(uint32_t entry, WorldMap* map, uint32_t phase, LocationV
         parentRotation = gameObjectAddon->parentRotation;
 
     setParentRotation(parentRotation);
+#else
+    write(gameObjectData()->rotation[0], rotation.x);
+    write(gameObjectData()->rotation[1], rotation.y);
+
+    write(gameObjectData()->o, position.o);
+
+    float rotationZ = rotation.z;
+    float rotationW = rotation.w;
+    if (rotationZ == 0.0f && rotationW == 0.0f)
+    {
+        rotationZ = sin(position.o / 2);
+        rotationW = cos(position.o / 2);
+    }
+
+    write(gameObjectData()->rotation[2], rotationZ);
+    write(gameObjectData()->rotation[3], rotationW);
+
+#endif
 
     setScale(gameobject_properties->size);
     SetFaction(0);
@@ -447,7 +508,7 @@ bool GameObject::create(uint32_t entry, WorldMap* map, uint32_t phase, LocationV
 
     m_model = createModel();
 
-    setGoType(static_cast<uint8>(gameobject_properties->type));
+    setGoType(static_cast<uint8_t>(gameobject_properties->type));
     m_prevGoState = state;
     setState(state);
     setArtKit(0);
@@ -560,6 +621,7 @@ void GameObject::respawn()
 
 void GameObject::setLocalRotation(float qx, float qy, float qz, float qw)
 {
+#if VERSION_STRING > TBC
     G3D::Quat rotation(qx, qy, qz, qw);
     rotation.unitize();
     m_localRotation.x = rotation.x;
@@ -567,6 +629,19 @@ void GameObject::setLocalRotation(float qx, float qy, float qz, float qw)
     m_localRotation.z = rotation.z;
     m_localRotation.w = rotation.w;
     updatePackedRotation();
+#else
+    G3D::Quat rotation(qx, qy, qz, qw);
+
+    if (qz == 0 && qw == 0)
+        rotation = G3D::Quat::fromAxisAngleRotation(G3D::Vector3::unitZ(), GetOrientation());
+
+    rotation.unitize();
+    m_localRotation.x = rotation.x;
+    m_localRotation.y = rotation.y;
+    m_localRotation.z = rotation.z;
+    m_localRotation.w = rotation.w;
+    updatePackedRotation();
+#endif
 }
 
 void GameObject::setLocalRotationAngles(float z_rot, float y_rot, float x_rot)
@@ -605,6 +680,13 @@ void GameObject::updatePackedRotation()
     int64_t y = int32_t(m_localRotation.y * PACK_YZ) * w_sign & PACK_YZ_MASK;
     int64_t z = int32_t(m_localRotation.z * PACK_YZ) * w_sign & PACK_YZ_MASK;
     m_packedRotation = z | (y << 21) | (x << 42);
+
+#if VERSION_STRING <= TBC
+    write(gameObjectData()->rotation[0], m_localRotation.x);
+    write(gameObjectData()->rotation[1], m_localRotation.y);
+    write(gameObjectData()->rotation[2], m_localRotation.z);
+    write(gameObjectData()->rotation[3], m_localRotation.w);
+#endif
 }
 
 void GameObject::setLootState(LootState state, Unit* unit)
@@ -646,6 +728,9 @@ void GameObject::enableCollision(bool enable)
     m_model->enable(enable ? GetPhase() : 0);
 }
 
+Transporter* GameObject::ToTransport() { if (GetGameObjectProperties()->type == GAMEOBJECT_TYPE_MO_TRANSPORT) return reinterpret_cast<Transporter*>(this); return nullptr; }
+Transporter const* GameObject::ToTransport() const { if (GetGameObjectProperties()->type == GAMEOBJECT_TYPE_MO_TRANSPORT) return reinterpret_cast<Transporter const*>(this); return nullptr; }
+
 uint32_t GameObject::getTransportPeriod() const
 {
     if (getGoType() != GAMEOBJECT_TYPE_TRANSPORT)
@@ -674,7 +759,7 @@ private:
     GameObject const* _owner;
 };
 
-GameObjectModel* GameObject::createModel()
+std::unique_ptr<GameObjectModel> GameObject::createModel()
 {
     return GameObjectModel::Create(std::make_unique<GameObjectModelOwnerImpl>(this), worldConfig.server.dataDir);
 }
@@ -692,6 +777,8 @@ void GameObject::updateModelPosition()
     }
 }
 
+GameObjectValue const* GameObject::getGOValue() const { return &m_goValue; }
+
 void GameObject::updateModel()
 {
     if (!IsInWorld())
@@ -699,7 +786,6 @@ void GameObject::updateModel()
     if (m_model)
         if (getWorldMap()->containsGameObjectModel(*m_model))
             getWorldMap()->removeGameObjectModel(*m_model);
-    delete m_model;
     m_model = createModel();
     if (m_model)
         getWorldMap()->insertGameObjectModel(*m_model);
@@ -829,7 +915,7 @@ void GameObject::Update(unsigned long time_passed)
                         {
                             if (radius > itr->getDistance(this->GetPosition()))
                             {
-                                if (itr->isCreatureOrPlayer() && isAttackable(this, itr, false))
+                                if (itr->isCreatureOrPlayer() && this->isValidAttackableTarget(itr))
                                     target = itr->ToUnit();
                             }
                         }
@@ -969,7 +1055,7 @@ void GameObject::despawn(uint32_t delay, uint32_t forceRespawntime)
             }
             else
             {
-                sLogger.failure("GameObject::Despawn tries to respawn go %u without a valid MapCell, return!", this->getEntry());
+                sLogger.failure("GameObject::Despawn tries to respawn go {} without a valid MapCell, return!", this->getEntry());
             }
             return;
         }
@@ -1094,6 +1180,18 @@ void GameObject::triggerLinkedGameObject(uint32_t trapEntry, Unit* target)
         trapGO->CastSpell(target->getGuid(), trapSpell->getId());
 }
 
+void GameObject::setOwnerGuid(uint64_t owner)
+{
+    // Owner already found and different than expected owner - remove object from old owner
+    if (owner && getCreatedByGuid() && getCreatedByGuid() != owner)
+        return;
+
+    m_spawnedByDefault = false; // all object with owner is despawned after delay
+    setCreatedByGuid(owner);
+}
+
+LootState GameObject::getLootState() const { return m_lootState; }
+
 GameObject* GameObject::getLinkedTrap()
 {
     return getWorldMapGameObject(m_linkedTrap);
@@ -1154,6 +1252,8 @@ GameObjectProperties const* GameObject::GetGameObjectProperties() const
     return gameobject_properties;
 }
 
+void GameObject::SetGameObjectProperties(GameObjectProperties const* go_prop) { gameobject_properties = go_prop; }
+
 void GameObject::SaveToFile(std::stringstream & name)
 {
 
@@ -1173,7 +1273,7 @@ void GameObject::SaveToFile(std::stringstream & name)
         << getParentRotation(1) << ","
         << getParentRotation(2) << ","
         << getParentRotation(3) << ","
-        << uint32(getState()) << ","
+        << uint32_t(getState()) << ","
         << getFlags() << ","
         << getFactionTemplate() << ","
         << getScale() << ","
@@ -1202,8 +1302,10 @@ void GameObject::CallScriptUpdate()
     if (myScript)
         myScript->AIUpdate();
     else
-        sLogger.failure("GameObject::CallScriptUpdate tries to call, but go %u has no valid script (nullptr)", this->getEntry());
+        sLogger.failure("GameObject::CallScriptUpdate tries to call, but go {} has no valid script (nullptr)", this->getEntry());
 }
+
+GameObjectAIScript* GameObject::GetScript() { return myScript; }
 
 void GameObject::OnPushToWorld()
 {
@@ -1254,7 +1356,7 @@ void GameObject::onRemoveInRangeObject(Object* pObj)
 uint32_t GameObject::GetGOReqSkill()
 {
     // Here we check the SpellFocus table against the dbcs
-    auto lock = sLockStore.LookupEntry(GetGameObjectProperties()->raw.parameter_0);
+    auto lock = sLockStore.lookupEntry(GetGameObjectProperties()->raw.parameter_0);
     if (!lock)
         return 0;
 
@@ -1283,7 +1385,7 @@ void GameObject::CastSpell(uint64_t TargetGUID, uint32_t SpellID)
     SpellInfo const* sp = sSpellMgr.getSpellInfo(SpellID);
     if (sp == nullptr)
     {
-        sLogger.failure("GameObject %u tried to cast a non-existing Spell %u.", gameobject_properties->entry, SpellID);
+        sLogger.failure("GameObject {} tried to cast a non-existing Spell {}.", gameobject_properties->entry, SpellID);
         return;
     }
 
@@ -1298,6 +1400,18 @@ void GameObject::sendGameobjectCustomAnim(uint32_t anim)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_Lootable
+uint16_t GameObject_Lootable::getLootMode() const { return m_LootMode; }
+bool GameObject_Lootable::hasLootMode(uint16_t lootMode) const { return (m_LootMode & lootMode) != 0; }
+void GameObject_Lootable::setLootMode(uint16_t lootMode) { m_LootMode = lootMode; }
+void GameObject_Lootable::addLootMode(uint16_t lootMode) { m_LootMode |= lootMode; }
+void GameObject_Lootable::removeLootMode(uint16_t lootMode) { m_LootMode &= ~lootMode; }
+void GameObject_Lootable::resetLootMode() { m_LootMode = LOOT_MODE_DEFAULT; }
+void GameObject_Lootable::setLootGenerationTime() { m_lootGenerationTime = static_cast<uint32_t>(Util::getTimeNow()); }
+uint32_t GameObject_Lootable::getLootGenerationTime() const { return m_lootGenerationTime; }
+
+time_t GameObject_Lootable::getRestockTime() const { return m_restockTime; }
+void GameObject_Lootable::setRestockTime(time_t time) { m_restockTime = time; }
+
 void GameObject_Lootable::getFishLoot(Player* loot_owner, bool getJunk/* = false*/)
 {
     loot.clear();
@@ -1309,20 +1423,20 @@ void GameObject_Lootable::getFishLoot(Player* loot_owner, bool getJunk/* = false
     const uint8_t lootMode = getJunk ? LOOT_MODE_JUNK_FISH : 0;
 
     // if subzone loot exist use it
-    loot.fillLoot(subzone, sLootMgr.FishingLoot, loot_owner, true, lootMode);
+    loot.fillLoot(subzone, sLootMgr.getFishingLoot(), loot_owner, true, lootMode);
     if (loot.empty())
     {
         //subzone no result,use zone loot
-        loot.fillLoot(zone, sLootMgr.FishingLoot, loot_owner, true, lootMode);
+        loot.fillLoot(zone, sLootMgr.getFishingLoot(), loot_owner, true, lootMode);
         //use zone 1 as default, somewhere fishing got nothing,becase subzone and zone not set, like Off the coast of Storm Peaks.
         if (loot.empty())
-            loot.fillLoot(defaultzone, sLootMgr.FishingLoot, loot_owner, true, lootMode);
+            loot.fillLoot(defaultzone, sLootMgr.getFishingLoot(), loot_owner, true, lootMode);
     }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_Door
-GameObject_Door::GameObject_Door(uint64 GUID) : GameObject(GUID)
+GameObject_Door::GameObject_Door(uint64_t GUID) : GameObject(GUID)
 { }
 
 GameObject_Door::~GameObject_Door()
@@ -1347,6 +1461,9 @@ void GameObject_Door::_internalUpdateOnState(unsigned long /*timeDiff*/)
 {
     switch (m_lootState)
     {
+        case GO_NOT_READY:
+            m_lootState = GO_READY;
+        break;
         case GO_READY:
             // We need to open doors if they are closed (add there another condition if this code breaks some usage, but it need to be here for battlegrounds)
             if (getState() != GO_STATE_CLOSED)
@@ -1363,7 +1480,7 @@ void GameObject_Door::_internalUpdateOnState(unsigned long /*timeDiff*/)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_Button
-GameObject_Button::GameObject_Button(uint64 GUID) : GameObject(GUID)
+GameObject_Button::GameObject_Button(uint64_t GUID) : GameObject(GUID)
 {
     spell = nullptr;
 }
@@ -1407,6 +1524,9 @@ void GameObject_Button::_internalUpdateOnState(unsigned long /*timeDiff*/)
 {
     switch (m_lootState)
     {
+        case GO_NOT_READY:
+            m_lootState = GO_READY;
+            break;
         case GO_READY:
             // We need to open doors if they are closed (add there another condition if this code breaks some usage, but it need to be here for battlegrounds)
             if (getState() != GO_STATE_CLOSED)
@@ -1423,7 +1543,7 @@ void GameObject_Button::_internalUpdateOnState(unsigned long /*timeDiff*/)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_QuestGiver
-GameObject_QuestGiver::GameObject_QuestGiver(uint64 GUID) : GameObject(GUID)
+GameObject_QuestGiver::GameObject_QuestGiver(uint64_t GUID) : GameObject(GUID)
 {
     m_quests = NULL;
 }
@@ -1437,6 +1557,17 @@ void GameObject_QuestGiver::InitAI()
     GameObject::InitAI();
 }
 
+bool GameObject_QuestGiver::HasQuests()
+{
+    if (m_quests == NULL)
+        return false;
+
+    if (m_quests->size() == 0)
+        return false;
+
+    return true;
+}
+
 void GameObject_QuestGiver::onUse(Player* player)
 {
     GameObject::onUse(player);
@@ -1448,15 +1579,24 @@ void GameObject_QuestGiver::onUse(Player* player)
         sQuestMgr.OnActivateQuestGiver(this, player);
 }
 
-void GameObject_QuestGiver::DeleteQuest(QuestRelation* Q)
+uint32_t GameObject_QuestGiver::NumOfQuests()
 {
-    for (std::list<QuestRelation*>::iterator itr = m_quests->begin(); itr != m_quests->end(); ++itr)
+    return static_cast<uint32_t>(m_quests->size());
+}
+
+void GameObject_QuestGiver::AddQuest(std::unique_ptr<QuestRelation> Q)
+{
+    m_quests->push_back(std::move(Q));
+}
+
+void GameObject_QuestGiver::DeleteQuest(QuestRelation const* Q)
+{
+    for (auto itr = m_quests->begin(); itr != m_quests->end(); ++itr)
     {
-        QuestRelation* qr = *itr;
+        const auto& qr = *itr;
 
         if ((qr->type == Q->type) && (qr->qst == Q->qst))
         {
-            delete qr;
             m_quests->erase(itr);
             break;
         }
@@ -1465,9 +1605,9 @@ void GameObject_QuestGiver::DeleteQuest(QuestRelation* Q)
 
 QuestProperties const* GameObject_QuestGiver::FindQuest(uint32_t quest_id, uint8_t quest_relation)
 {
-    for (std::list<QuestRelation*>::iterator itr = m_quests->begin(); itr != m_quests->end(); ++itr)
+    for (auto itr = m_quests->begin(); itr != m_quests->end(); ++itr)
     {
-        QuestRelation* qr = *itr;
+        const auto& qr = *itr;
 
         if ((qr->qst->id == quest_id) && ((qr->type & quest_relation) != 0))
         {
@@ -1477,13 +1617,13 @@ QuestProperties const* GameObject_QuestGiver::FindQuest(uint32_t quest_id, uint8
     return nullptr;
 }
 
-uint16 GameObject_QuestGiver::GetQuestRelation(uint32_t quest_id)
+uint16_t GameObject_QuestGiver::GetQuestRelation(uint32_t quest_id)
 {
-    uint16 quest_relation = 0;
+    uint16_t quest_relation = 0;
 
-    for (std::list<QuestRelation*>::iterator itr = m_quests->begin(); itr != m_quests->end(); ++itr)
+    for (auto itr = m_quests->begin(); itr != m_quests->end(); ++itr)
     {
-        QuestRelation* qr = *itr;
+        const auto& qr = *itr;
 
         if ((qr != nullptr) && (qr->qst->id == quest_id))
             quest_relation |= qr->type;
@@ -1492,9 +1632,31 @@ uint16 GameObject_QuestGiver::GetQuestRelation(uint32_t quest_id)
     return quest_relation;
 }
 
+std::list<std::unique_ptr<QuestRelation>>::iterator GameObject_QuestGiver::QuestsBegin()
+{
+    return m_quests->begin();
+}
+
+std::list<std::unique_ptr<QuestRelation>>::iterator GameObject_QuestGiver::QuestsEnd()
+{
+    return m_quests->end();
+}
+
+void GameObject_QuestGiver::SetQuestList(std::list<std::unique_ptr<QuestRelation>>* qst_lst)
+{
+    m_quests = qst_lst;
+}
+
+std::list<std::unique_ptr<QuestRelation>>& GameObject_QuestGiver::getQuestList() const
+{
+    return *m_quests;
+}
+
+void GameObject_QuestGiver::LoadQuests() { sQuestMgr.LoadGOQuests(this); }
+
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_Chest
-GameObject_Chest::GameObject_Chest(uint64 GUID) : GameObject_Lootable(GUID)
+GameObject_Chest::GameObject_Chest(uint64_t GUID) : GameObject_Lootable(GUID)
 {
     spell = nullptr;
 }
@@ -1591,7 +1753,7 @@ void GameObject_Chest::_internalUpdateOnState(unsigned long /*timeDiff*/)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_Trap
-GameObject_Trap::GameObject_Trap(uint64 GUID) : GameObject(GUID)
+GameObject_Trap::GameObject_Trap(uint64_t GUID) : GameObject(GUID)
 {
     spell = NULL;
 }
@@ -1714,7 +1876,7 @@ void GameObject_Chair::onUse(Player* player)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_SpellFocus
-GameObject_SpellFocus::GameObject_SpellFocus(uint64 GUID) : GameObject(GUID)
+GameObject_SpellFocus::GameObject_SpellFocus(uint64_t GUID) : GameObject(GUID)
 { }
 
 GameObject_SpellFocus::~GameObject_SpellFocus()
@@ -1727,7 +1889,7 @@ void GameObject_SpellFocus::OnPushToWorld()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_Goober
-GameObject_Goober::GameObject_Goober(uint64 GUID) : GameObject(GUID)
+GameObject_Goober::GameObject_Goober(uint64_t GUID) : GameObject(GUID)
 {
     spell = NULL;
 }
@@ -1798,6 +1960,9 @@ void GameObject_Goober::_internalUpdateOnState(unsigned long /*timeDiff*/)
 {
     switch (m_lootState)
     {
+        case GO_NOT_READY:
+            m_lootState = GO_READY;
+            break;
         case GO_ACTIVATED:
             if (Util::getMSTime() >= m_cooldownTime)
             {
@@ -1862,7 +2027,7 @@ void GameObject_Camera::onUse(Player* player)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_FishingNode
-GameObject_FishingNode::GameObject_FishingNode(uint64 GUID) : GameObject_Lootable(GUID)
+GameObject_FishingNode::GameObject_FishingNode(uint64_t GUID) : GameObject_Lootable(GUID)
 {
 }
 
@@ -1893,7 +2058,7 @@ void GameObject_FishingNode::onUse(Player* player)
             //provide error, no fishable zone or area should be 0
             if (!zone_skill)
             {
-                sLogger.failure("Fishable areaId %u are not found in `fishing` table.", subzone);
+                sLogger.failure("Fishable areaId {} are not found in `fishing` table.", subzone);
                 break;
             }
 
@@ -1910,7 +2075,7 @@ void GameObject_FishingNode::onUse(Player* player)
             int32_t roll = Util::getRandomInt(1, 100);
 
             // Advance
-            player->advanceSkillLine(SKILL_FISHING, static_cast<uint16_t>(float2int32(1.0f * worldConfig.getFloatRate(RATE_SKILLRATE))));
+            player->advanceSkillLine(SKILL_FISHING, static_cast<uint16_t>(Util::float2int32(1.0f * worldConfig.getFloatRate(RATE_SKILLRATE))));
 
             GameObject_FishingHole* school = nullptr;
             GameObject* fishingPool = getWorldMap()->getInterface()->findNearestGoWithType(this, GAMEOBJECT_TYPE_FISHINGHOLE);;
@@ -2017,19 +2182,15 @@ void GameObject_FishingNode::_internalUpdateOnState(unsigned long /*timeDiff*/)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_Ritual
-GameObject_Ritual::GameObject_Ritual(uint64 GUID) : GameObject(GUID)
+GameObject_Ritual::GameObject_Ritual(uint64_t GUID) : GameObject(GUID), Ritual(nullptr)
 {
 }
 
-GameObject_Ritual::~GameObject_Ritual()
-{
-    delete Ritual;
-    Ritual = nullptr;
-}
+GameObject_Ritual::~GameObject_Ritual() = default;
 
 void GameObject_Ritual::InitAI()
 {
-    Ritual = new RitualStruct(gameobject_properties->summoning_ritual.req_participants);
+    Ritual = std::make_unique<RitualStruct>(gameobject_properties->summoning_ritual.req_participants);
 }
 
 void GameObject_Ritual::onUse(Player* player)
@@ -2087,7 +2248,7 @@ void GameObject_Ritual::onUse(Player* player)
             if (info == nullptr)
                 return;
 
-            Player* target = sObjectMgr.GetPlayer(static_cast<uint32_t>(GetRitual()->GetTargetGUID()));
+            Player* target = sObjectMgr.getPlayer(static_cast<uint32_t>(GetRitual()->GetTargetGUID()));
             if (target == nullptr || !target->IsInWorld())
                 return;
 
@@ -2154,7 +2315,7 @@ void GameObject_Ritual::onUse(Player* player)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_SpellCaster
-GameObject_SpellCaster::GameObject_SpellCaster(uint64 GUID) : GameObject(GUID)
+GameObject_SpellCaster::GameObject_SpellCaster(uint64_t GUID) : GameObject(GUID)
 {
     spell = nullptr;
 }
@@ -2166,7 +2327,7 @@ void GameObject_SpellCaster::InitAI()
 {
     spell = sSpellMgr.getSpellInfo(gameobject_properties->spell_caster.spell_id);
     if (spell == nullptr)
-        sLogger.failure("GameObject %u ( %s ) has a nonexistant spellID in the database.", gameobject_properties->entry, gameobject_properties->name.c_str());
+        sLogger.failure("GameObject {} ( {} ) has a nonexistant spellID in the database.", gameobject_properties->entry, gameobject_properties->name);
 }
 
 void GameObject_SpellCaster::onUse(Player* player)
@@ -2212,7 +2373,7 @@ void GameObject_Meetingstone::onUse(Player* player)
         return;
 
     // Use selection
-    Player* pPlayer = sObjectMgr.GetPlayer(static_cast<uint32>(player->getTargetGuid()));
+    Player* pPlayer = sObjectMgr.getPlayer(static_cast<uint32_t>(player->getTargetGuid()));
     if (pPlayer == nullptr)
         return;
 
@@ -2263,7 +2424,7 @@ void GameObject_FlagStand::onUse(Player* player)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_FishingHole
-GameObject_FishingHole::GameObject_FishingHole(uint64 GUID) : GameObject_Lootable(GUID)
+GameObject_FishingHole::GameObject_FishingHole(uint64_t GUID) : GameObject_Lootable(GUID)
 {
 
 }
@@ -2351,7 +2512,7 @@ void GameObject_BarberChair::onUse(Player* player)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Class functions for GameObject_Destructible
-GameObject_Destructible::GameObject_Destructible(uint64 GUID) : GameObject(GUID)
+GameObject_Destructible::GameObject_Destructible(uint64_t GUID) : GameObject(GUID)
 {
     hitpoints = 0;
     maxhitpoints = 0;
@@ -2377,10 +2538,6 @@ void GameObject_Destructible::Damage(uint32_t damage, uint64_t AttackerGUID, uin
         // Instant destruction
         hitpoints = 0;
 
-        setFlags(GO_FLAG_DESTROYED);
-        removeFlags(GO_FLAG_DAMAGED);
-        setDisplayId(gameobject_properties->destructible_building.destroyed_display_id);   // destroyed display id
-
         if (GetScript())
             GetScript()->OnDestroyed();
     }
@@ -2389,34 +2546,31 @@ void GameObject_Destructible::Damage(uint32_t damage, uint64_t AttackerGUID, uin
         // Simply damaging
         hitpoints -= damage;
 
-        if (!hasFlags(GO_FLAG_DAMAGED))
-        {
-            // Intact  ->  Damaged
-
-            // Are we below the intact-damaged transition treshold?
-            if (hitpoints <= (maxhitpoints - gameobject_properties->destructible_building.intact_num_hits))
-            {
-                setFlags(GO_FLAG_DAMAGED);
-                setDisplayId(gameobject_properties->destructible_building.damaged_display_id); // damaged display id
-            }
-        }
-        else
-        {
-            if (hitpoints == 0)
-            {
-                removeFlags(GO_FLAG_DAMAGED);
-                setFlags(GO_FLAG_DESTROYED);
-                setDisplayId(gameobject_properties->destructible_building.destroyed_display_id);
-            }
-        }
-
         if (GetScript())
             GetScript()->OnDamaged(damage);
     }
 
+    // Health Bar
     uint8_t animprogress = static_cast<uint8_t>(std::round(hitpoints / float(maxhitpoints)) * 255);
     setAnimationProgress(animprogress);
+
+    // Send Packet
     SendDamagePacket(damage, AttackerGUID, ControllerGUID, SpellID);
+    
+    GameObjectDestructibleState newState = GetDestructibleState();
+
+    if (!hitpoints)
+        newState = GO_DESTRUCTIBLE_DESTROYED;
+    else if (hitpoints <= gameobject_properties->destructible_building.damaged_num_hits)
+        newState = GO_DESTRUCTIBLE_DAMAGED;
+    else if (hitpoints == maxhitpoints)
+        newState = GO_DESTRUCTIBLE_INTACT;
+
+    if (newState == GetDestructibleState())
+        return;
+
+    // Visuals
+    setDestructibleState(newState, false);
 }
 
 void GameObject_Destructible::SendDamagePacket(uint32_t damage, uint64_t AttackerGUID, uint64_t ControllerGUID, uint32_t SpellID)
@@ -2432,4 +2586,61 @@ void GameObject_Destructible::Rebuild()
     setDisplayId(gameobject_properties->display_id);
     maxhitpoints = gameobject_properties->destructible_building.intact_num_hits + gameobject_properties->destructible_building.damaged_num_hits;
     hitpoints = maxhitpoints;
+}
+
+void GameObject_Destructible::setDestructibleState(GameObjectDestructibleState state, bool setHealth /*= false*/)
+{
+    switch (state)
+    {
+        case GO_DESTRUCTIBLE_INTACT:
+        {
+            removeFlags(GO_FLAG_DAMAGED | GO_FLAG_DESTROYED);
+            setDisplayId(gameobject_properties->display_id);
+
+            if (setHealth)
+            {
+                hitpoints = maxhitpoints;
+                setAnimationProgress(255);
+            }
+            enableCollision(true);
+        } break;
+        case GO_DESTRUCTIBLE_DAMAGED:
+        {
+            removeFlags(GO_FLAG_DESTROYED);
+            setFlags(GO_FLAG_DAMAGED);
+            setDisplayId(gameobject_properties->destructible_building.damaged_display_id);
+
+            if (setHealth)
+            {
+                hitpoints = gameobject_properties->destructible_building.damaged_num_hits;
+                setAnimationProgress(static_cast<uint8_t>(std::round(hitpoints / float(maxhitpoints)) * 255));
+            }
+        } break;
+        case GO_DESTRUCTIBLE_DESTROYED:
+        {
+            removeFlags(GO_FLAG_DAMAGED);
+            setFlags(GO_FLAG_DESTROYED);
+            setDisplayId(gameobject_properties->destructible_building.destroyed_display_id);
+
+            if (setHealth)
+            {
+                hitpoints = 0;
+                setAnimationProgress(0);
+            }
+            enableCollision(false);
+        } break;
+        case GO_DESTRUCTIBLE_REBUILDING:
+        {
+            removeFlags(GO_FLAG_DAMAGED | GO_FLAG_DESTROYED);
+            setDisplayId(gameobject_properties->display_id);
+
+            // restores to full health
+            if (setHealth)
+            {
+                hitpoints = maxhitpoints;
+                setAnimationProgress(255);
+            }
+            enableCollision(true);
+        } break;
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -19,9 +19,16 @@
 
 #pragma once
 
-#include "Management/Faction.h"
-#include <Objects/Units/Creatures/Pet.h>
-#include "Server/Script/CreatureAIScript.h"
+#include "Setup.h"
+#include "Management/ObjectMgr.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Creatures/Pet.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Utilities/Random.hpp"
+
 
 class GrandWidowFaerlinaAI;
 class AnubRekhanAI;
@@ -1015,7 +1022,7 @@ DeathKnightUnderstudyAI::DeathKnightUnderstudyAI(Creature* pCreature) : Creature
     understudyTaunt->setMinMaxDistance(0.0f, 8.0f);
 
     // Blood Strike
-    auto blood_strike_spell = new AI_Spell;
+    auto blood_strike_spell = std::make_unique<AI_Spell>();
     blood_strike_spell->spell = sSpellMgr.getSpellInfo(DEATH_KNIGHT_UNDERSTUDY_BLOOD_STRIKE);
     blood_strike_spell->agent = AGENT_SPELL;
     blood_strike_spell->entryId = getCreature()->getEntry();
@@ -1023,18 +1030,17 @@ DeathKnightUnderstudyAI::DeathKnightUnderstudyAI(Creature* pCreature) : Creature
     blood_strike_spell->minrange = blood_strike_spell->spell->getMinRange();
     blood_strike_spell->spelltargetType = TTYPE_SINGLETARGET;
     blood_strike_spell->spellType = STYPE_DAMAGE;
-    blood_strike_spell->cooldown = sObjectMgr.GetPetSpellCooldown(blood_strike_spell->spell->getId());
+    blood_strike_spell->cooldown = sObjectMgr.getPetSpellCooldown(blood_strike_spell->spell->getId());
     blood_strike_spell->cooldowntime = 0;
     blood_strike_spell->autocast_type = AUTOCAST_EVENT_NONE;
     blood_strike_spell->floatMisc1 = 0;
     blood_strike_spell->Misc2 = 0;
     blood_strike_spell->procChance = 0;
     blood_strike_spell->procCount = 0;
-    getCreature()->getAIInterface()->addSpellToList(blood_strike_spell);
-    delete blood_strike_spell;
+    getCreature()->getAIInterface()->addSpellToList(std::move(blood_strike_spell));
 
     // Bone Barrier
-    auto bone_barrier_spell = new AI_Spell;
+    auto bone_barrier_spell = std::make_unique<AI_Spell>();
     bone_barrier_spell->spell = sSpellMgr.getSpellInfo(DEATH_KNIGHT_UNDERSTUDY_BONE_BARRIER);
     bone_barrier_spell->agent = AGENT_SPELL;
     bone_barrier_spell->entryId = getCreature()->getEntry();
@@ -1042,18 +1048,17 @@ DeathKnightUnderstudyAI::DeathKnightUnderstudyAI(Creature* pCreature) : Creature
     bone_barrier_spell->minrange = bone_barrier_spell->spell->getMinRange();
     bone_barrier_spell->spelltargetType = TTYPE_CASTER;
     bone_barrier_spell->spellType = STYPE_BUFF;
-    bone_barrier_spell->cooldown = sObjectMgr.GetPetSpellCooldown(bone_barrier_spell->spell->getId());
+    bone_barrier_spell->cooldown = sObjectMgr.getPetSpellCooldown(bone_barrier_spell->spell->getId());
     bone_barrier_spell->cooldowntime = 0;
     bone_barrier_spell->autocast_type = AUTOCAST_EVENT_NONE;
     bone_barrier_spell->floatMisc1 = 0;
     bone_barrier_spell->Misc2 = 0;
     bone_barrier_spell->procChance = 0;
     bone_barrier_spell->procCount = 0;
-    getCreature()->getAIInterface()->addSpellToList(bone_barrier_spell);
-    delete bone_barrier_spell;
+    getCreature()->getAIInterface()->addSpellToList(std::move(bone_barrier_spell));
 
     // Taunt
-    auto understudy_taunt_spell = new AI_Spell;
+    auto understudy_taunt_spell = std::make_unique<AI_Spell>();
     understudy_taunt_spell->spell = sSpellMgr.getSpellInfo(DEATH_KNIGHT_UNDERSTUDY_TAUNT);
     understudy_taunt_spell->agent = AGENT_SPELL;
     understudy_taunt_spell->entryId = getCreature()->getEntry();
@@ -1061,15 +1066,14 @@ DeathKnightUnderstudyAI::DeathKnightUnderstudyAI(Creature* pCreature) : Creature
     understudy_taunt_spell->minrange = understudy_taunt_spell->spell->getMinRange();
     understudy_taunt_spell->spelltargetType = TTYPE_SINGLETARGET;
     understudy_taunt_spell->spellType = STYPE_BUFF;
-    understudy_taunt_spell->cooldown = sObjectMgr.GetPetSpellCooldown(understudy_taunt_spell->spell->getId());
+    understudy_taunt_spell->cooldown = sObjectMgr.getPetSpellCooldown(understudy_taunt_spell->spell->getId());
     understudy_taunt_spell->cooldowntime = 0;
     understudy_taunt_spell->autocast_type = AUTOCAST_EVENT_NONE;
     understudy_taunt_spell->floatMisc1 = 0;
     understudy_taunt_spell->Misc2 = 0;
     understudy_taunt_spell->procChance = 0;
     understudy_taunt_spell->procCount = 0;
-    getCreature()->getAIInterface()->addSpellToList(understudy_taunt_spell);
-    delete understudy_taunt_spell;
+    getCreature()->getAIInterface()->addSpellToList(std::move(understudy_taunt_spell));
 
     mRazuviousAI = NULL;
     mIsControlled = false;
@@ -1980,6 +1984,7 @@ const uint32_t IMMUNITY_HOLY = 34182;
 const uint32_t IMMUNITY_ARCANE = 34184;
 const uint32_t IMMUNITY_PHYSICAL = 34310;
 
+// todo move this to .cpp and remove WorldMap.h include
 class SapphironAI : public CreatureAIScript
 {
 public:

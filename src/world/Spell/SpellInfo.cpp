@@ -1,19 +1,68 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
+
+#include "SpellInfo.hpp"
 
 #include "Definitions/School.hpp"
 #include "Definitions/SpellEffects.hpp"
 #include "Definitions/SpellEffectTarget.hpp"
 #include "Definitions/SpellFamily.hpp"
 #include "Definitions/SpellIsFlags.hpp"
-#include "SpellAuras.h"
+#include "Definitions/SpellCastTargetFlags.hpp"
+#include "SpellAura.hpp"
+#include "SpellMgr.hpp"
 #include "SpellTarget.h"
-
+#include "Logging/Logger.hpp"
+#include "Storage/WDB/WDBStores.hpp"
 #include "Management/Skill.hpp"
+#include "Objects/Item.hpp"
 #include "Objects/Units/Creatures/AIInterface.h"
 #include "Objects/Units/Players/Player.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Narrow.hpp"
+#include "Utilities/Random.hpp"
+
+SpellInfo const* SpellRankInfo::getPreviousSpell() const { return previousSpell; }
+SpellInfo const* SpellRankInfo::getNextSpell() const { return nextSpell; }
+SpellInfo const* SpellRankInfo::getFirstSpell() const { return firstSpell; }
+SpellInfo const* SpellRankInfo::getLastSpell() const { return lastSpell; }
+uint8_t SpellRankInfo::getRank() const { return rank; }
+
+SpellInfo const* SpellRankInfo::getSpellWithRank(uint8_t spellRank) const
+{
+    if (spellRank == 0)
+        return nullptr;
+
+    const auto* spellInfo = getFirstSpell();
+    do
+    {
+        if (spellInfo->getRankInfo()->getRank() == spellRank)
+            return spellInfo;
+
+        spellInfo = spellInfo->getRankInfo()->getNextSpell();
+    } while (spellInfo != nullptr);
+
+    return nullptr;
+}
+
+bool SpellRankInfo::isSpellPartOfThisSpellRankChain(uint32_t spellId) const
+{
+    if (spellId == 0)
+        return false;
+
+    return isSpellPartOfThisSpellRankChain(sSpellMgr.getSpellInfo(spellId));
+}
+
+bool SpellRankInfo::isSpellPartOfThisSpellRankChain(SpellInfo const* providedSpellInfo) const
+{
+    if (providedSpellInfo == nullptr || !providedSpellInfo->hasSpellRanks())
+        return false;
+
+    const auto* const rankInfo = providedSpellInfo->getRankInfo();
+    return getFirstSpell()->getId() == rankInfo->getFirstSpell()->getId() && getLastSpell()->getId() == rankInfo->getLastSpell()->getId();
+}
 
 SpellInfo::SpellInfo()
 {
@@ -200,7 +249,7 @@ bool SpellInfo::isDamagingEffect(uint8_t effIndex) const
     }
     else
     {
-        sLogger.failure("SpellInfo::isDamagingEffect called with invalid effIndex %u", static_cast<uint32_t>(effIndex));
+        sLogger.failure("SpellInfo::isDamagingEffect called with invalid effIndex {}", static_cast<uint32_t>(effIndex));
         return false;
     }
 }
@@ -242,7 +291,7 @@ bool SpellInfo::isHealingEffect(uint8_t effIndex) const
     }
     else
     {
-        sLogger.failure("SpellInfo::isHealingEffect called with invalid effIndex %u", static_cast<uint32_t>(effIndex));
+        sLogger.failure("SpellInfo::isHealingEffect called with invalid effIndex {}", static_cast<uint32_t>(effIndex));
         return false;
     }
 }
@@ -337,7 +386,7 @@ int32_t SpellInfo::getBasePowerCost(Unit* caster) const
     {
         if (!hasValidPowerType())
         {
-            sLogger.failure("SpellInfo::getBasePowerCost : Unknown power type %u for spell id %u", getPowerType(), getId());
+            sLogger.failure("SpellInfo::getBasePowerCost : Unknown power type {} for spell id {}", getPowerType(), getId());
             return 0;
         }
 
@@ -363,7 +412,9 @@ int32_t SpellInfo::getBasePowerCost(Unit* caster) const
                 case POWER_TYPE_RAGE:
                 case POWER_TYPE_FOCUS:
                 case POWER_TYPE_ENERGY:
+#if VERSION_STRING < Cata
                 case POWER_TYPE_HAPPINESS:
+#endif
                     powerCost += static_cast<int32_t>(caster->getMaxPower(getPowerType()) * getManaCostPercentage() / 100);
                     break;
 #if VERSION_STRING >= WotLK
@@ -373,7 +424,7 @@ int32_t SpellInfo::getBasePowerCost(Unit* caster) const
                     break;
 #endif
                 default:
-                    sLogger.failure("SpellInfo::getBasePowerCost() : Unknown power type %u for spell id %u", getPowerType(), getId());
+                    sLogger.failure("SpellInfo::getBasePowerCost() : Unknown power type {} for spell id {}", getPowerType(), getId());
                     return 0;
             }
         }
@@ -429,6 +480,10 @@ bool SpellInfo::isNegativeAura() const
         case 72293:
         // Deathbringer Saurfang - Rune of Blood
         case 72410:
+        // Lady Deathwhisper trash - Darkreckoning
+        case 69483:
+        // Trial Of Champion - Dreadscale and Acidmaw - Burning Bile
+        case 66869:
             // These should be negative
             return true;
         default:
@@ -555,7 +610,7 @@ bool SpellInfo::isNegativeAura() const
 
 uint32_t SpellInfo::getSpellDefaultDuration(Unit const* caster) const
 {
-    const auto spell_duration = sSpellDurationStore.LookupEntry(DurationIndex);
+    const auto spell_duration = sSpellDurationStore.lookupEntry(DurationIndex);
     if (spell_duration == nullptr)
         return 0;
 
@@ -590,7 +645,55 @@ uint32_t SpellInfo::getRequiredTargetMaskForEffectTarget(uint32_t implicitTarget
     switch (implicitTarget)
     {
         case EFF_TARGET_NONE:
-            targetMask = SPELL_TARGET_REQUIRE_ITEM | SPELL_TARGET_REQUIRE_GAMEOBJECT;
+            // If effect has no implicit target, set one based on effect type
+            switch (Effect[effectIndex])
+            {
+                case SPELL_EFFECT_DODGE:
+                case SPELL_EFFECT_EVADE:
+                case SPELL_EFFECT_PARRY:
+                case SPELL_EFFECT_BLOCK:
+                case SPELL_EFFECT_WEAPON:
+                case SPELL_EFFECT_DEFENSE:
+                case SPELL_EFFECT_ENERGIZE:
+                case SPELL_EFFECT_TRANSFORM_ITEM:
+                case SPELL_EFFECT_SPELL_DEFENSE:
+                case SPELL_EFFECT_LANGUAGE:
+                case SPELL_EFFECT_SPAWN:
+                case SPELL_EFFECT_TRADE_SKILL:
+                case SPELL_EFFECT_STEALTH:
+                case SPELL_EFFECT_DETECT:
+                case SPELL_EFFECT_FORCE_CRITICAL_HIT:
+                case SPELL_EFFECT_GUARANTEE_HIT:
+                case SPELL_EFFECT_PROFICIENCY:
+                case SPELL_EFFECT_USE_GLYPH:
+                case SPELL_EFFECT_ATTACK:
+                case SPELL_EFFECT_SANCTUARY:
+                case SPELL_EFFECT_STUCK:
+                case SPELL_EFFECT_SUMMON_PHANTASM:
+                case SPELL_EFFECT_SELF_RESURRECT:
+                case SPELL_EFFECT_SUMMON_MULTIPLE_TOTEMS:
+                case SPELL_EFFECT_DESTROY_ALL_TOTEMS:
+                case SPELL_EFFECT_SKILL:
+#if VERSION_STRING >= TBC
+                case SPELL_EFFECT_UNKNOWN_131:
+                case SPELL_EFFECT_KILL_CREDIT:
+#if VERSION_STRING >= WotLK
+                case SPELL_EFFECT_DUAL_WIELD_2H:
+#endif
+#endif
+                    targetMask = SPELL_TARGET_OBJECT_SELF;
+                    break;
+                // TODO: possibly wotlk only
+                case SPELL_EFFECT_SUMMON_GUARDIAN:
+#if VERSION_STRING >= Cata
+                case SPELL_EFFECT_UNKNOWN_171:
+                case SPELL_EFFECT_UNKNOWN_179:
+#endif
+                    targetMask = SPELL_TARGET_AREA;
+                    break;
+                default:
+                    break;
+            }
             break;
         case EFF_TARGET_SELF:
             targetMask = SPELL_TARGET_OBJECT_SELF;
@@ -799,7 +902,7 @@ uint32_t SpellInfo::getRequiredTargetMaskForEffect(uint8_t effectIndex, bool get
     // Remove explicit object target masks if spell has no max range
     if (getExplicitMask)
     {
-        const auto rangeEntry = sSpellRangeStore.LookupEntry(getRangeIndex());
+        const auto rangeEntry = sSpellRangeStore.lookupEntry(getRangeIndex());
         if (rangeEntry != nullptr)
         {
 #if VERSION_STRING >= WotLK
@@ -825,6 +928,34 @@ uint32_t SpellInfo::getRequiredTargetMask(bool getExplicitMask) const
             continue;
 
         fullMask |= getRequiredTargetMaskForEffect(i, getExplicitMask);
+    }
+
+    // Add spell cast target flags to mask
+    if (Targets != 0)
+    {
+        if (Targets & TARGET_FLAG_UNIT)
+            fullMask |= SPELL_TARGET_REQUIRE_ATTACKABLE;
+        if (Targets & TARGET_FLAG_ITEM)
+            fullMask |= SPELL_TARGET_REQUIRE_ITEM;
+        if (Targets & TARGET_FLAG_SOURCE_LOCATION)
+            fullMask |= SPELL_TARGET_AREA_SELF;
+        if (Targets & TARGET_FLAG_DEST_LOCATION)
+            fullMask |= SPELL_TARGET_AREA;
+        // TODO: confirm this
+        /*if (Targets & TARGET_FLAG_UNK8)
+            fullMask |= SPELL_TARGET_REQUIRE_ATTACKABLE;*/
+        if (Targets & TARGET_FLAG_UNIT_CASTER)
+            fullMask |= SPELL_TARGET_OBJECT_SELF;
+        if (Targets & TARGET_FLAG_CORPSE)
+            fullMask |= SPELL_TARGET_REQUIRE_ATTACKABLE;
+        if (Targets & TARGET_FLAG_UNIT_CORPSE)
+            fullMask |= SPELL_TARGET_REQUIRE_ATTACKABLE;
+        if (Targets & TARGET_FLAG_OBJECT)
+            fullMask |= SPELL_TARGET_REQUIRE_GAMEOBJECT;
+        if (Targets & TARGET_FLAG_OPEN_LOCK)
+            fullMask |= SPELL_TARGET_REQUIRE_GAMEOBJECT;
+        if (Targets & TARGET_FLAG_CORPSE2)
+            fullMask |= SPELL_TARGET_REQUIRE_FRIENDLY;
     }
 
     return fullMask;
@@ -928,7 +1059,7 @@ bool SpellInfo::isPassive() const
     return (Attributes & ATTRIBUTES_PASSIVE) != 0;
 }
 
-bool SpellInfo::isProfession() const
+bool SpellInfo::isProfession(bool checkRiding/* = false*/) const
 {
     for (uint8_t i = 0; i < MAX_SPELL_EFFECTS; ++i)
     {
@@ -938,6 +1069,9 @@ bool SpellInfo::isProfession() const
 
             //Profession skill
             if (skill == SKILL_FISHING || skill == SKILL_COOKING || skill == SKILL_FIRST_AID)
+                return true;
+
+            if (checkRiding && skill == SKILL_RIDING)
                 return true;
 
             if (isPrimaryProfessionSkill(skill))
@@ -963,13 +1097,28 @@ bool SpellInfo::isPrimaryProfession() const
 
 bool SpellInfo::isPrimaryProfessionSkill(uint32_t skill_id) const
 {
-    if (const auto skill_line = sSkillLineStore.LookupEntry(skill_id))
+    if (const auto skill_line = sSkillLineStore.lookupEntry(skill_id))
     {
         if (skill_line && skill_line->type == SKILL_TYPE_PROFESSION)
             return true;
     }
 
     return false;
+}
+
+bool SpellInfo::isTalent() const
+{
+    return m_isTalent;
+}
+
+bool SpellInfo::isPetTalent() const
+{
+    return m_isPetTalent;
+}
+
+bool SpellInfo::isCastableOnDeadTarget() const
+{
+    return hasAttribute(ATTRIBUTESEXB_CAN_BE_CASTED_ON_DEAD_TARGET) || Targets & (TARGET_FLAG_CORPSE | TARGET_FLAG_CORPSE2 | TARGET_FLAG_UNIT_CORPSE);
 }
 
 bool SpellInfo::isDeathPersistent() const
@@ -997,6 +1146,70 @@ bool SpellInfo::isStackableFromMultipleCasters() const
     return getMaxstack() > 1 && !isChanneled() && !(getAttributesExC() & ATTRIBUTESEXC_APPLY_OWN_STACK_FOR_EACH_CASTER);
 }
 
+bool SpellInfo::hasSpellRanks() const
+{
+    return m_spellRankInfo.has_value();
+}
+
+SpellRankInfo const* SpellInfo::getRankInfo() const
+{
+    if (!hasSpellRanks())
+        return nullptr;
+
+    return &m_spellRankInfo.value();
+}
+
+bool SpellInfo::canKnowOnlySingleRank() const
+{
+    // Passive spells or spells without mana cost should have only one rank known
+    if (isPassive() || (getPowerType() != POWER_TYPE_MANA && getPowerType() != POWER_TYPE_HEALTH))
+        return true;
+
+    // Profession skills should have only one rank known
+    if (isProfession(true))
+        return true;
+
+    const auto isSpellAutoLearnedFromSkill = [](uint32_t spellId) -> bool
+    {
+        const auto spellRange = sSpellMgr.getSkillEntryRangeForSpell(spellId);
+        for (const auto& [_, skillEntry] : spellRange)
+        {
+            if (skillEntry->acquireMethod != 1)
+                continue;
+            if (skillEntry->minSkillLineRank > 0)
+                return true;
+        }
+
+        return false;
+    };
+
+    // Spells that are auto learned from a skill with certain skill level should have only one rank known
+    if (isSpellAutoLearnedFromSkill(getId()))
+        return true;
+
+    for (uint8_t i = 0; i < MAX_SPELL_EFFECTS; ++i)
+    {
+        if (getEffect(i) == SPELL_EFFECT_NULL)
+            continue;
+
+        if (getSpellFamilyName() == SPELLFAMILY_DRUID)
+        {
+            // Druid shapeshift spells should have only one rank known
+            if (getEffect(i) == SPELL_EFFECT_APPLY_AURA && getEffectApplyAuraName(i) == SPELL_AURA_MOD_SHAPESHIFT)
+                return true;
+        }
+        else if (getSpellFamilyName() == SPELLFAMILY_PALADIN)
+        {
+            // Paladin auras should have only one rank known
+            if (getEffect(i) == SPELL_EFFECT_APPLY_RAID_AREA_AURA ||
+                getEffect(i) == SPELL_EFFECT_APPLY_GROUP_AREA_AURA)
+                return true;
+        }
+    }
+
+    return false;
+}
+
 int32_t SpellInfo::calculateEffectValue(uint8_t effIndex, Unit* unitCaster/* = nullptr*/, Item* itemCaster/* = nullptr*/, SpellForcedBasePoints forcedBasePoints/* = SpellForcedBasePoints()*/) const
 {
     if (effIndex >= MAX_SPELL_EFFECTS)
@@ -1009,7 +1222,7 @@ int32_t SpellInfo::calculateEffectValue(uint8_t effIndex, Unit* unitCaster/* = n
     // Random suffix value calculation
     if (itemCaster != nullptr && static_cast<int32_t>(itemCaster->getRandomPropertiesId()) < 0)
     {
-        const auto randomSuffix = sItemRandomSuffixStore.LookupEntry(std::abs(static_cast<int32_t>(itemCaster->getRandomPropertiesId())));
+        const auto randomSuffix = sItemRandomSuffixStore.lookupEntry(std::abs(static_cast<int32_t>(itemCaster->getRandomPropertiesId())));
         if (randomSuffix != nullptr)
         {
             auto faulty = false;
@@ -1018,7 +1231,7 @@ int32_t SpellInfo::calculateEffectValue(uint8_t effIndex, Unit* unitCaster/* = n
                 if (randomSuffix->enchantments[i] == 0)
                     continue;
 
-                const auto spellItemEnchant = sSpellItemEnchantmentStore.LookupEntry(randomSuffix->enchantments[i]);
+                const auto spellItemEnchant = sSpellItemEnchantmentStore.lookupEntry(randomSuffix->enchantments[i]);
                 if (spellItemEnchant == nullptr)
                     continue;
 
@@ -1067,7 +1280,7 @@ int32_t SpellInfo::calculateEffectValue(uint8_t effIndex, Unit* unitCaster/* = n
         else
             diff += unitCaster->getLevel();
 
-        diff = float2int32(diff * basePointsPerLevel);
+        diff = Util::float2int32(diff * basePointsPerLevel);
         // Should not happen but just in case do not make total value negative
         if (diff > 0)
             basePoints += diff;
@@ -1176,7 +1389,7 @@ bool SpellInfo::isTriggerSpellCastedByCaster(SpellInfo const* triggeringSpell) c
 
 float_t SpellInfo::getMinRange([[maybe_unused]]bool friendly/* = false*/) const
 {
-    const auto* const rangeEntry = sSpellRangeStore.LookupEntry(getRangeIndex());
+    const auto* const rangeEntry = sSpellRangeStore.lookupEntry(getRangeIndex());
     if (rangeEntry == nullptr)
         return 0.0f;
 
@@ -1190,7 +1403,7 @@ float_t SpellInfo::getMinRange([[maybe_unused]]bool friendly/* = false*/) const
 
 float_t SpellInfo::getMaxRange([[maybe_unused]]bool friendly/* = false*/, Object* caster/* = nullptr*/, Spell* spell/* = nullptr*/) const
 {
-    const auto* const rangeEntry = sSpellRangeStore.LookupEntry(getRangeIndex());
+    const auto* const rangeEntry = sSpellRangeStore.lookupEntry(getRangeIndex());
     if (rangeEntry == nullptr)
         return 0.0f;
 
@@ -1207,3 +1420,614 @@ float_t SpellInfo::getMaxRange([[maybe_unused]]bool friendly/* = false*/, Object
 
     return range;
 }
+
+uint32_t SpellInfo::getTotem(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_TOTEMS)
+    {
+        sLogger.failure("Totem index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return Totem[idx];
+}
+
+int32_t SpellInfo::getReagent(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_REAGENTS)
+    {
+        sLogger.failure("Reagent index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return Reagent[idx];
+}
+
+uint32_t SpellInfo::getReagentCount(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_REAGENTS)
+    {
+        sLogger.failure("ReagentCount index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return ReagentCount[idx];
+}
+
+uint32_t SpellInfo::getEffect(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return Effect[idx];
+}
+
+int32_t SpellInfo::getEffectDieSides(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectDieSides[idx];
+}
+
+float SpellInfo::getEffectRealPointsPerLevel(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0.f;
+    }
+
+    return EffectRealPointsPerLevel[idx];
+}
+
+int32_t SpellInfo::getEffectBasePoints(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectBasePoints[idx];
+}
+
+uint32_t SpellInfo::getEffectMechanic(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectMechanic[idx];
+}
+
+uint32_t SpellInfo::getEffectImplicitTargetA(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectImplicitTargetA[idx];
+}
+
+uint32_t SpellInfo::getEffectImplicitTargetB(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectImplicitTargetB[idx];
+}
+
+uint32_t SpellInfo::getEffectRadiusIndex(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectRadiusIndex[idx];
+}
+
+uint32_t SpellInfo::getEffectApplyAuraName(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectApplyAuraName[idx];
+}
+
+uint32_t SpellInfo::getEffectAmplitude(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectAmplitude[idx];
+}
+
+float SpellInfo::getEffectMultipleValue(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectMultipleValue[idx];
+}
+
+uint32_t SpellInfo::getEffectChainTarget(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectChainTarget[idx];
+}
+
+uint32_t SpellInfo::getEffectItemType(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectItemType[idx];
+}
+
+int32_t SpellInfo::getEffectMiscValue(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectMiscValue[idx];
+}
+
+int32_t SpellInfo::getEffectMiscValueB(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectMiscValueB[idx];
+}
+
+uint32_t SpellInfo::getEffectTriggerSpell(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectTriggerSpell[idx];
+}
+
+float SpellInfo::getEffectPointsPerComboPoint(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectPointsPerComboPoint[idx];
+}
+
+uint32_t SpellInfo::getEffectSpellClassMask(uint8_t idx1, uint8_t idx2) const
+{
+    if (idx1 >= MAX_SPELL_EFFECTS || idx2 >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Totem index id {} or effect index {} is invalid!", idx1, idx2);
+        return 0;
+    }
+
+    return EffectSpellClassMask[idx1][idx2];
+}
+
+uint32_t const* SpellInfo::getEffectSpellClassMask(uint8_t idx1) const
+{
+    if (idx1 >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx1);
+        return 0;
+    }
+
+    return EffectSpellClassMask[idx1];
+}
+
+uint32_t SpellInfo::getSpellFamilyFlags(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return SpellFamilyFlags[idx];
+}
+
+float SpellInfo::getEffectDamageMultiplier(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectDamageMultiplier[idx];
+}
+
+#if VERSION_STRING > Classic
+uint32_t SpellInfo::getTotemCategory(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_TOTEM_CATEGORIES)
+    {
+        sLogger.failure("TotemCategory index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return TotemCategory[idx];
+}
+#endif
+
+float SpellInfo::getEffectBonusMultiplier(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectBonusMultiplier[idx];
+}
+
+uint32_t SpellInfo::getEffectCustomFlag(uint8_t idx) const
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return 0;
+    }
+
+    return EffectCustomFlag[idx];
+}
+
+void SpellInfo::setTotem(uint32_t totemId, uint8_t idx)                                         // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_TOTEMS)
+    {
+        sLogger.failure("Totem index id {} is invalid!", idx);
+        return;
+    }
+
+    Totem[idx] = totemId;
+}
+
+void SpellInfo::setReagent(int32_t reagentId, uint8_t idx)                                      // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_REAGENTS)
+    {
+        sLogger.failure("Spellreagents index id {} is invalid!", idx);
+        return;
+    }
+
+    Reagent[idx] = reagentId;
+}
+
+void SpellInfo::setReagentCount(uint32_t reagentId, uint8_t idx)                                // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_REAGENTS)
+    {
+        sLogger.failure("Reagentcount index id {} is invalid!", idx);
+        return;
+    }
+
+    ReagentCount[idx] = reagentId;
+}
+
+void SpellInfo::setEffect(uint32_t effectId, uint8_t idx)                                       // used in HackFixes.cpp / ObjectMgr.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    Effect[idx] = effectId;
+}
+
+void SpellInfo::setEffectDieSides(int32_t effecSide, uint8_t idx)                               // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectDieSides[idx] = effecSide;
+}
+
+void SpellInfo::setEffectRealPointsPerLevel(float pointsPerLevel, uint8_t idx)                  // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectRealPointsPerLevel[idx] = pointsPerLevel;
+}
+
+void SpellInfo::setEffectBasePoints(int32_t pointsPerLevel, uint8_t idx)                        // used in HackFixes.cpp / ObjectMgr.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectBasePoints[idx] = pointsPerLevel;
+}
+
+void SpellInfo::setEffectMechanic(uint32_t mechanic, uint8_t idx)                               // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectMechanic[idx] = mechanic;
+}
+
+void SpellInfo::setEffectImplicitTargetA(uint32_t targetA, uint8_t idx)                         // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectImplicitTargetA[idx] = targetA;
+}
+
+void SpellInfo::setEffectImplicitTargetB(uint32_t targetB, uint8_t idx)                         // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectImplicitTargetB[idx] = targetB;
+}
+
+void SpellInfo::setEffectRadiusIndex(uint32_t radiusIndex, uint8_t idx)                         // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectRadiusIndex[idx] = radiusIndex;
+}
+
+void SpellInfo::setEffectApplyAuraName(uint32_t auraName, uint8_t idx)                          // used in HackFixes.cpp / ObjectMgr.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectApplyAuraName[idx] = auraName;
+}
+
+void SpellInfo::setEffectAmplitude(uint32_t amplitude, uint8_t idx)                             // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectAmplitude[idx] = amplitude;
+}
+
+void SpellInfo::setEffectMultipleValue(float multiply, uint8_t idx)                             // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectMultipleValue[idx] = multiply;
+}
+
+void SpellInfo::setEffectChainTarget(uint32_t chainTarget, uint8_t idx)                         // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectChainTarget[idx] = chainTarget;
+}
+
+void SpellInfo::setEffectItemType(uint32_t itemEntryId, uint8_t idx)
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectItemType[idx] = itemEntryId;
+}
+
+void SpellInfo::setEffectMiscValue(int32_t misc, uint8_t idx)                                   // used in HackFixes.cpp / ObjectMgr.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectMiscValue[idx] = misc;
+}
+
+void SpellInfo::setEffectMiscValueB(int32_t miscB, uint8_t idx)
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectMiscValueB[idx] = miscB;
+}
+
+void SpellInfo::setEffectTriggerSpell(uint32_t spell, uint8_t idx)                              // used in ObjectMgr.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectTriggerSpell[idx] = spell;
+}
+
+void SpellInfo::setEffectPointsPerComboPoint(float effectPoints, uint8_t idx)                   // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectPointsPerComboPoint[idx] = effectPoints;
+}
+
+void SpellInfo::setEffectSpellClassMask(uint32_t spellClass, uint8_t idx1, uint8_t idx2)        // used in HackFixes.cpp
+{
+    if (idx1 >= MAX_SPELL_EFFECTS || idx2 >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id1 {} or id2 {} is invalid!", idx1, idx2);
+        return;
+    }
+
+    EffectSpellClassMask[idx1][idx2] = spellClass;
+}
+
+void SpellInfo::setSpellFamilyFlags(uint32_t value, uint8_t idx)                                // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    SpellFamilyFlags[idx] = value;
+}
+
+void SpellInfo::setEffectDamageMultiplier(float dmgMultiplier, uint8_t idx)                     // used in HackFixes.cpp
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectDamageMultiplier[idx] = dmgMultiplier;
+}
+
+#if VERSION_STRING > Classic
+void SpellInfo::setTotemCategory(uint32_t category, uint8_t idx)
+{
+    if (idx >= MAX_SPELL_TOTEM_CATEGORIES)
+    {
+        sLogger.failure("TotemCategory index id {} is invalid!", idx);
+        return;
+    }
+
+    TotemCategory[idx] = category;
+}
+#endif
+
+void SpellInfo::setEffectBonusMultiplier(float value, uint8_t idx)
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectBonusMultiplier[idx] = value;
+}
+
+#if VERSION_STRING >= Cata
+void SpellInfo::setEffectRadiusMaxIndex(uint32_t value, uint8_t idx)
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectRadiusMaxIndex[idx] = value;
+}
+
+void SpellInfo::setEffectSpellId(uint32_t value, uint8_t idx)
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectSpellId[idx] = value;
+}
+
+void SpellInfo::setEffectIndex(uint32_t value, uint8_t idx)
+{
+    if (idx >= MAX_SPELL_EFFECTS)
+    {
+        sLogger.failure("Effect index id {} is invalid!", idx);
+        return;
+    }
+
+    EffectIndex[idx] = value;
+}
+#endif

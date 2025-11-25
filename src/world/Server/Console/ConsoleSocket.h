@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -9,7 +9,6 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "Network/Network.h"
 #include "BaseConsole.h"
-
 
 namespace ConsoleDefines
 {
@@ -23,48 +22,43 @@ namespace ConsoleDefines
     };
 }
 
-
 class ConsoleSocket : public Socket
 {
-    public:
-
-        ConsoleSocket(SOCKET iFd);
-        ~ConsoleSocket();
+public:
+    ConsoleSocket(SOCKET iFd);
+    ~ConsoleSocket();
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // virtual functions (Socket)
 
-        void OnConnect();
-        void OnRead();
-        void OnDisconnect();
+    void OnConnect();
+    void OnRead();
+    void OnDisconnect();
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // handle console input
+private:
+    std::unique_ptr<RemoteConsole> mRemoteConsole;
 
-    private:
+    std::unique_ptr<char[]> mInputBuffer;
+    bool isWebClient;
 
-        RemoteConsole* mRemoteConsole;
+    uint32_t mInputBufferLength;
+    uint32_t mInputBufferPosition;
+    ConsoleDefines::RemoteConsoleState mConsoleSocketState;
 
-        char* mInputBuffer;
-        bool isWebClient;
+    std::string mConsoleAuthName;
+    std::string mConsoleAuthPassword;
 
-        uint32_t mInputBufferLength;
-        uint32_t mInputBufferPosition;
-        ConsoleDefines::RemoteConsoleState mConsoleSocketState;
+    uint32_t mRequestId;
+    uint8_t mFailedLoginCount;
 
-        std::string mConsoleAuthName;
-        std::string mConsoleAuthPassword;
+public:
+    void sendLoginMessage();
+    void handleConsoleInput();
+    void closeRemoteConnection();
 
-        uint32_t mRequestId;
-        uint8_t mFailedLoginCount;
+    void getConsoleAuthResult(bool result);
 
-    public:
-
-        void sendLoginMessage();
-        void handleConsoleInput();
-        void closeRemoteConnection();
-
-        void getConsoleAuthResult(bool result);
-
-        void testConsoleLogin(std::string& username, std::string& password, uint32_t requestno);
+    void testConsoleLogin(std::string& username, std::string& password, uint32_t requestno);
 };

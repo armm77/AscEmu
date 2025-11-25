@@ -1,22 +1,20 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
+#include "Objects/Units/Unit.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Spell/SpellProc.hpp"
+#include "Spell/SpellScript.hpp"
+#include "Spell/Definitions/ProcFlags.hpp"
 
 enum WarriorSpells
 {
     SPELL_FLURRY_DUMMY_R1   = 12319,
-    SPELL_FLURRY_DUMMY_R2   = 12971,
-    SPELL_FLURRY_DUMMY_R3   = 12972,
-    SPELL_FLURRY_DUMMY_R4   = 12973,
-    SPELL_FLURRY_DUMMY_R5   = 12974,
     SPELL_FLURRY_PROC_R1    = 12966,
-    SPELL_FLURRY_PROC_R2    = 12967,
-    SPELL_FLURRY_PROC_R3    = 12968,
-    SPELL_FLURRY_PROC_R4    = 12969,
-    SPELL_FLURRY_PROC_R5    = 12970,
 };
 
 #if VERSION_STRING < Mop
@@ -76,30 +74,7 @@ void setupWarriorSpells(ScriptMgr* mgr)
     SetupLegacyWarriorSpells(mgr);
 
 #if VERSION_STRING < Mop
-    uint32_t flurryIds[] =
-    {
-        SPELL_FLURRY_PROC_R1,
-        SPELL_FLURRY_PROC_R2,
-        SPELL_FLURRY_PROC_R3,
-#if VERSION_STRING < Cata
-        SPELL_FLURRY_PROC_R4,
-        SPELL_FLURRY_PROC_R5,
-#endif
-        0
-    };
-    mgr->register_spell_script(flurryIds, new Flurry);
-
-    uint32_t flurryDummyIds[] =
-    {
-        SPELL_FLURRY_DUMMY_R1,
-        SPELL_FLURRY_DUMMY_R2,
-        SPELL_FLURRY_DUMMY_R3,
-#if VERSION_STRING < Cata
-        SPELL_FLURRY_DUMMY_R4,
-        SPELL_FLURRY_DUMMY_R5,
-#endif
-        0
-    };
-    mgr->register_spell_script(flurryDummyIds, new FlurryDummy);
+    mgr->register_spell_script(SPELL_FLURRY_PROC_R1, new Flurry);
+    mgr->register_spell_script(SPELL_FLURRY_DUMMY_R1, new FlurryDummy);
 #endif
 }

@@ -1,9 +1,7 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
-
-
 
 #include <cstdint>
 
@@ -11,8 +9,10 @@ This file is released under the MIT license. See README-MIT for more information
 #include "World.h"
 #include "Storage/MySQLDataStore.hpp"
 #include "Storage/MySQLStructures.h"
-
-#include "Log.hpp"
+#include "Logging/Log.hpp"
+#include "Logging/Logger.hpp"
+#include "Utilities/Random.hpp"
+#include "Utilities/Util.hpp"
 
 using AscEmu::Threading::AEThread;
 using std::chrono::milliseconds;
@@ -40,7 +40,11 @@ BroadcastMgr::BroadcastMgr()
     this->threadInit();
 }
 
-BroadcastMgr::~BroadcastMgr() { m_thread->killAndJoin(); }
+BroadcastMgr::~BroadcastMgr()
+{
+    sLogger.info("BroadcastMgr: ~BroadcastMgr()");
+    m_thread->killAndJoin();
+}
 
 void BroadcastMgr::sendBroadcast()
 {

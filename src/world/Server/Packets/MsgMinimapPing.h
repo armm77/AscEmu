@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -30,6 +31,8 @@ namespace AscEmu::Packets
         }
 
     protected:
+        size_t expectedSize() const override { return static_cast<size_t>(8 + 4 + 4); }
+
         bool internalSerialise(WorldPacket& packet) override
         {
             packet << guid << posX << posY;

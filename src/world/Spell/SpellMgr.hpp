@@ -1,18 +1,25 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include "Definitions/SpellMechanics.hpp"
-#include "Spell.h"
-#include "SpellAuras.h"
-#include "SpellInfo.hpp"
+#include "Objects/Units/Players/PlayerDefines.hpp"
 #include "SpellTargetConstraint.hpp"
 
-#include "Storage/DBC/DBCStructures.hpp"
-#include "Objects/Units/Players/PlayerDefines.hpp"
+#include <memory>
+#include <ranges>
+
+namespace WDB::Structures
+{
+    struct SkillLineAbilityEntry;
+}
+
+class Unit;
+class Object;
+class Spell;
 
 struct SpellArea
 {
@@ -29,21 +36,21 @@ struct SpellArea
     bool fitsToRequirements(Player* player, uint32_t newZone, uint32_t newArea) const;
 };
 
-typedef std::unordered_map<uint32_t, SpellInfo> SpellInfoMap;
+typedef std::unordered_map<uint32_t, std::unique_ptr<SpellInfo>> SpellInfoMap;
 
 typedef Spell* (*SpellScriptLinker)(Object* Caster, SpellInfo* info, bool triggered, Aura* aur);
-typedef Aura* (*AuraScriptLinker)(SpellInfo* proto, int32 duration, Object* caster, Unit* target, bool temporary, Item* i_caster);
+typedef std::unique_ptr<Aura> (*AuraScriptLinker)(SpellInfo* proto, int32_t duration, Object* caster, Unit* target, bool temporary, Item* i_caster);
 
 typedef std::multimap<uint32_t, uint32_t> SpellRequiredMap;
 typedef std::multimap<uint32_t, uint32_t> SpellsRequiringSpellMap;
-typedef std::multimap<uint32_t, DBC::Structures::SkillLineAbilityEntry const*> SkillLineAbilityMap;
-typedef std::unordered_multimap<uint32_t, DBC::Structures::SkillLineAbilityEntry const*> SpellSkillMap;
-typedef std::pair<SpellRequiredMap::const_iterator, SpellRequiredMap::const_iterator> SpellRequiredMapBounds;
-typedef std::pair<SpellsRequiringSpellMap::const_iterator, SpellsRequiringSpellMap::const_iterator> SpellsRequiringSpellMapBounds;
-typedef std::pair<SkillLineAbilityMap::const_iterator, SkillLineAbilityMap::const_iterator> SkillLineAbilityMapBounds;
-typedef std::pair<SpellSkillMap::const_iterator, SpellSkillMap::const_iterator> SpellSkillMapBounds;
+typedef std::unordered_multimap<uint16_t, WDB::Structures::SkillLineAbilityEntry const*> SkillSkillAbilityMap;
+typedef std::unordered_multimap<uint32_t, WDB::Structures::SkillLineAbilityEntry const*> SpellSkillAbilityMap;
+using SpellRequiredMapRange = std::ranges::subrange<SpellRequiredMap::const_iterator>;
+using SpellsRequiringSpellMapRange = std::ranges::subrange<SpellsRequiringSpellMap::const_iterator>;
+using SkillSkillAbilityMapRange = std::ranges::subrange<SkillSkillAbilityMap::const_iterator>;
+using SpellSkillAbilityMapRange = std::ranges::subrange<SpellSkillAbilityMap::const_iterator>;
 
-typedef std::map<uint32_t, SpellTargetConstraint*> SpellTargetConstraintMap;
+typedef std::map<uint32_t, std::unique_ptr<SpellTargetConstraint>> SpellTargetConstraintMap;
 
 typedef std::multimap<uint32_t, SpellArea> SpellAreaMap;
 typedef std::multimap<uint32_t, SpellArea const*> SpellAreaForQuestMap;
@@ -58,8 +65,8 @@ typedef std::pair<SpellAreaForAreaMap::const_iterator, SpellAreaForAreaMap::cons
 class SERVER_DECL SpellMgr
 {
 private:
-    SpellMgr() = default;
-    ~SpellMgr() = default;
+    SpellMgr();
+    ~SpellMgr();
 
 public:
     static SpellMgr& getInstance();
@@ -78,7 +85,7 @@ public:
     void loadSpellScripts();
 
     Spell* newSpell(Object* caster, SpellInfo const* info, bool triggered, Aura* aur);
-    Aura* newAura(SpellInfo const* proto, int32_t duration, Object* caster, Unit* target, bool temporary = false, Item* i_caster = nullptr);
+    std::unique_ptr<Aura> newAura(SpellInfo const* proto, int32_t duration, Object* caster, Unit* target, bool temporary = false, Item* i_caster = nullptr);
 
     // Registering legacy spell scripts (DO NOT USE, use ScriptMgr and SpellScript instead!)
     void addSpellById(uint32_t spellId, SpellScriptLinker spellScript);
@@ -88,9 +95,9 @@ public:
     SpellMechanic const* getCrowdControlMechanicList(bool includeSilence) const;
 
     // Spell required
-    SpellRequiredMapBounds getSpellsRequiredForSpellBounds(uint32_t spellId) const;
+    SpellRequiredMapRange getSpellsRequiredRangeForSpell(uint32_t spellId) const;
     SpellsRequiringSpellMap getSpellsRequiringSpell() const;
-    SpellsRequiringSpellMapBounds getSpellsRequiringSpellBounds(uint32_t spellId) const;
+    SpellsRequiringSpellMapRange getSpellsRequiringSpellRange(uint32_t spellId) const;
     bool isSpellRequiringSpell(uint32_t spellId, uint32_t requiredSpellId) const;
     uint32_t getSpellRequired(uint32_t spellId) const;
 
@@ -98,12 +105,14 @@ public:
     void reloadSpellDisabled();
 
     // Skills
-    SpellSkillMapBounds getSkillEntryForSpellBounds(uint32_t spellId) const;
+    // Returns skill ability entries by spell id
+    SpellSkillAbilityMapRange getSkillEntryRangeForSpell(uint32_t spellId) const;
+    // Returns skill ability entries by skill id
+    SkillSkillAbilityMapRange getSkillEntryRangeForSkill(uint16_t skillId) const;
     // Use forPlayer if you want to see if skill ability entry fits for player
-    DBC::Structures::SkillLineAbilityEntry const* getFirstSkillEntryForSpell(uint32_t spellId, Player const* forPlayer = nullptr) const;
-    SkillLineAbilityMapBounds getSkillLineAbilityMapBounds(uint32_t skillId) const;
+    WDB::Structures::SkillLineAbilityEntry const* getFirstSkillEntryForSpell(uint32_t spellId, Player const* forPlayer = nullptr) const;
 
-    SpellTargetConstraint* getSpellTargetConstraintForSpell(uint32_t spellId) const;
+    SpellTargetConstraint const* getSpellTargetConstraintForSpell(uint32_t spellId) const;
     
     // Spell area maps
     SpellAreaMapBounds getSpellAreaMapBounds(uint32_t spellId) const;
@@ -124,6 +133,9 @@ private:
     // DBC files
     void loadSpellInfoData();
     void loadSkillLineAbilityMap();
+#if VERSION_STRING < Mop
+    void loadTalentRanks();
+#endif
 
     // Database tables
     void loadSpellCoefficientOverride();
@@ -134,6 +146,7 @@ private:
     void loadSpellRequired();
     void loadSpellTargetConstraints();
     void loadSpellDisabled();
+    void loadSpellRanks();
 
     // Calculates spell power coefficient
     void setSpellCoefficient(SpellInfo* sp);
@@ -152,8 +165,8 @@ private:
     SpellsRequiringSpellMap mSpellsRequiringSpell;
     SpellRequiredMap mSpellRequired;
 
-    SkillLineAbilityMap mSkillLineAbilityMap;
-    SpellSkillMap mSpellSkillsMap;
+    SpellSkillAbilityMap mSpellSkillsMap;
+    SkillSkillAbilityMap mSkillSpellsMap;
 
     SpellTargetConstraintMap mSpellTargetConstraintMap;
 
@@ -162,15 +175,17 @@ private:
     SpellAreaMap mSpellAreaMap;
     SpellAreaForAreaMap mSpellAreaForAreaMap;
     SpellAreaForAuraMap mSpellAreaForAuraMap;
+
 public:
     SpellAreaForQuestMap mSpellAreaForQuestMap;
+
 private:
     SpellAreaForQuestMap mSpellAreaForActiveQuestMap;
     SpellAreaForQuestMap mSpellAreaForQuestEndMap;
 
     SpellInfoMap mSpellInfoMapStore;
 
-    SpellInfo* getMutableSpellInfo(const uint32_t spellId);
+    SpellInfo* getMutableSpellInfo(const uint32_t spellId) const;
 
     // Legacy script registerers
     void addSpellBySpellInfo(SpellInfo* info, SpellScriptLinker spellScript);

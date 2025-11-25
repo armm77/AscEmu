@@ -1,9 +1,9 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
-# set up our project name
-project(g3dlite CXX)
+# set up our project name.
+set(LIBRARY_NAME g3dlite)
 
-set(sources
+set(SRC_G3DLITE
     AABox.cpp
     Any.cpp
     AnyTableReader.cpp
@@ -49,16 +49,20 @@ set(sources
     Vector4.cpp
 )
 
-include_directories(
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(${LIBRARY_NAME} STATIC ${SRC_G3DLITE})
+
+target_include_directories(${LIBRARY_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${ZLIB_INCLUDE_DIRS}
 )
 
-add_library(${PROJECT_NAME} STATIC ${sources})
-
-target_link_libraries(${PROJECT_NAME} 
+# include library dependencies.
+target_link_libraries(${LIBRARY_NAME}
+  PUBLIC
     ${ZLIB_LIBRARIES}
-    ${CMAKE_THREAD_LIBS_INIT}
 )
 
-unset(sources)
+unset(SRC_G3DLITE)

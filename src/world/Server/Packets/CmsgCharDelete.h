@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -41,7 +42,7 @@ namespace AscEmu::Packets
             uint64_t unpackedGuid;
             packet >> unpackedGuid;
 #else
-            ObjectGuid unpackedGuid;
+            WoWGuid unpackedGuid;
 
             unpackedGuid[1] = packet.readBit();
             unpackedGuid[3] = packet.readBit();
@@ -61,7 +62,7 @@ namespace AscEmu::Packets
             packet.ReadByteSeq(unpackedGuid[2]);
             packet.ReadByteSeq(unpackedGuid[5]);
 #endif
-            guid.Init(unpackedGuid);
+            guid.init(unpackedGuid);
             return true;
         }
     };

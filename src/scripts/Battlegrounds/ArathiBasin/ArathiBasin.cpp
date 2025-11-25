@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -17,14 +17,29 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Setup.h"
 #include "ArathiBasin.h"
+
+#include "Chat/ChatDefines.hpp"
 #include "Management/HonorHandler.h"
-#include "Storage/MySQLDataStore.hpp"
 #include "Management/QuestLogEntry.hpp"
-#include "Management/WorldStates.h"
-#include "Server/MainServerDefines.h"
-#include "Map/Management/MapMgr.hpp"
+#include "Management/WorldStates.hpp"
+#include "Map/Maps/BattleGroundMap.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObjectProperties.hpp"
+#include "Server/Master.h"
+#include "Server/WorldSessionLog.hpp"
 #include "Spell/SpellMgr.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Management/Battleground/BattlegroundDefines.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Spell/Spell.hpp"
+#include "CommonTime.hpp"
+#include "Utilities/Random.hpp"
+#include "Utilities/Util.hpp"
 
 uint32_t buffentries[3] = { 180380, 180362, 180146 };
 

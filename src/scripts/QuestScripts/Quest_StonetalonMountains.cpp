@@ -1,10 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/QuestLogEntry.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Movement/MovementManager.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/QuestScript.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Quest: "Protect Kaya" (Entry: 6523)

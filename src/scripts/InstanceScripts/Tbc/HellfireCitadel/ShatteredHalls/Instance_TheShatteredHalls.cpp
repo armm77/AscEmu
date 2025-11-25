@@ -1,11 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Instance_TheShatteredHalls.h"
-#include "Management/Faction.h"
+
+#include "Movement/MovementManager.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Hellfire Citadel: The Shattered Halls

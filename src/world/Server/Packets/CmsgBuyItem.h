@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -27,7 +28,7 @@ namespace AscEmu::Packets
         }
 
         CmsgBuyItem(uint64_t sourceGuid, uint32_t itemEntry, int32_t slot, uint8_t amount) :
-            ManagedPacket(CMSG_BUY_ITEM, 14),
+            ManagedPacket(CMSG_BUY_ITEM, 13),
             sourceGuid(sourceGuid),
             itemEntry(itemEntry),
             slot(slot),
@@ -53,9 +54,9 @@ namespace AscEmu::Packets
 #endif
 
 #if VERSION_STRING <= TBC
-            packet >> rawGuid >> itemEntry >> slot >> amount;
+            packet >> rawGuid >> itemEntry >> amount;
 #endif
-            sourceGuid.Init(rawGuid);
+            sourceGuid.init(rawGuid);
             return true;
         }
     };

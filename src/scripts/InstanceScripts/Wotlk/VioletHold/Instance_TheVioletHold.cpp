@@ -1,24 +1,29 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Instance_TheVioletHold.hpp"
+#include "AzureSaboteur.hpp"
 #include "Cyangosa.hpp"
 #include "Erekem.hpp"
 #include "Ichron.hpp"
 #include "Lavanthor.hpp"
 #include "Moragg.hpp"
-#include "Xevozz.hpp"
-#include "Zuramat.hpp"
 #include "Portal_Common.hpp"
 #include "Portal_Elite.hpp"
 #include "Portal_Intro.hpp"
-#include "AzureSaboteur.hpp"
+#include "Setup.h"
+#include "Xevozz.hpp"
+#include "Zuramat.hpp"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "CommonTime.hpp"
+#include "Utilities/Random.hpp"
 
-#include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // TheVioletHold Instance
@@ -314,9 +319,9 @@ void TheVioletHoldScript::UpdateEvent()
 
                 if (Creature* boss = getCreatureFromData(bossId))
                 {
-                    boss->getAIInterface()->setImmuneToNPC(false);
-                    boss->getAIInterface()->setImmuneToPC(false);
-                    boss->removeUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+                    boss->getAIInterface()->setIgnoreCreatureCombat(false);
+                    boss->getAIInterface()->setIgnorePlayerCombat(false);
+                    boss->removeUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
 
                     switch (bossId)
                     {
@@ -324,13 +329,13 @@ void TheVioletHoldScript::UpdateEvent()
                         {
                             boss->emote(EMOTE_ONESHOT_ROAR);
 
-                            for (uint32 i = DATA_EREKEM_GUARD_1; i <= DATA_EREKEM_GUARD_2; ++i)
+                            for (uint32_t i = DATA_EREKEM_GUARD_1; i <= DATA_EREKEM_GUARD_2; ++i)
                             {
                                 if (Creature* guard = GetCreatureByGuid(getLocalData(i)))
                                 {
-                                    guard->getAIInterface()->setImmuneToNPC(false);
-                                    guard->getAIInterface()->setImmuneToPC(false);
-                                    guard->removeUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+                                    guard->getAIInterface()->setIgnoreCreatureCombat(false);
+                                    guard->getAIInterface()->setIgnorePlayerCombat(false);
+                                    guard->removeUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
                                 }
                             }
                         } break;
@@ -358,9 +363,9 @@ void TheVioletHoldScript::UpdateEvent()
                 {
                     cyanigosa->removeAllAurasById(SPELL_CYANIGOSA_ARCANE_POWER_STATE);
                     cyanigosa->castSpell(cyanigosa, SPELL_CYANIGOSA_TRANSFORM, true);
-                    cyanigosa->getAIInterface()->setImmuneToNPC(false);
-                    cyanigosa->getAIInterface()->setImmuneToPC(false);
-                    cyanigosa->removeUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+                    cyanigosa->getAIInterface()->setIgnoreCreatureCombat(false);
+                    cyanigosa->getAIInterface()->setIgnorePlayerCombat(false);
+                    cyanigosa->removeUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
                 }
             } break;
             default:
@@ -584,7 +589,7 @@ void TheVioletHoldScript::resetBossEncounter(uint8_t bossId)
         } break;
         case DATA_EREKEM:
         {
-            for (uint32 i = DATA_EREKEM_GUARD_1; i <= DATA_EREKEM_GUARD_2; ++i)
+            for (uint32_t i = DATA_EREKEM_GUARD_1; i <= DATA_EREKEM_GUARD_2; ++i)
             {
                 if (Creature* guard = GetCreatureByGuid(getLocalData(i)))
                 {
@@ -598,9 +603,9 @@ void TheVioletHoldScript::resetBossEncounter(uint8_t bossId)
                     }
 
                     guard->getMovementManager()->moveTargetedHome();
-                    guard->getAIInterface()->setImmuneToNPC(true);
-                    guard->getAIInterface()->setImmuneToPC(true);
-                    guard->addUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+                    guard->getAIInterface()->setIgnoreCreatureCombat(true);
+                    guard->getAIInterface()->setIgnorePlayerCombat(true);
+                    guard->addUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
                 }
             }
         } [[fallthrough]];
@@ -836,7 +841,7 @@ void SinclariAI::Reset()
     summons.despawnAll();
 
     // Spawn All Portals
-    for (uint8 i = 0; i < PortalIntroCount; ++i)
+    for (uint8_t i = 0; i < PortalIntroCount; ++i)
     {
         if (Creature* summon = summonCreature(NPC_TELEPORTATION_PORTAL_INTRO, PortalIntroPositions[i]))
         {
@@ -1032,7 +1037,7 @@ void TrashAI::AIUpdate(unsigned long /*time_passed*/)
     }
 }
 
-void TrashAI::waypointReached(uint32 waypointId, uint32 /*pathId*/)
+void TrashAI::waypointReached(uint32_t waypointId, uint32_t /*pathId*/)
 {
     if (waypointId == mlastWaypointId)
     {
@@ -1082,7 +1087,7 @@ void TrashAI::SetCreatureData(uint32_t type, uint32_t data)
 
         if (path)
         {
-            for (uint32 i = 0; i <= mlastWaypointId; i++)
+            for (uint32_t i = 0; i <= mlastWaypointId; i++)
             {
                 WaypointNode node = WaypointNode(i, path[i].getPositionX() + Util::getRandomInt(-1, 1), path[i].getPositionY() + Util::getRandomInt(-1, 1), path[i].getPositionZ(), 0, 0);
                 node.moveType = WAYPOINT_MOVE_TYPE_RUN;
@@ -1250,13 +1255,13 @@ void SetupTheVioletHold(ScriptMgr* mgr)
 
 // Trash
     // Intro
-    uint32_t entrys1[] = { NPC_AZURE_INVADER_1, NPC_AZURE_MAGE_SLAYER_1, NPC_AZURE_BINDER_1 };
+    uint32_t entrys1[] = { NPC_AZURE_INVADER_1, NPC_AZURE_MAGE_SLAYER_1, NPC_AZURE_BINDER_1, 0 };
     mgr->register_creature_script(entrys1, &TrashAI::Create);
     // Common
-    uint32_t entrys2[] = { NPC_PORTAL_GUARDIAN, NPC_PORTAL_KEEPER, NPC_AZURE_SPELLBREAKER_1, NPC_AZURE_INVADER_2, NPC_AZURE_SPELLBREAKER_2, NPC_AZURE_MAGE_SLAYER_2, NPC_AZURE_BINDER_2 };
+    uint32_t entrys2[] = { NPC_PORTAL_GUARDIAN, NPC_PORTAL_KEEPER, NPC_AZURE_SPELLBREAKER_1, NPC_AZURE_INVADER_2, NPC_AZURE_SPELLBREAKER_2, NPC_AZURE_MAGE_SLAYER_2, NPC_AZURE_BINDER_2, 0 };
     mgr->register_creature_script(entrys2, &TrashAI::Create);
     //Elite
-    uint32_t entrys3[] = { NPC_AZURE_CAPTAIN_1, NPC_AZURE_RAIDER_1, NPC_AZURE_STALKER_1, NPC_AZURE_SORCEROR_1 };
+    uint32_t entrys3[] = { NPC_AZURE_CAPTAIN_1, NPC_AZURE_RAIDER_1, NPC_AZURE_STALKER_1, NPC_AZURE_SORCEROR_1, 0 };
     mgr->register_creature_script(entrys3, &TrashAI::Create);
     // Boss Waves
     mgr->register_creature_script(NPC_SABOTEOUR, &AzureSaboteurAI::Create);
@@ -1273,7 +1278,7 @@ void SetupTheVioletHold(ScriptMgr* mgr)
 
 // Spells
     mgr->register_spell_script(SPELL_DESTROY_DOOR_SEAL, new DestroyDoorSeal);
-    uint32_t entrys4[] = { SPELL_ARCANE_LIGHTNING_DAMAGE, SPELL_ARCANE_LIGHTNING_INSTAKILL, SPELL_ARCANE_LIGHTNING_DUMMY };
+    uint32_t entrys4[] = { SPELL_ARCANE_LIGHTNING_DAMAGE, SPELL_ARCANE_LIGHTNING_INSTAKILL, SPELL_ARCANE_LIGHTNING_DUMMY, 0 };
     mgr->register_spell_script(entrys4, new ArcaneLightning);
     mgr->register_spell_script(Ichron::SPELL_MERGE, new IchronMerge);
     mgr->register_spell_script(Ichron::SPELL_PROTECTIVE_BUBBLE, new IchronBubble);

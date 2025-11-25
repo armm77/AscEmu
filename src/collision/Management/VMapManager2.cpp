@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,22 +17,31 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <iostream>
-#include <iomanip>
-#include <string>
-#include <sstream>
 #include "VMapManager2.h"
 #include "MapTree.h"
 #include "ModelInstance.h"
 #include "WorldModel.h"
 #include <G3D/Vector3.h>
 #include "Logging/Logger.hpp"
-#include "Errors.h"
+#include "Debugging/Errors.h"
+
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <sstream>
 
 using G3D::Vector3;
 
 namespace VMAP
 {
+    ManagedModel::ManagedModel() : iModel(nullptr), iRefCount(0)
+    {}
+
+    void ManagedModel::setModel(std::unique_ptr<WorldModel> model)
+    {
+        iModel = std::move(model);
+    }
+
     VMapManager2::VMapManager2()
     {
         GetLiquidFlagsPtr = &GetLiquidFlagsDummy;
@@ -40,22 +49,12 @@ namespace VMAP
         thread_safe_environment = true;
     }
 
-    VMapManager2::~VMapManager2(void)
-    {
-        for (InstanceTreeMap::iterator i = iInstanceMapTrees.begin(); i != iInstanceMapTrees.end(); ++i)
-        {
-            delete i->second;
-        }
-        for (ModelFileMap::iterator i = iLoadedModelFiles.begin(); i != iLoadedModelFiles.end(); ++i)
-        {
-            delete i->second.getModel();
-        }
-    }
+    VMapManager2::~VMapManager2(void) = default;
 
-    void VMapManager2::InitializeThreadUnsafe(const std::vector<uint32>& mapIds)
+    void VMapManager2::InitializeThreadUnsafe(const std::vector<uint32_t>& mapIds)
     {
         // the caller must pass the list of all mapIds that will be used in the VMapManager2 lifetime
-        for (const uint32& mapId : mapIds)
+        for (const uint32_t& mapId : mapIds)
             iInstanceMapTrees.insert(InstanceTreeMap::value_type(mapId, nullptr));
 
         thread_safe_environment = false;
@@ -96,7 +95,7 @@ namespace VMAP
         return result;
     }
 
-    InstanceTreeMap::const_iterator VMapManager2::GetMapTree(uint32 mapId) const
+    InstanceTreeMap::const_iterator VMapManager2::GetMapTree(uint32_t mapId) const
     {
         // return the iterator if found or end() if not found/NULL
         InstanceTreeMap::const_iterator itr = iInstanceMapTrees.find(mapId);
@@ -107,7 +106,7 @@ namespace VMAP
     }
 
     // load one tile (internal use only)
-    bool VMapManager2::_loadMap(uint32 mapId, const std::string& basePath, uint32 tileX, uint32 tileY)
+    bool VMapManager2::_loadMap(uint32_t mapId, const std::string& basePath, uint32_t tileX, uint32_t tileY)
     {
         InstanceTreeMap::iterator instanceTree = iInstanceMapTrees.find(mapId);
         if (instanceTree == iInstanceMapTrees.end())
@@ -116,7 +115,7 @@ namespace VMAP
                 instanceTree = iInstanceMapTrees.insert(InstanceTreeMap::value_type(mapId, nullptr)).first;
             else
             {
-                sLogger.failure("Invalid mapId %u tile [%u, %u] passed to VMapManager2 after startup in thread unsafe environment", mapId, tileX, tileY);
+                sLogger.failure("Invalid mapId {} tile [{}, {}] passed to VMapManager2 after startup in thread unsafe environment", mapId, tileX, tileY);
                 ASSERT(false);
             }
         }
@@ -124,13 +123,12 @@ namespace VMAP
         if (!instanceTree->second)
         {
             std::string mapFileName = getMapFileName(mapId);
-            StaticMapTree* newTree = new StaticMapTree(mapId, basePath);
+            auto newTree = std::make_unique<StaticMapTree>(mapId, basePath);
             if (!newTree->InitMap(mapFileName, this))
             {
-                delete newTree;
                 return false;
             }
-            instanceTree->second = newTree;
+            instanceTree->second = std::move(newTree);
         }
 
         return instanceTree->second->LoadMapTile(tileX, tileY, this);
@@ -144,7 +142,6 @@ namespace VMAP
             instanceTree->second->UnloadMap(this);
             if (instanceTree->second->numLoadedTiles() == 0)
             {
-                delete instanceTree->second;
                 instanceTree->second = nullptr;
             }
         }
@@ -158,7 +155,6 @@ namespace VMAP
             instanceTree->second->UnloadMapTile(x, y, this);
             if (instanceTree->second->numLoadedTiles() == 0)
             {
-                delete instanceTree->second;
                 instanceTree->second = nullptr;
             }
         }
@@ -236,7 +232,7 @@ namespace VMAP
         return VMAP_INVALID_HEIGHT_VALUE;
     }
 
-    bool VMapManager2::getAreaInfo(unsigned int mapId, float x, float y, float& z, uint32& flags, int32& adtId, int32& rootId, int32& groupId) const
+    bool VMapManager2::getAreaInfo(unsigned int mapId, float x, float y, float& z, uint32_t& flags, int32_t& adtId, int32_t& rootId, int32_t& groupId) const
     {
         if (!IsVMAPDisabledForPtr(mapId, VMAP_DISABLE_AREAFLAG))
         {
@@ -326,16 +322,15 @@ namespace VMAP
         ModelFileMap::iterator model = iLoadedModelFiles.find(filename);
         if (model == iLoadedModelFiles.end())
         {
-            WorldModel* worldmodel = new WorldModel();
+            auto worldmodel = std::make_unique<WorldModel>();
             if (!worldmodel->readFile(basepath + filename + ".vmo"))
             {
-                sLogger.failure("could not load '%s%s.vmo'", basepath.c_str(), filename.c_str());
-                delete worldmodel;
+                sLogger.failure("could not load '{}{}.vmo'", basepath, filename);
                 return nullptr;
             }
-            sLogger.debug("VMapManager2 loading file '%s%s'", basepath.c_str(), filename.c_str());
+            sLogger.debug("VMapManager2 loading file '{}{}'", basepath, filename);
             model = iLoadedModelFiles.insert(std::pair<std::string, ManagedModel>(filename, ManagedModel())).first;
-            model->second.setModel(worldmodel);
+            model->second.setModel(std::move(worldmodel));
         }
         model->second.incRefCount();
         return model->second.getModel();
@@ -349,13 +344,12 @@ namespace VMAP
         ModelFileMap::iterator model = iLoadedModelFiles.find(filename);
         if (model == iLoadedModelFiles.end())
         {
-            sLogger.failure("trying to unload non-loaded file '%s'", filename.c_str());
+            sLogger.failure("trying to unload non-loaded file '{}'", filename);
             return;
         }
         if (model->second.decRefCount() == 0)
         {
-            sLogger.debug("VMapManager2 unloading file '%s'", filename.c_str());
-            delete model->second.getModel();
+            sLogger.debug("VMapManager2 unloading file '{}'", filename);
             iLoadedModelFiles.erase(model);
         }
     }
@@ -365,9 +359,9 @@ namespace VMAP
         return StaticMapTree::CanLoadMap(std::string(basePath), mapId, x, y);
     }
 
-    void VMapManager2::getInstanceMapTree(InstanceTreeMap &instanceMapTree)
+    InstanceTreeMap const& VMapManager2::getInstanceMapTree() const
     {
-        instanceMapTree = iInstanceMapTrees;
+        return iInstanceMapTrees;
     }
 
 } // namespace VMAP

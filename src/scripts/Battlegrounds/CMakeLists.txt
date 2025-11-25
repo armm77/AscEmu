@@ -1,85 +1,55 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
-# set up our project name
-project(Battlegrounds CXX)
+# set up our project name.
+set(LIBRARY_NAME Battlegrounds)
 
-include(AlteracValley/CMakeLists.txt)
-include(ArathiBasin/CMakeLists.txt)
-include(CircleOfBlood/CMakeLists.txt)
-include(DalaranSewers/CMakeLists.txt)
-include(EyeOfTheStorm/CMakeLists.txt)
-include(IsleOfConquest/CMakeLists.txt)
-include(RingOfTrials/CMakeLists.txt)
-include(RingOfValor/CMakeLists.txt)
-include(RuinsOfLordaeron/CMakeLists.txt)
-include(StrandOfTheAncient/CMakeLists.txt)
-include(WarsongGulch/CMakeLists.txt)
+file(GLOB_RECURSE SRC_LOCAL_DIR *.cpp *.h *.hpp)
 
+# required for linker.
 set(SRC_BATTLEGROUNDS
-    Setup.cpp
-    Setup.h
-    # required for linker
     ../../world/Server/ServerState.cpp
     ../../world/Spell/SpellCastTargets.cpp
 )
 
-source_group(Battlegrounds FILES ${SRC_BATTLEGROUNDS})
-
-set(SRC_BGS
-    ${SRC_AlteracValley}
-    ${SRC_ArathiBasin}
-    ${SRC_CircleOfBlood}
-    ${SRC_DalaranSewers}
-    ${SRC_EyeOfTheStorm}
-    ${SRC_IsleOfConquest}
-    ${SRC_RingOfTrials}
-    ${SRC_RingOfValor}
-    ${SRC_RuinsOfLordaeron}
-    ${SRC_StrandOfTheAncient}
-    ${SRC_WarsongGulch}
+set(BATTLEGROUNDS_SRCS
     ${SRC_BATTLEGROUNDS}
+    ${SRC_LOCAL_DIR}
 )
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
 
-include_directories(
+# add shared library.
+add_library(${LIBRARY_NAME} SHARED ${BATTLEGROUNDS_SRCS})
+
+# include directories.
+set(BATTLEGROUNDS_INCLUDES
     ${OPENSSL_INCLUDE_DIR}
-    ${PCRE_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Detour/Include
     ${CMAKE_SOURCE_DIR}/src/collision
     ${CMAKE_SOURCE_DIR}/src/collision/Management
     ${CMAKE_SOURCE_DIR}/src/collision/Maps
     ${CMAKE_SOURCE_DIR}/src/collision/Models
     ${CMAKE_SOURCE_DIR}/dep/g3dlite/include
+    ${CMAKE_SOURCE_DIR}/dep/lualib/src
     ${CMAKE_SOURCE_DIR}/src/shared
     ${CMAKE_SOURCE_DIR}/src/world
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${ZLIB_INCLUDE_DIRS}
 )
+target_include_directories(${LIBRARY_NAME} PUBLIC ${BATTLEGROUNDS_INCLUDES})
 
-add_library(${PROJECT_NAME} SHARED ${SRC_BGS})
-
-target_link_libraries(${PROJECT_NAME} world)
-
-if (USE_PCH)
-    ##gen_cxx_pch(${PROJECT_NAME} Setup.h ${CMAKE_CURRENT_SOURCE_DIR}/Setup.cpp)
-endif ()
-
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${ASCEMU_SCRIPTLIB_PATH} LIBRARY DESTINATION ${ASCEMU_SCRIPTLIB_PATH})
-
-if (USE_PCH)
-    target_precompile_headers(${PROJECT_NAME}
-    PRIVATE 
-    <Chat/ChatDefines.hpp>
-    <Management/HonorHandler.h>
-    <Management/QuestLogEntry.hpp>
-    <Management/WorldStates.h>
-    <Map/Management/MapMgr.hpp>
-    <Objects/GameObject.h>
-    <Server/MainServerDefines.h>
-    <Server/Packets/SmsgMessageChat.h>
-    <Spell/SpellMgr.hpp>
-    <Storage/MySQLDataStore.hpp>
+# include library dependencies.
+target_link_libraries(${LIBRARY_NAME}
+  PUBLIC
+    world
 )
+
+# generate precompiled header.
+if (AE_USE_PCH)
+    message(STATUS "Generate PCH for ${LIBRARY_NAME}")
+    target_precompile_headers(${LIBRARY_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pchBattleGrounds.hpp)
 endif ()
 
-unset(sources)
-unset(headers)
+# install library.
+install(TARGETS ${LIBRARY_NAME} RUNTIME DESTINATION ${ASCEMU_SCRIPTLIB_PATH} LIBRARY DESTINATION ${ASCEMU_SCRIPTLIB_PATH})
+

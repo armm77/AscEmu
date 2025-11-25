@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -39,7 +40,7 @@ namespace AscEmu::Packets
             uint64_t unpackedGuid;
             packet.read_skip<uint32_t>();
             packet >> itemGuid >> unpackedGuid;
-            playerGuid.Init(unpackedGuid);
+            playerGuid.init(unpackedGuid);
             return true;
         }
     };

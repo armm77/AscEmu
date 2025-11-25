@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,7 +20,16 @@
  */
 
 #include "Setup.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/ItemInterface.h"
+#include "Management/ObjectMgr.hpp"
+#include "Management/QuestLogEntry.hpp"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Objects/Item.hpp"
+#include "Server/WorldSession.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Objects/Units/Players/Player.hpp"
 
 enum
 {
@@ -240,8 +249,7 @@ public:
                 case 4:
                 {
                     mRazuunPhase = -1;
-                    _removeTimer(mRazuunTimer);
-                    despawn(0, 0);
+                    despawn(1, 0);
                 }
                 break;
             }
@@ -358,22 +366,7 @@ void FlanisSwiftwing_Gossip::onHello(Object* pObject, Player* plr)
 
 void FlanisSwiftwing_Gossip::onSelectOption(Object* /*pObject*/, Player* Plr, uint32_t /*Id*/, const char* /*Code*/, uint32_t /*gossipId*/)
 {
-    Item* item = sObjectMgr.CreateItem(30658, Plr);
-    if (item == nullptr)
-        return;
-
-    item->setStackCount(1);
-    if (!Plr->getItemInterface()->AddItemToFreeSlot(item))
-    {
-        Plr->getSession()->SendNotification("No free slots were found in your inventory!");
-        item->deleteMe();
-    }
-    else
-    {
-        Plr->sendItemPushResultPacket(false, true, false, Plr->getItemInterface()->LastSearchResult()->ContainerSlot,
-            Plr->getItemInterface()->LastSearchResult()->Slot, 1, item->getEntry(), item->getPropertySeed(),
-            item->getRandomPropertiesId(), item->getStackCount());
-    }
+    Plr->getItemInterface()->AddItemById(30658, 1, 0);
 };
 
 void SetupShadowmoon(ScriptMgr* mgr)

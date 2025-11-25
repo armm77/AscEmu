@@ -1,12 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Management/Battleground/Battleground.hpp"
 #include "StrandOfTheAncientDefinitions.h"
+#include "Management/Battleground/Battleground.hpp"
 
 class StrandOfTheAncient : public Battleground
 {
@@ -55,8 +55,8 @@ public:
     void HookGenerateLoot(Player* plr, Object* pOCorpse) override;
     void HookOnUnitKill(Player* plr, Unit* pVictim) override;
     void HookOnUnitDied(Unit* victim) override;
-    bool HookSlowLockOpen(GameObject* go, Player* player, Spell* spell ) override;
-    bool HookQuickLockOpen(GameObject* go, Player* player, Spell* spell ) override;
+    bool HookSlowLockOpen(GameObject* go, Player* player, Spell* spell) override;
+    bool HookQuickLockOpen(GameObject* go, Player* player, Spell* spell) override;
     void HookOnPlayerDeath(Player* plr) override;
     void HookOnMount(Player* plr) override;
     bool HookHandleRepop(Player* plr) override;

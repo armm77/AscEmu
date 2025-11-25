@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -26,13 +26,13 @@ namespace AscEmu::Packets
         {
         }
 #else
-        ObjectGuid guid;
+        WoWGuid guid;
 
         CmsgGuildDemote() : CmsgGuildDemote(0)
         {
         }
 
-        CmsgGuildDemote(ObjectGuid guid) :
+        CmsgGuildDemote(WoWGuid guid) :
             ManagedPacket(CMSG_GUILD_DEMOTE, 8),
             guid(guid)
         {

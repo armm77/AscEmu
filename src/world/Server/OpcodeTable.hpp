@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -11,139 +11,140 @@ This file is released under the MIT license. See README-MIT for more information
 #pragma once
 
 #include "Opcodes.hpp"
-#include "Common.hpp"
-#include "WorldConf.h"
-#include <iostream>
+#include "AEVersion.hpp"
+#include "CommonTypes.hpp"
+#include <cstdint>
+#include <string>
+#include <vector>
 
 class SERVER_DECL OpcodeTables
 {
-    private:
+private:
+    OpcodeTables() = default;
+    ~OpcodeTables() = default;
 
-        OpcodeTables() = default;
-        ~OpcodeTables() = default;
+public:
+    static OpcodeTables& getInstance();
+    void initialize();
+    void finalize();
 
-    public:
+    OpcodeTables(OpcodeTables&&) = delete;
+    OpcodeTables(OpcodeTables const&) = delete;
+    OpcodeTables& operator=(OpcodeTables&&) = delete;
+    OpcodeTables& operator=(OpcodeTables const&) = delete;
 
-        static OpcodeTables& getInstance();
-        void initialize();
-        void finalize();
-
-        OpcodeTables(OpcodeTables&&) = delete;
-        OpcodeTables(OpcodeTables const&) = delete;
-        OpcodeTables& operator=(OpcodeTables&&) = delete;
-        OpcodeTables& operator=(OpcodeTables const&) = delete;
-
-        int getVersionIdForAEVersion()
+    int getVersionIdForAEVersion()
+    {
+        switch (VERSION_STRING)
         {
-            switch (VERSION_STRING)
-            {
-                case Classic:
-                    return 0;
-                case TBC:
-                    return 1;
-                case WotLK:
-                    return 2;
-                case Cata:
-                    return 3;
-                case Mop:
-                    return 4;
-                default:
-                    return 0;
-            }
+            case Classic:
+                return 0;
+            case TBC:
+                return 1;
+            case WotLK:
+                return 2;
+            case Cata:
+                return 3;
+            case Mop:
+                return 4;
+            default:
+                return 0;
         }
+    }
 
-        std::string getNameForAEVersion()
+    std::string getNameForAEVersion()
+    {
+        switch (VERSION_STRING)
         {
-            switch (VERSION_STRING)
-            {
-                case Classic:
-                    return "Classic";
-                case TBC:
-                    return "BC";
-                case WotLK:
-                    return "WotLK";
-                case Cata:
-                    return "Cata";
-                case Mop:
-                    return "Mop";
-                default:
-                    return "";
-            }
+            case Classic:
+                return "Classic";
+            case TBC:
+                return "BC";
+            case WotLK:
+                return "WotLK";
+            case Cata:
+                return "Cata";
+            case Mop:
+                return "Mop";
+            default:
+                return "";
         }
+    }
 
-        std::string getNameForVersionId(int versionId)
+    std::string getNameForVersionId(int versionId)
+    {
+        switch (versionId)
         {
-            switch (versionId)
-            {
-                case 0:
-                    return "Classic";
-                case 1:
-                    return "BC";
-                case 2:
-                    return "WotLK";
-                case 3:
-                    return "Cata";
-                case 4:
-                    return "Mop";
-                default:
-                    return "";
-            }
+            case 0:
+                return "Classic";
+            case 1:
+                return "BC";
+            case 2:
+                return "WotLK";
+            case 3:
+                return "Cata";
+            case 4:
+                return "Mop";
+            default:
+                return "";
         }
+    }
 
-        uint32_t getInternalIdForHex(uint16_t hex, int versionId = -1)
+    uint32_t getInternalIdForHex(uint16_t hex)
+    {
+        auto versionId = getVersionIdForAEVersion();
+
+        for (const auto table : _versionHexTable[versionId])
+            if (table.hexValue == hex)
+                return table.internalId;
+
+        return 0;
+    }
+
+    std::string getNameForOpcode(uint16_t hex)
+    {
+        const auto internalId = getInternalIdForHex(hex);
+
+        auto multiversionTable = multiversionOpcodeStore.find(internalId);
+        if (multiversionTable != multiversionOpcodeStore.end())
+            return multiversionTable->second.name + " [" + getNameForAEVersion() + "]";
+
+        return "Unknown internal id!";
+    }
+
+    std::string getNameForInternalId(uint32_t id)
+    {
+        auto multiversionTable = multiversionOpcodeStore.find(id);
+        if (multiversionTable != multiversionOpcodeStore.end())
+            return multiversionTable->second.name + " [" + getNameForAEVersion() + "]";
+
+        return "Unknown internal id!";
+    }
+
+    uint16_t getHexValueForVersionId(uint32_t internalId)
+    {
+        auto versionId = getVersionIdForAEVersion();
+
+        if (versionId >= 0 && versionId < MAX_VERSION_INDEX)
         {
-            if (versionId == -1 || versionId >= MAX_VERSION_INDEX)
-                versionId = getVersionIdForAEVersion();
-
-            for (const auto table : _versionHexTable[versionId])
-                if (table.hexValue == hex)
-                    return table.internalId;
-
-            return 0;
-        }
-
-        std::string getNameForOpcode(uint16_t hex, int versionId = -1)
-        {
-            const auto internalId = getInternalIdForHex(hex, versionId);
-
             auto multiversionTable = multiversionOpcodeStore.find(internalId);
             if (multiversionTable != multiversionOpcodeStore.end())
-                return multiversionTable->second.name + " [" + getNameForAEVersion() + "]";
-
-            return "Unknown internal id!";
+                return multiversionTable->second.hexValues[versionId];
         }
 
-        std::string getNameForInternalId(uint32_t id)
-        {
-            auto multiversionTable = multiversionOpcodeStore.find(id);
-            if (multiversionTable != multiversionOpcodeStore.end())
-                return multiversionTable->second.name + " [" + getNameForAEVersion() + "]";
+        return 0;
+    }
 
-            return "Unknown internal id!";
-        }
+    struct HexToId
+    {
+        HexToId(uint16_t hex, uint32_t intId) :
+            hexValue(hex), internalId(intId){}
 
-        uint16_t getHexValueForVersionId(int versionId, uint32_t internalId)
-        {
-            if (versionId >= 0 && versionId < MAX_VERSION_INDEX)
-            {
-                auto multiversionTable = multiversionOpcodeStore.find(internalId);
-                if (multiversionTable != multiversionOpcodeStore.end())
-                    return multiversionTable->second.hexValues[versionId];
-            }
+        uint16_t hexValue;
+        uint32_t internalId;
+    };
 
-            return 0;
-        }
-
-        struct HexToId
-        {
-            HexToId(uint16_t hex, uint32_t intId) :
-                hexValue(hex), internalId(intId){}
-
-            uint16_t hexValue;
-            uint32_t internalId;
-        };
-
-        std::vector<HexToId> _versionHexTable[MAX_VERSION_INDEX] = {};
+    std::vector<HexToId> _versionHexTable[MAX_VERSION_INDEX] = {};
 };
 
 #define sOpcodeTables OpcodeTables::getInstance()

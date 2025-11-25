@@ -1,37 +1,63 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
+#include "Objects/Units/Unit.hpp"
 #include "Objects/Units/Players/PlayerDefines.hpp"
 #include "Objects/Units/Stats.h"
 #include "Management/QuestDefines.hpp"
-#include "Management/Battleground/BattlegroundMgr.hpp"
-#include "Management/MailMgr.h"
-#include "Management/ItemProperties.hpp"
-#include "Management/AchievementMgr.h"
-#include "Map/Maps/InstanceMgr.hpp"
-#include "Objects/Units/Unit.hpp" 
-#include "Storage/MySQLStructures.h"
-#include "Macros/PlayerMacros.hpp"
-#include "Objects/Units/Creatures/AIInterface.h" //?? what?
-#include "WorldConf.h"
-#include "Management/AuctionHouse.h"
-#include "Management/Guild/Guild.hpp"
 #include "Management/ObjectUpdates/UpdateManager.hpp"
 #include "Data/WoWPlayer.hpp"
+#include "AEVersion.hpp"
+#include "Logging/Log.hpp"
+#include "Server/UpdateFieldInclude.h"
+#include "Objects/ItemDefines.hpp"
+
+// todo include header for now struct InstancePlayerBind definition
+#include "Map/Maps/InstanceMgr.hpp"
+
+#include <Utilities/utf8.hpp>
+
 #include <mutex>
 
-#include "TradeData.hpp"
-#include "Map/Maps/InstanceDefines.hpp"
+#include "Utilities/CallBack.h"
 
+class QueryResult;
+
+namespace WDB::Structures
+{
+    struct SpellShapeshiftFormEntry;
+    struct ChrClassesEntry;
+    struct ChrRacesEntry;
+#if VERSION_STRING > TBC
+    struct ScalingStatValuesEntry;
+    struct ScalingStatDistributionEntry;
+#endif
+}
+
+//struct InstancePlayerBind;
+struct ItemSet;
+class AchievementMgr;
+class Mailbox;
+
+namespace MySQLStructure
+{
+    struct VendorRestrictions;
+}
+
+struct VoidStorageItem;
+class TradeData;
+class ItemInterface;
+struct ItemProperties;
+struct Auction;
+enum AchievementCriteriaTypes : uint8_t;
 class ArenaTeam;
 struct CharCreate;
 class QuestLogEntry;
 struct BGScore;
-class AchievementMgr;
 class Channel;
 class Creature;
 class Battleground;
@@ -50,7 +76,6 @@ struct GuildMember;
 class QueryBuffer;
 struct QuestProperties;
 struct SpellShapeshiftForm;
-class Battleground;
 class Instance;
 class InstanceSaved;
 struct CharRaceEntry;
@@ -70,12 +95,12 @@ typedef std::unordered_map<uint32_t, time_t> InstanceTimeMap;
 // 2. Use const wherever possible
 // 3. move stuff out of this class
 // 4. Check out the members (there are duplicats)
-// 5. Get rid of legacy files (Player.Legacy.cpp)
+// 5. Get rid of legacy files (Player.Legacy.cpp) - done!?
 struct WoWPlayer;
+
 class SERVER_DECL Player : public Unit
 {
 public:
-
     friend class WorldSession;
     friend class Pet;
 
@@ -84,11 +109,10 @@ public:
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Essential functions
-
     void Update(unsigned long time_passed);             // hides function Unit::Update
     void AddToWorld();                                  // hides virtual function Object::AddToWorld
-    void AddToWorld(WorldMap* pMapMgr);                   // hides virtual function Object::AddToWorld
-    // void PushToWorld(WorldMap*);                       // not used
+    void AddToWorld(WorldMap* pMapMgr);                 // hides virtual function Object::AddToWorld
+    // void PushToWorld(WorldMap*);                     // not used
     // void RemoveFromWorld(bool free_guid);            // not used
     void OnPrePushToWorld() override;                   // overrides virtual function  Object::OnPrePushToWorld
     void OnPushToWorld() override;                      // overrides virtual function  Object::OnPushToWorld
@@ -101,7 +125,6 @@ public:
 private:
     const WoWPlayer* playerData() const { return reinterpret_cast<WoWPlayer*>(wow_data); }
 public:
-
     //////////////////////////////////////////////////////////////////////////////////////////
     // Data
     uint64_t getDuelArbiter() const;
@@ -124,7 +147,8 @@ public:
     void setGuildLevel(uint32_t guildLevel);
 #endif
 
-    //bytes begin
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // bytes begin
     uint32_t getPlayerBytes() const;
     void setPlayerBytes(uint32_t bytes);
 
@@ -139,26 +163,27 @@ public:
 
     uint8_t getHairColor() const;
     void setHairColor(uint8_t color);
-    //bytes end
+    // bytes end
+    //////////////////////////////////////////////////////////////////////////////////////////
 
-    //bytes2 begin
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // bytes2 begin
     uint32_t getPlayerBytes2() const;
     void setPlayerBytes2(uint32_t bytes2);
 
     uint8_t getFacialFeatures() const;
     void setFacialFeatures(uint8_t feature);
 
-    uint8_t getBytes2UnknownField() const;
-    void setBytes2UnknownField(uint8_t value);
-
     uint8_t getBankSlots() const;
     void setBankSlots(uint8_t slots);
 
     uint8_t getRestState() const;
     void setRestState(uint8_t state);
-    //bytes2 end
+    // bytes2 end
+    //////////////////////////////////////////////////////////////////////////////////////////
 
-    //bytes3 begin
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // bytes3 begin
     uint32_t getPlayerBytes3() const;
     void setPlayerBytes3(uint32_t bytes3);
 
@@ -172,9 +197,12 @@ public:
     uint8_t getPvpRank() const;
     void setPvpRank(uint8_t rank);
 
+#if VERSION_STRING >= TBC
     uint8_t getArenaFaction() const;
     void setArenaFaction(uint8_t faction);
-    //bytes3 end
+#endif
+    // bytes3 end
+    //////////////////////////////////////////////////////////////////////////////////////////
 
     uint32_t getDuelTeam() const;
     void setDuelTeam(uint32_t team);
@@ -182,7 +210,8 @@ public:
     uint32_t getGuildTimestamp() const;
     void setGuildTimestamp(uint32_t timestamp);
 
-    //QuestLog start
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // QuestLog start
     uint32_t getQuestLogEntryForSlot(uint8_t slot) const;
     void setQuestLogEntryBySlot(uint8_t slot, uint32_t questEntry);
 
@@ -199,9 +228,11 @@ public:
 
     uint32_t getQuestLogExpireTimeForSlot(uint8_t slot) const;
     void setQuestLogExpireTimeBySlot(uint8_t slot, uint32_t expireTime);
-    //QuestLog end
+    // QuestLog end
+    //////////////////////////////////////////////////////////////////////////////////////////
 
-//VisibleItem start
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // VisibleItem start
     uint32_t getVisibleItemEntry(uint32_t slot) const;
     void setVisibleItemEntry(uint32_t slot, uint32_t entry);
 #if VERSION_STRING > TBC
@@ -211,10 +242,38 @@ public:
     uint32_t getVisibleItemEnchantment(uint32_t slot, uint8_t pos) const;
     void setVisibleItemEnchantment(uint32_t slot, uint8_t pos, uint32_t enchantment);
 #endif
-//VisibleItem end
+    // VisibleItem end
+    //////////////////////////////////////////////////////////////////////////////////////////
+
+    uint64_t getInventorySlotItemGuid(uint8_t slot) const;
+    void setInventorySlotItemGuid(uint8_t slot, uint64_t guid);
+
+    uint64_t getPackSlotItemGuid(uint8_t slot) const;
+    void setPackSlotItemGuid(uint8_t slot, uint64_t guid);
+
+    uint64_t getBankSlotItemGuid(uint8_t slot) const;
+    void setBankSlotItemGuid(uint8_t slot, uint64_t guid);
+
+    uint64_t getBankBagSlotItemGuid(uint8_t slot) const;
+    void setBankBagSlotItemGuid(uint8_t slot, uint64_t guid);
 
     uint64_t getVendorBuybackSlot(uint8_t slot) const;
     void setVendorBuybackSlot(uint8_t slot, uint64_t guid);
+
+#if VERSION_STRING < Cata
+    uint64_t getKeyRingSlotItemGuid(uint8_t slot) const;
+    void setKeyRingSlotItemGuid(uint8_t slot, uint64_t guid);
+#endif
+
+#if VERSION_STRING == TBC
+    uint64_t getVanityPetSlotItemGuid(uint8_t slot) const;
+    void setVanityPetSlotItemGuid(uint8_t slot, uint64_t guid);
+#endif
+
+#if VERSION_STRING == WotLK
+    uint64_t getCurrencyTokenSlotItemGuid(uint8_t slot) const;
+    void setCurrencyTokenSlotItemGuid(uint8_t slot, uint64_t guid);
+#endif
 
     uint64_t getFarsightGuid() const;
     void setFarsightGuid(uint64_t farsightGuid);
@@ -336,7 +395,7 @@ public:
     uint32_t getWatchedFaction() const;
     void setWatchedFaction(uint32_t factionId);
 
-#if VERSION_STRING < WotLK
+#if VERSION_STRING == TBC
     float getManaRegeneration() const;
     void setManaRegeneration(float value);
 
@@ -407,8 +466,13 @@ public:
     uint32_t getPlayerFieldBytes() const;
     void setPlayerFieldBytes(uint32_t bytes);
 
-    uint8_t getActionBarId() const;
-    void setActionBarId(uint8_t actionBarId);
+    uint8_t getPlayerFieldBytesMiscFlag() const;
+    void setPlayerFieldBytesMiscFlag(uint8_t miscFlag);
+    void addPlayerFieldBytesMiscFlag(uint8_t miscFlag);
+    void removePlayerFieldBytesMiscFlag(uint8_t miscFlag);
+
+    uint8_t getEnabledActionBars() const;
+    void setEnabledActionBars(uint8_t actionBarId);
     // playerfieldbytes end
 
 #if VERSION_STRING < Cata
@@ -443,6 +507,11 @@ public:
     // playerfieldbytes2 start
     uint32_t getPlayerFieldBytes2() const;
     void setPlayerFieldBytes2(uint32_t bytes);
+
+    uint8_t getAuraVision() const;
+    void setAuraVision(uint8_t auraVision);
+    void addAuraVision(uint8_t auraVision);
+    void removeAuraVision(uint8_t auraVision);
     // playerfieldbytes2 end
 
     uint32_t getCombatRating(uint8_t combatRating) const;
@@ -458,9 +527,6 @@ public:
     void setArenaTeamMemberRank(uint8_t teamSlot, uint32_t rank);
     // field_arena_team_info end
 #endif
-
-    uint64_t getInventorySlotItemGuid(uint8_t index) const;
-    void setInventorySlotItemGuid(uint8_t index, uint64_t guid);
 
 #if VERSION_STRING > Classic
 #if VERSION_STRING < Cata
@@ -491,15 +557,10 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////////
     // Movement/Position
 public:
-#if VERSION_STRING >= Cata
-    void sendForceMovePacket(UnitSpeedType speed_type, float speed);
-    void sendMoveSetSpeedPaket(UnitSpeedType speed_type, float speed);
-#endif
     void resendSpeed();
 
     bool isMoving() const;
 
-    bool isMounted() const;
     uint32_t getMountSpellId() const;
     void setMountSpellId(uint32_t id);
 
@@ -507,12 +568,7 @@ public:
     uint32_t getMountVehicleId() const;
     void setMountVehicleId(uint32_t id);
 
-    void dismount();
-
     void handleAuraInterruptForMovementFlags(MovementInfo const& movement_info);
-
-    uint32_t getAreaId() const;
-    void setAreaId(uint32_t area);
 
     bool isInCity() const;
 
@@ -523,7 +579,7 @@ public:
     uint32_t m_underwaterTime = 180000;
     uint32_t m_underwaterMaxTime = 180000;
     uint32_t m_underwaterState = 0;
-    uint32_t m_underwaterLastDamage = Util::getMSTime();
+    uint32_t m_underwaterLastDamage;
 
     void handleKnockback(Object* caster, float horizontal, float vertical) override;
 
@@ -564,8 +620,6 @@ protected:
     uint32_t m_mountSpellId = 0;
     uint32_t m_mountVehicleId = 0;
 
-    uint32_t m_areaId = 0;
-
     float m_noseLevel = .0f;
 
     LocationVector m_sentTeleportPosition;
@@ -584,11 +638,11 @@ public:
     void zoneUpdate(uint32_t zoneId);
     void forceZoneUpdate();
 
-    bool hasAreaExplored(DBC::Structures::AreaTableEntry const*);
+    bool hasAreaExplored(WDB::Structures::AreaTableEntry const*);
     bool hasOverlayUncovered(uint32_t overlayId);
     void eventExploration();
 
-    uint32_t m_explorationTimer = Util::getMSTime();
+    uint32_t m_explorationTimer;
 
     void ejectFromInstance();
     bool exitInstance();
@@ -598,10 +652,10 @@ private:
 public:
     bool create(CharCreate& charCreateContent);
 
-    DBC::Structures::ChrRacesEntry const* getDbcRaceEntry();
-    DBC::Structures::ChrClassesEntry const* getDbcClassEntry();
+    WDB::Structures::ChrRacesEntry const* getDbcRaceEntry();
+    WDB::Structures::ChrClassesEntry const* getDbcClassEntry();
 
-    std::string getName() const;
+    utf8_string getName() const;
     void setName(std::string name);
 
     uint32_t getLoginFlag() const;
@@ -611,17 +665,17 @@ public:
 
     void applyLevelInfo(uint32_t newLevel);
 
-    virtual bool isClassMage();
-    virtual bool isClassDeathKnight();
-    virtual bool isClassPriest();
-    virtual bool isClassRogue();
-    virtual bool isClassShaman();
-    virtual bool isClassHunter();
-    virtual bool isClassWarlock();
-    virtual bool isClassWarrior();
-    virtual bool isClassPaladin();
-    virtual bool isClassMonk();
-    virtual bool isClassDruid();
+    virtual bool isClassMage() const;
+    virtual bool isClassDeathKnight() const;
+    virtual bool isClassPriest() const;
+    virtual bool isClassRogue() const;
+    virtual bool isClassShaman() const;
+    virtual bool isClassHunter() const;
+    virtual bool isClassWarlock() const;
+    virtual bool isClassWarrior() const;
+    virtual bool isClassPaladin() const;
+    virtual bool isClassMonk() const;
+    virtual bool isClassDruid() const;
 
     PlayerTeam getTeam() const;
     PlayerTeam getBgTeam() const;
@@ -634,10 +688,22 @@ public:
     bool isTeamHorde() const;
     bool isTeamAlliance() const;
 
+    // Returns unit charmer
     Unit* getUnitOwner() override;
+    // Returns unit charmer
+    Unit const* getUnitOwner() const override;
+    // Returns unit charmer or self
     Unit* getUnitOwnerOrSelf() override;
+    // Returns unit charmer or self
+    Unit const* getUnitOwnerOrSelf() const override;
+    // Returns player charmer
     Player* getPlayerOwner() override;
+    // Returns player charmer
+    Player const* getPlayerOwner() const override;
+    // Returns player charmer or self
     Player* getPlayerOwnerOrSelf() override;
+    // Returns player charmer or self
+    Player const* getPlayerOwnerOrSelf() const override;
 
     void toggleAfk();
     void toggleDnd();
@@ -652,17 +718,17 @@ public:
     void sendInitialLogonPackets();
 
 private:
-    LevelInfo* m_levelInfo = nullptr;
+    LevelInfo const* m_levelInfo = nullptr;
 
-    DBC::Structures::ChrRacesEntry const* m_dbcRace = nullptr;
-    DBC::Structures::ChrClassesEntry const* m_dbcClass = nullptr;
+    WDB::Structures::ChrRacesEntry const* m_dbcRace = nullptr;
+    WDB::Structures::ChrClassesEntry const* m_dbcClass = nullptr;
 
     uint32_t m_loadHealth = 0;
     uint32_t m_loadMana = 0;
 
     uint32_t m_classicMaxLevel = 60;
 
-    std::string m_name;
+    utf8_string m_name;
 
     uint32_t m_loginFlag = LOGIN_NO_FLAG;
 
@@ -705,6 +771,8 @@ public:
 
     void setEnteringToWorld();
 
+    Creature* getCreatureWhenICanInteract(WoWGuid const& guid, uint32_t npcflagmask);
+
     UpdateManager& getUpdateMgr();
 
 private:
@@ -743,24 +811,22 @@ public:
 #endif
 
     // PlayerStats.cpp
-    void updateManaRegeneration();
+    void updateManaRegeneration(bool initialUpdate = false);
+    void updateRageRegeneration(bool initialUpdate = false);
+#if VERSION_STRING >= WotLK
+    void updateRunicPowerRegeneration(bool initialUpdate = false);
+#endif
+    // Returns health regen value per 2 sec
+    float_t calculateHealthRegenerationValue(bool inCombat) const;
 
 private:
     // Regenerate timers
-    // Rage and Runic Power
-    uint16_t m_rageRunicPowerRegenerateTimer = 0;
 #if VERSION_STRING >= Cata
     uint16_t m_holyPowerRegenerateTimer = 0;
 #endif
 
     // This timer ticks even if the player is not eating or drinking
     uint16_t m_foodDrinkSpellVisualTimer = 5000;
-
-#if VERSION_STRING == Classic
-    // Classic doesn't have these in unit or playerdata
-    float m_manaRegeneration = 0.0f;
-    float m_manaRegenerationWhileCasting = 0.0f;
-#endif
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Database stuff
@@ -771,38 +837,31 @@ public:
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Spells and skills
-#if VERSION_STRING >= Cata
-    void setInitialPlayerProfessions();
-#endif
-    bool hasSpell(uint32_t spellId);
-    bool hasDeletedSpell(uint32_t spellId);
-    void sendSmsgInitialSpells();
+    bool hasSpell(uint32_t spellId) const;
+    bool hasDeletedSpell(uint32_t spellId) const;
     void addSpell(uint32_t spellId, uint16_t fromSkill = 0);
-    bool removeSpell(uint32_t spellId, bool moveToDeleted, bool supercededSpell, uint32_t supercededSpellId);
+    void addDeletedSpell(uint32_t spellId);
+    bool removeSpell(uint32_t spellId, bool moveToDeleted);
     bool removeDeletedSpell(uint32_t spellId);
+    SpellSet const& getSpellSet() const;
+    SpellSet const& getDeletedSpellSet() const;
+
+    void sendSmsgInitialSpells();
     void sendPreventSchoolCast(uint32_t spellSchool, uint32_t timeMs);
 
     void resetSpells();
 
-    void addOnStrikeSpell(SpellInfo const* spellInfo, uint32_t delay);
-    void removeOnStrikeSpell(SpellInfo const* spellInfo);
-
-    void addOnStrikeSpellDamage(uint32_t spellId, uint32_t minDmg, uint32_t maxDmg);
-    void removeOnStrikeSpellDamage(uint32_t spellId);
-
     void addShapeShiftSpell(uint32_t spellId);
     void removeShapeShiftSpell(uint32_t spellId);
-    void sendAvailSpells(DBC::Structures::SpellShapeshiftFormEntry const* shapeshiftFormEntry, bool active);
+    SpellSet const& getShapeshiftSpells() const;
+
+    void sendAvailSpells(WDB::Structures::SpellShapeshiftFormEntry const* shapeshiftFormEntry, bool active);
 
     bool isInFeralForm();
+    bool isInDisallowedMountForm() const;
 
-    //Spells variables
-    StrikeSpellMap m_onStrikeSpells;
-    StrikeSpellDmgMap m_onStrikeSpellDmg;
+    // Spells variables
     SpellOverrideMap m_spellOverrideMap;
-    SpellSet m_spells;
-    SpellSet m_deletedSpells;
-    SpellSet mShapeShiftSpells;
 
     void updateAutoRepeatSpell();
     bool canUseFlyingMountHere();
@@ -825,8 +884,7 @@ public:
     float getResistRCrit() { return m_resistCritical[1]; }
     void setResistRCrit(float newvalue) { m_resistCritical[1] = newvalue; }
 
-    float m_resistCritical[2] = { 0 };             // when we are a victim we can have talents to decrease chance for critical hit. This is a negative value and it's added to critchances
-
+    float m_resistCritical[2] = { 0 }; // when we are a victim we can have talents to decrease chance for critical hit. This is a negative value and it's added to critchances
 
     // Cooldowns
     bool hasSpellOnCooldown(SpellInfo const* spellInfo);
@@ -872,6 +930,9 @@ public:
     void removeAllSkills();
     void updateSkillMaximumValues();
     float getSkillUpChance(uint16_t id);
+#if VERSION_STRING >= Cata
+    void setInitialPlayerProfessions();
+#endif
 
     uint32_t getArmorProficiency() const;
     void addArmorProficiency(uint32_t proficiency);
@@ -886,7 +947,6 @@ public:
     // Initializes glyph slots or updates them on levelup
     void updateGlyphs();
 #endif
-
     // Combo Points
     uint64_t getComboPointTarget() const;
     int8_t getComboPoints() const;
@@ -897,11 +957,19 @@ public:
     bool m_FirstCastAutoRepeat = false;
 
 private:
+    // learningPreviousRanks and ignorePreviousRanks are for internal use only
+    void _addSpell(uint32_t spellId, uint16_t fromSkill = 0, bool learningPreviousRanks = false, bool ignorePreviousRanks = false);
+    // removingPreviousRanks and forceRemoveHigherRanks are for internal use only
+    bool _removeSpell(uint32_t spellId, bool moveToDeleted, bool silently = false, bool removingPreviousRank = false, bool forceRemoveHigherRanks = false);
+    SpellSet m_spellSet;
+    SpellSet m_deletedSpellSet;
+    SpellSet m_shapeshiftSpells;
+
     bool m_canDualWield2H = false;
 
     // Skills
-    void _verifySkillValues(DBC::Structures::SkillLineEntry const* skillEntry, uint16_t* currentValue, uint16_t* maxValue, uint16_t* skillStep, bool* requireUpdate);
-    void _verifySkillValues(DBC::Structures::SkillLineEntry const* skillEntry, uint16_t* currentValue, uint16_t* maxValue, uint16_t* skillStep);
+    void _verifySkillValues(WDB::Structures::SkillLineEntry const* skillEntry, uint16_t* currentValue, uint16_t* maxValue, uint16_t* skillStep, bool* requireUpdate);
+    void _verifySkillValues(WDB::Structures::SkillLineEntry const* skillEntry, uint16_t* currentValue, uint16_t* maxValue, uint16_t* skillStep);
     void _updateSkillFieldOnValueChange(const PlayerSkillFieldPosition fieldPosition, uint16_t skillStep, uint16_t currentValue, uint16_t maxValue);
     void _updateSkillBonusFields(const PlayerSkillFieldPosition fieldPosition, uint16_t tempBonus, uint16_t permBonus);
     SkillMap m_skills;
@@ -916,8 +984,6 @@ private:
     // Talents
 public:
     void learnTalent(uint32_t talentId, uint32_t talentRank);
-    void addTalent(SpellInfo const* sp);
-    void removeTalent(uint32_t spellId, bool onSpecChange = false);
     // Resets only current spec's talents
     void resetTalents();
     // Resets talents for both specs
@@ -959,7 +1025,11 @@ protected:
     // Actionbar
 public:
     void setActionButton(uint8_t button, uint32_t action, uint8_t type, uint8_t misc);
-    void sendActionBars(bool clearBars);
+    // Action param
+    // 0: Normal action, sends bars
+    // 1: Sent after changing talent spec, sends bars and client will check if spell is known
+    // 2: Sent before changing talent spec, clears bars clientside
+    void sendActionBars(uint8_t action);
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Auction
@@ -973,7 +1043,9 @@ public:
     void cancelTrade(bool sendToSelfAlso, bool silently = false);
 
 private:
-    TradeData* m_TradeData = nullptr;
+    std::unique_ptr<TradeData> m_TradeData;
+
+    std::mutex m_tradeMutex;
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Messages
@@ -1015,8 +1087,6 @@ public:
     float m_goLastXRotation = 0.0f;
     float m_goLastYRotation = 0.0f;
 
-    bool m_saveAllChangesCommand = false;
-
     AIInterface* m_aiInterfaceWaypoint = nullptr;
 
     bool m_isGmInvisible = false;
@@ -1057,8 +1127,8 @@ public:
 
 #if VERSION_STRING > TBC
     void calculateHeirloomBonus(ItemProperties const* proto, int16_t slot, bool apply);
-    DBC::Structures::ScalingStatDistributionEntry const* getScalingStatDistributionFor(ItemProperties const& itemProto) const;
-    DBC::Structures::ScalingStatValuesEntry const* getScalingStatValuesFor(ItemProperties const& itemProto) const;
+    WDB::Structures::ScalingStatDistributionEntry const* getScalingStatDistributionFor(ItemProperties const& itemProto) const;
+    WDB::Structures::ScalingStatValuesEntry const* getScalingStatValuesFor(ItemProperties const& itemProto) const;
 #endif
 
     // Player's item storage
@@ -1066,15 +1136,15 @@ public:
 
     void removeTempItemEnchantsOnArena();
 
-    void addGarbageItem(Item* item);
+    void addGarbageItem(std::unique_ptr<Item> item);
 
     void applyItemMods(Item* item, int16_t slot, bool apply, bool justBrokedown = false, bool skipStatApply = false);
 
 private:
-    ItemInterface* m_itemInterface = nullptr;
+    std::unique_ptr<ItemInterface> m_itemInterface;
 
     void removeGarbageItems();
-    std::list<Item*> m_GarbageItems;
+    std::list<std::unique_ptr<Item>> m_GarbageItems;
 
 protected:
     std::list<ItemSet> m_itemSets;
@@ -1095,10 +1165,9 @@ private:
     uint8_t m_raidDifficulty = 0;
 
     //////////////////////////////////////////////////////////////////////////////////////////
-    // Die, Kill, Corpse & Repop
+    // Die, Corpse & Repop
 public:
     void die(Unit* unitAttacker, uint32_t damage, uint32_t spellId) override;
-    void kill();
 
     void setCorpseData(LocationVector position, int32_t instanceId);
     LocationVector getCorpseLocation() const;
@@ -1191,13 +1260,13 @@ private:
     // Charter
 public:
     void unsetCharter(uint8_t charterType);
-    Charter* getCharter(uint8_t charterType);
+    Charter const* getCharter(uint8_t charterType);
 
-    bool canSignCharter(Charter* charter, Player* requester);
+    bool canSignCharter(Charter const* charter, Player* requester);
     void initialiseCharters();
 
 private:
-    Charter* m_charters[NUM_CHARTER_TYPES] = {nullptr};
+    std::array<Charter*, NUM_CHARTER_TYPES> m_charters = { nullptr };
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Guild
@@ -1222,7 +1291,7 @@ public:
 
     bool isInGroup() const;
 
-    Group* getGroup();
+    Group* getGroup() const;
     bool isGroupLeader() const;
 
     int8_t getSubGroupSlot() const;
@@ -1281,7 +1350,7 @@ public:
     uint32_t getInviteArenaTeamId() const;
 
 private:
-    ArenaTeam* m_arenaTeams[NUM_ARENA_TEAM_TYPES] = {nullptr};
+    std::array<ArenaTeam*, NUM_ARENA_TEAM_TYPES> m_arenaTeams = { nullptr };
     uint32_t m_arenaPoints = 0;
     uint32_t m_inviteArenaTeamId = 0;
 
@@ -1399,7 +1468,7 @@ private:
 public:
     void acceptQuest(uint64_t guid, uint32_t quest_id);
 
-    void setQuestLogInSlot(QuestLogEntry* entry, uint32_t slotId);
+    QuestLogEntry* createQuestLogInSlot(QuestProperties const* questProperties, uint8_t slotId);
 
     bool hasAnyQuestInQuestSlot() const;
     bool hasQuestInQuestLog(uint32_t questId) const;
@@ -1422,13 +1491,13 @@ public:
     void addQuestToRemove(uint32_t questId);
 
     void addQuestToFinished(uint32_t questId);
-    bool hasQuestFinished(uint32_t questId);
+    bool hasQuestFinished(uint32_t questId) const;
 
     void areaExploredQuestEvent(uint32_t questId);
 
     void clearQuest(uint32_t questId);
 
-    bool hasQuestForItem(uint32_t itemId);
+    bool hasQuestForItem(uint32_t itemId) const;
 
     void addQuestSpell(uint32_t spellId);
     bool hasQuestSpell(uint32_t spellId);
@@ -1445,7 +1514,7 @@ public:
     std::set<uint32_t> getFinishedQuests() const;
 
 private:
-    QuestLogEntry* m_questlog[MAX_QUEST_LOG_SIZE] = {nullptr};
+    std::array<std::unique_ptr<QuestLogEntry>, MAX_QUEST_LOG_SIZE> m_questlog;
 
     mutable std::mutex m_mutextDailies;
     std::set<uint32_t> m_finishedDailies = {};
@@ -1459,7 +1528,6 @@ private:
     //////////////////////////////////////////////////////////////////////////////////////////
     // Social
 public:
-
     struct SocialFriends
     {
         uint32_t friendGuid = 0;
@@ -1500,7 +1568,7 @@ public:
     void speedCheatReset();
 
 private:
-    SpeedCheatDetector* m_speedCheatDetector;
+    std::unique_ptr<SpeedCheatDetector> m_speedCheatDetector;
 
     //Speed
     //Fly
@@ -1533,45 +1601,28 @@ public:
     VoidStorageItem* getVoidStorageItem(uint64_t id, uint8_t& slot) const;
 
 private:
-    VoidStorageItem* _voidStorageItems[VOID_STORAGE_MAX_SLOT];
+    std::array<std::unique_ptr<VoidStorageItem>, VOID_STORAGE_MAX_SLOT> _voidStorageItems;
 #endif
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Taxi
-public:   
-    TaxiPath* getTaxiPath() const;
-    void setTaxiPath(TaxiPath* path);
+public:
+    bool activateTaxiPathTo(std::vector<uint32_t> const& nodes, Creature* npc = nullptr, uint32_t spellid = 0);
+    bool activateTaxiPathTo(uint32_t taxi_path_id, uint32_t spellid = 0);
+    bool activateTaxiPathTo(uint32_t taxi_path_id, Creature* npc);
+    void cleanupAfterTaxiFlight();
+    void continueTaxiFlight() const;
+    void sendTaxiNodeStatusMultiple();
 
-    void loadTaxiMask(const char* data);
-    const uint32_t& getTaxiMask(uint32_t index) const;
-    void setTaxiMask(uint32_t index, uint32_t value);
-
-    void setTaxiPosition();
-    void unsetTaxiPosition();
-
+    bool isInFlight() const;
     bool isOnTaxi() const;
-    void setOnTaxi(bool state);
 
-    void startTaxiPath(TaxiPath* path, uint32_t modelid, uint32_t start_node);
-    void skipTaxiPathNodesToEnd(TaxiPath* path);
-    void dismountAfterTaxiPath(uint32_t money, float x, float y, float z);
-    void interpolateTaxiPosition();
+    void initTaxiNodesForLevel();
 
-    void eventTeleportTaxi(uint32_t mapId, float x, float y, float z);
+    TaxiPath* getTaxiData() const { return m_taxi.get(); }
 
 private:
-    TaxiPath* m_currentTaxiPath = nullptr;
-
-    uint32_t m_taxiMountDisplayId = 0;
-    uint32_t m_lastTaxiNode = 0;
-    uint32_t m_taxiMapChangeNode = 0;
-    uint32_t m_taxiRideTime = 0;
-    uint32_t m_taxiMask[DBC_TAXI_MASK_SIZE];
-
-    LocationVector m_taxiPosition = { 0, 0, 0 };
-
-    bool m_isOnTaxi = false;
-    std::vector<TaxiPath*> m_taxiPaths;
+    std::unique_ptr<TaxiPath> m_taxi;
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Loot
@@ -1598,25 +1649,27 @@ private:
     // Reputation/faction
 public:
     void setFactionStanding(uint32_t faction, int32_t value);
-    int32_t getFactionStanding(uint32_t faction);
-    int32_t getBaseFactionStanding(uint32_t faction);
+    std::optional<int32_t> getFactionStanding(uint32_t faction) const;
+    std::optional<int32_t> getBaseFactionStanding(uint32_t faction) const;
     void modFactionStanding(uint32_t faction, int32_t value);
     
-    Standing getFactionStandingRank(uint32_t faction);
-    static Standing getReputationRankFromStanding(int32_t value);
+    Standing getFactionStandingRank(uint32_t faction) const;
+
+    void applyForcedReaction(uint32_t faction_id, Standing rank, bool apply);
+    std::optional<Standing> getForcedReputationRank(WDB::Structures::FactionTemplateEntry const* factionTemplateEntry) const;
 
     void setFactionAtWar(uint32_t faction, bool set);
 
-    bool isHostileBasedOnReputation(DBC::Structures::FactionEntry const* factionEntry);
+    bool isHostileBasedOnReputation(WDB::Structures::FactionEntry const* factionEntry, bool skipForcedReactions = false) const;
     void updateInrangeSetsBasedOnReputation();
 
     void onKillUnitReputation(Unit* unit, bool innerLoop);
-    void onTalkReputation(DBC::Structures::FactionEntry const* factionEntry);
+    void onTalkReputation(WDB::Structures::FactionEntry const* factionEntry);
     
     void setFactionInactive(uint32_t faction, bool set);
-    bool addNewFaction(DBC::Structures::FactionEntry const* factionEntry, int32_t standing, bool base);
-    void onModStanding(DBC::Structures::FactionEntry const* factionEntry, FactionReputation* reputation);
-    uint32_t getExaltedCount();
+    bool addNewFaction(WDB::Structures::FactionEntry const* factionEntry, int32_t standing, bool base);
+    void onModStanding(WDB::Structures::FactionEntry const* factionEntry, FactionReputation* reputation);
+    uint32_t getExaltedCount() const;
 
     void sendSmsgInitialFactions();
     void initialiseReputation();
@@ -1630,7 +1683,7 @@ public:
 private:
     ReputationMap m_reputation;
     int32_t m_pctReputationMod = 0;
-    FactionReputation* m_reputationByListId[128] = { nullptr };
+    std::array<FactionReputation*, PLAYER_REPUTATION_COUNT> m_reputationByListId = { nullptr };
 
     uint32_t m_championingFactionId = 0;
 
@@ -1639,7 +1692,7 @@ private:
 public:
     uint16_t getServersideDrunkValue() const;
     void setServersideDrunkValue(uint16_t newDrunkValue, uint32_t itemId = 0);
-    static DrunkenState getDrunkStateByValue(uint16_t value);
+    static PlayerBytes3_DrunkValue getDrunkStateByValue(uint16_t value);
     void handleSobering();
 
 private:
@@ -1694,26 +1747,41 @@ private:
     /////////////////////////////////////////////////////////////////////////////////////////
     // Pets/Summons
 public:
-    std::list<Pet*> getSummons();
-    void addPetToSummons(Pet* pet);
-    void removePetFromSummons(Pet* pet);
-    Pet* getFirstPetFromSummons() const;
-
-    PlayerPet* getPlayerPet(uint32_t petId);
-    void addPlayerPet(PlayerPet* pet, uint32_t index);
-    void removePlayerPet(uint32_t petId);
+    PetCache const* getPetCache(uint8_t petId) const;
+    PetCache* getModifiablePetCache(uint8_t petId) const;
+    PetCacheMap const& getPetCacheMap() const;
+    // <Slot, pet id>
+    std::map<uint8_t, uint8_t> const& getPetCachedSlotMap() const;
+    void addPetCache(std::unique_ptr<PetCache> petCache, uint8_t index);
+    void removePetCache(uint8_t petId);
     uint8_t getPetCount() const;
 
-    uint32_t getFreePetNumber() const;
+    uint8_t getFreePetNumber();
+    std::optional<uint8_t> getPetIdFromSlot(uint8_t slot) const;
+    bool hasPetInSlot(uint8_t slot) const;
+    std::optional<uint8_t> findFreeActivePetSlot() const;
+    std::optional<uint8_t> findFreeStablePetSlot() const;
 
-    void spawnPet(uint32_t petId);
-    void spawnActivePet();
-    void dismissActivePets();
+    bool tryPutPetToSlot(uint8_t petId, uint8_t newSlot, bool sendErrors = true);
+
+    // Summons existing pet from PetCache map
+    // Pet must be in active slot
+    void spawnPet(uint8_t petId);
+    // Summons temporarily unsummoned pet if one exists
+    void summonTemporarilyUnsummonedPet();
+    // Unsummons current pet and saves it id for quick re-summon
+    // Used i.e. when entering vehicle, mounting or using taxi
+    void unSummonPetTemporarily();
+    bool isPetRequiringTemporaryUnsummon() const;
+    void setTemporarilyUnsummonedPetsOffline();
+
+    void setLastBattlegroundPetId(uint8_t petId);
+    uint8_t getLastBattlegroundPetId() const;
+    void setLastBattlegroundPetSpell(uint32_t petSpell);
+    uint32_t getLastBattlegroundPetSpell() const;
 
     void setStableSlotCount(uint8_t count);
     uint8_t getStableSlotCount() const;
-
-    uint32_t getUnstabledPetNumber() const;
 
     void eventSummonPet(Pet* summonPet);
     void eventDismissPet();
@@ -1722,18 +1790,24 @@ public:
     void setSummonedObject(Object* summonedObject);
 
 private:
-    std::list<Pet*> m_summons;
-    std::map<uint32_t, PlayerPet*> m_pets;
+    void _spawnPet(PetCache const* petCache);
+
+    PetCacheMap m_cachedPets;
+    // <Slot, pet id>
+    std::map<uint8_t, uint8_t> m_cachedPetSlots;
+
+    uint8_t m_battlegroundLastPetId = 0;
+    uint32_t m_battlegroundLastPetSpell = 0;
 
     uint8_t m_stableSlotCount = 0;
-    uint32_t m_maxPetNumber = 0;
+    uint8_t m_maxPetNumber = 0;
 
     Object* m_summonedObject = nullptr;
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Misc
 public:
-    bool isGMFlagSet();
+    bool isGMFlagSet() const;
 
     void sendMovie(uint32_t movieId);
 
@@ -1756,6 +1830,7 @@ public:
     void sendDestroyObjectPacket(uint64_t destroyedGuid);
     void sendEquipmentSetUseResultPacket(uint8_t result);
     void sendTotemCreatedPacket(uint8_t slot, uint64_t guid, uint32_t duration, uint32_t spellId);
+    void sendPetTameFailure(uint8_t result) const;
 
     void sendGossipPoiPacket(float posX, float posY, uint32_t icon, uint32_t flags, uint32_t data, std::string name);
     void sendPoiById(uint32_t id);
@@ -1786,15 +1861,15 @@ public:
     void sendEmptyPetSpellList();
     void sendInitialWorldstates();
 
-    bool isPvpFlagSet() override;
+    bool isPvpFlagSet() const override;
     void setPvpFlag() override;
     void removePvpFlag() override;
 
-    bool isFfaPvpFlagSet() override;
+    bool isFfaPvpFlagSet() const override;
     void setFfaPvpFlag() override;
     void removeFfaPvpFlag() override;
 
-    bool isSanctuaryFlagSet() override;
+    bool isSanctuaryFlagSet() const override;
     void setSanctuaryFlag() override;
     void removeSanctuaryFlag() override;
 
@@ -1811,14 +1886,15 @@ public:
     void tagUnit(Object* object);
 
 #if VERSION_STRING > TBC
-    AchievementMgr& getAchievementMgr();
+    void updateAchievementCriteria(AchievementCriteriaTypes type, int32_t miscValue1 = 0, int32_t miscValue2 = 0, uint32_t miscValue3 = 0, Unit* unit = nullptr);
+    AchievementMgr* getAchievementMgr();
 #endif
 
     void sendUpdateDataToSet(ByteBuffer* groupBuf, ByteBuffer* nonGroupBuf, bool sendToSelf);
     void sendWorldStateUpdate(uint32_t worldState, uint32_t value);
 
     bool canBuyAt(MySQLStructure::VendorRestrictions const* vendor);
-    bool canTrainAt(Trainer* trainer);
+    bool canTrainAt(Trainer const* trainer);
 
     void sendCinematicCamera(uint32_t id);
 
@@ -1834,7 +1910,7 @@ private:
     uint32_t m_itemUpdateTimer = 0;
 
 #if VERSION_STRING > TBC
-    AchievementMgr m_achievementMgr = this;
+    std::unique_ptr<AchievementMgr> m_achievementMgr;
 #endif
 
     uint32_t m_timeSyncCounter = 0;
@@ -1843,9 +1919,7 @@ private:
     uint32_t m_timeSyncServer = 0;
 
 public:
-
     void buildFlagUpdateForNonGroupSet(uint32_t index, uint32_t flag);
-    void buildPetSpellList(WorldPacket& data) override;
 
     void modifyBonuses(uint32_t type, int32_t val, bool apply);
     void calcExpertise();
@@ -1853,8 +1927,6 @@ public:
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Spells
-    /////////////////////////////////////////////////////////////////////////////////////////
-
     void calculateDamage() override;
     float m_offhandDmgMod = 0.5f;
 
@@ -1874,7 +1946,7 @@ public:
         return getModDamageDonePct(static_cast<uint8_t>(school));
     }
 
-    uint32_t getMainMeleeDamage(uint32_t attackPowerOverride);          // I need this for windfury
+    uint32_t getMainMeleeDamage(uint32_t attackPowerOverride); // I need this for windfury
 
     // Talents
     void setTalentHearthOfWildPCT(int value) { m_hearthOfWildPct = value; }
@@ -1887,7 +1959,6 @@ protected:
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Player loading and savings Serialize character to db
-    /////////////////////////////////////////////////////////////////////////////////////////
 public:
     void saveToDB(bool newCharacter);
     void saveAuras(std::stringstream&);
@@ -1906,7 +1977,6 @@ public:
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Talent Specs
-    /////////////////////////////////////////////////////////////////////////////////////////
     uint16_t m_maxTalentPoints = 0;
     uint8_t m_talentSpecsCount = 1;
     uint8_t m_talentActiveSpec = 0;
@@ -1922,13 +1992,12 @@ public:
 
     PlayerSpec& getActiveSpec();
 
-#if VERSION_STRING > TBC
-    uint32_t GetGlyph(uint32_t spec, uint32_t slot) const { return m_specs[spec].glyphs[slot]; }
+#ifdef FT_GLYPHS
+    uint16_t getGlyph(uint8_t spec, uint16_t slot) const { return m_specs[spec].getGlyph(slot); }
 #endif
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Attack stuff
-    /////////////////////////////////////////////////////////////////////////////////////////
 public:
     void eventAttackStart();
     void eventAttackStop();
@@ -1937,15 +2006,12 @@ public:
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Inrange
-    /////////////////////////////////////////////////////////////////////////////////////////
     void addToInRangeObjects(Object* object) override;
     void onRemoveInRangeObject(Object* object) override;
     void clearInRangeSets() override;
 
     /////////////////////////////////////////////////////////////////////////////////////////
-    //  PVP Stuff
-    /////////////////////////////////////////////////////////////////////////////////////////
-
+    // PVP Stuff
     float m_spellHasteRatingBonus = 1.0f;
     void updateAttackSpeed();
 
@@ -1967,8 +2033,8 @@ public:
 
     uint32_t m_nextSave;
 
-    int m_lifeTapBonus = 0;         //warlock spell related
-    bool m_requiresNoAmmo = false;      //warlock spell related
+    int m_lifeTapBonus = 0;             // warlock spell related
+    bool m_requiresNoAmmo = false;      // warlock spell related
 
     // Misc
     void eventCannibalize(uint32_t amount);
@@ -1982,16 +2048,14 @@ public:
     uint32_t m_baseResistanceModPctNeg[TOTAL_SPELL_SCHOOLS] = { 0 };
     uint32_t m_resistanceModPctPos[TOTAL_SPELL_SCHOOLS] = { 0 };
     uint32_t m_resistanceModPctNeg[TOTAL_SPELL_SCHOOLS] = { 0 };
-    float m_resistHit[2] = { 0 };                  // 0 = melee; 1= ranged;
-    int32_t m_resistHitSpell[TOTAL_SPELL_SCHOOLS] = { 0 }; // spell resist per school
+    float m_resistHit[2] = { 0 };                           // 0 = melee; 1= ranged;
+    int32_t m_resistHitSpell[TOTAL_SPELL_SCHOOLS] = { 0 };  // spell resist per school
     uint32_t m_modPhysCritDmgPct = 0;
-    uint32_t m_rootedCritChanceBonus = 0;         // Class Script Override: Shatter
+    uint32_t m_rootedCritChanceBonus = 0;                   // Class Script Override: Shatter
     uint32_t m_increaseDmgSnaredSlowed = 0;
 
     // SPELL_AURA_MOD_MANA_REGEN_INTERRUPT
     uint32_t m_modInterrManaRegenPct = 0;
-    // SPELL_AURA_MOD_POWER_REGEN
-    int32_t m_modInterrManaRegen = 0;
     // SPELL_AURA_REGEN_MANA_STAT_PCT
     int32_t m_modManaRegenFromStat[STAT_COUNT] = { 0 };
     float m_RegenManaOnSpellResist = 0.0f;
@@ -2003,23 +2067,22 @@ public:
     uint32_t m_statModPctNeg[5] = { 0 };
     uint32_t m_totalStatModPctPos[5] = { 0 };
     uint32_t m_totalStatModPctNeg[5] = { 0 };
-    int32_t m_increaseDamageByType[12] = { 0 };         // mod dmg by creature type
+    int32_t m_increaseDamageByType[12] = { 0 };             // mod dmg by creature type
     float m_increaseDamageByTypePct[12] = { 0 };
     float m_increaseCricticalByTypePct[12] = { 0 };
     int32_t m_detectedRange = 0;
-    float m_pctIgnoreRegenModifier = 0.0f;
-    uint32_t m_retaineDrage = 0;                  // Warrior spell related
+    uint32_t m_retaineDrage = 0;                            // Warrior spell related
 
     void calcStat(uint8_t t);
     float calcRating(PlayerCombatRating t);
     void regenerateHealth(bool inCombat);
 
-    uint64_t m_misdirectionTarget = 0;              // Hunter spell related
+    uint64_t m_misdirectionTarget = 0;                      // Hunter spell related
 
     uint64_t getMisdirectionTarget() { return m_misdirectionTarget; }
     void setMisdirectionTarget(uint64_t PlayerGUID) { m_misdirectionTarget = PlayerGUID; }
 
-    bool m_reincarnation = false;                    // Shaman spell related
+    bool m_reincarnation = false;                           // Shaman spell related
 
     std::map<uint32_t, WeaponModifier> m_damageDone;
     std::map<uint32_t, WeaponModifier> m_toCritChance;
@@ -2050,7 +2113,7 @@ public:
     uint32_t getMaxPersonalRating();
 
     // Instance IDs
-    typedef std::unordered_map<uint32_t /*mapId*/, InstancePlayerBind > BoundInstancesMap;
+    typedef std::unordered_map<uint32_t /*mapId*/, InstancePlayerBind> BoundInstancesMap;
     void loadBoundInstances();
 
     // permanent binds and solo binds by difficulty
@@ -2116,19 +2179,18 @@ public:
     // paladin related
     SpellInfo const* m_lastHealSpell = nullptr;
 
-    Mailbox m_mailBox;
+    std::unique_ptr<Mailbox> m_mailBox;
     bool m_finishingMovesDodge = false;
 
     bool isAttacking() { return m_attacking; }
 
 protected:
-
     void _saveQuestLogEntry(QueryBuffer* buf);
     void _loadQuestLogEntry(QueryResult* result);
 
     void _loadPet(QueryResult* result);
     void _loadPetSpells(QueryResult* result);
-    void _savePet(QueryBuffer* buf);
+    void _savePet(QueryBuffer* buf, bool updateCurrentPetCache = false, Pet* currentPet = nullptr);
     void _savePetSpells(QueryBuffer* buf);
 
     void _eventAttack(bool offhand);
@@ -2137,16 +2199,15 @@ protected:
 
     /////////////////////////////////////////////////////////////////////////////////////////
     // Player Class systems, info and misc things
-    /////////////////////////////////////////////////////////////////////////////////////////
-    uint32_t m_AttackMsgTimer = 0;        // "too far away" and "wrong facing" timer
+    uint32_t m_AttackMsgTimer = 0; // "too far away" and "wrong facing" timer
     bool m_attacking = false;
 
-    //combat mods
+    // combat mods
     float m_blockFromSpellPct = 0.0f;
     float m_critFromSpell = 0.0f;
     float m_spellCritFromSpell = 0.0f;
     float m_hitFromSpell = 0.0f;
-    //stats mods
+    // stats mods
     uint32_t m_healthFromSpell = 0;
     uint32_t m_manaFromSpell = 0;
     uint32_t m_healthFromItems = 0;
@@ -2158,10 +2219,7 @@ protected:
     uint32_t _fields[getSizeOfStructure(WoWPlayer)];
 
 public:
-
-    void addDeletedSpell(uint32_t id) { m_deletedSpells.insert(id); }
-
-    std::map<uint32_t, uint32_t> m_forcedReactions;
+    std::map<uint32_t, Standing> m_forcedReactions;
 
     bool m_passOnLoot = false;
     uint32_t m_tradeSequence;
@@ -2170,6 +2228,10 @@ public:
     uint32_t m_outStealthDamageBonusPeriod = 0;
     uint32_t m_outStealthDamageBonusTimer = 0;
 
+    // helper for InstanceCommands
+    void displayDataStateList();
+    void displayTimerList();
+    void displayCreatureSetForEntry(uint32_t _creatureEntry);
 
     uint32_t checkDamageLimits(uint32_t damage, uint32_t spellId);
 

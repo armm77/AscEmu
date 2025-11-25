@@ -1,18 +1,19 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
-# set up project name
-project(mmaps_generator CXX)
-file(GLOB source *.cpp *.h)
+# set up our project name.
+set(EXECUTABLE_NAME mmaps_generator)
 
-set(source
-    ${source}
-)
+file(GLOB SRC_MMAPS_EXTRACTOR *.cpp *.h)
+
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(${EXECUTABLE_NAME} ${SRC_MMAPS_EXTRACTOR})
 
 include_directories(
     ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Detour/Include
     ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Recast/Include
     ${CMAKE_SOURCE_DIR}/dep/g3dlite/include
-    ${PCRE_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/src/shared
     ${CMAKE_SOURCE_DIR}/src/collision
     ${CMAKE_SOURCE_DIR}/src/collision/Management
@@ -22,6 +23,14 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_executable(${PROJECT_NAME} ${source})
-target_link_libraries(${PROJECT_NAME} shared g3dlite collision Detour Recast ${PCRE_LIBRARIES})
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${ASCEMU_TOOLS_PATH})
+# include library dependencies.
+target_link_libraries(${EXECUTABLE_NAME}
+  PUBLIC
+    shared
+    g3dlite
+    collision
+    Detour
+    Recast
+)
+
+install(TARGETS ${EXECUTABLE_NAME} RUNTIME DESTINATION ${ASCEMU_TOOLS_PATH})

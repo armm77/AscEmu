@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,9 +7,10 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include <cstdint>
 #include <list>
+#include <mutex>
+
 #include "Network/NetworkIncludes.hpp"
 #include <string>
-#include "Threading/Mutex.h"
 
 struct IPBan
 {
@@ -50,7 +51,7 @@ public:
     IpBanStatus getBanStatus(in_addr ip_address);
 
 protected:
-    Mutex ipBanMutex;
+    std::mutex ipBanMutex;
 
     std::list<IPBan> _ipBanList;
 };

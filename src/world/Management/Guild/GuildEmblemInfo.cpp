@@ -1,11 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "GuildEmblemInfo.hpp"
+
+#include "Server/DatabaseDefinition.hpp"
 #include "Database/Database.h"
-#include "Server/MainServerDefines.h"
+#include "WorldPacket.h"
+
 
 EmblemInfo::EmblemInfo() : mStyle(0), mColor(0), mBorderStyle(0), mBorderColor(0), mBackgroundColor(0)
 {
@@ -13,11 +16,11 @@ EmblemInfo::EmblemInfo() : mStyle(0), mColor(0), mBorderStyle(0), mBorderColor(0
 
 void EmblemInfo::loadEmblemInfoFromDB(Field* fields)
 {
-    mStyle = fields[3].GetUInt8();
-    mColor = fields[4].GetUInt8();
-    mBorderStyle = fields[5].GetUInt8();
-    mBorderColor = fields[6].GetUInt8();
-    mBackgroundColor = fields[7].GetUInt8();
+    mStyle = fields[3].asUint8();
+    mColor = fields[4].asUint8();
+    mBorderStyle = fields[5].asUint8();
+    mBorderColor = fields[6].asUint8();
+    mBackgroundColor = fields[7].asUint8();
 }
 
 void EmblemInfo::saveEmblemInfoToDB(uint32_t guildId) const

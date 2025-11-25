@@ -1,9 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
+#include "Data/Flags.hpp"
+#include "Logging/Logger.hpp"
+#include "Management/AuctionHouse.h"
+#include "Storage/WDB/WDBStores.hpp"
 #include "Server/Packets/ManagedPacket.h"
 #include "Server/WorldSession.h"
 #include "Server/Packets/MsgTabardvendorActivate.h"
@@ -17,17 +20,21 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgPetitionShowlist.h"
 #include "Objects/Units/Creatures/Creature.h"
 #include "Map/Management/MapMgr.hpp"
-#include "Management/AuctionMgr.h"
-#include "Server/MainServerDefines.h"
-#include "Management/ObjectMgr.h"
+#include "Management/AuctionMgr.hpp"
+#include "Management/ObjectMgr.hpp"
 #include "Server/Packets/CmsgGossipSelectOption.h"
 #include "Server/Packets/CmsgGossipHello.h"
 #include "Management/ItemInterface.h"
+#include "Management/Gossip/GossipMenu.hpp"
 #include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObject.h"
 #include "Server/Packets/SmsgBinderConfirm.h"
 #include "Server/Packets/CmsgTrainerList.h"
 #include "Server/Packets/CmsgBinderActivate.h"
 #include "Objects/Units/Creatures/Pet.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSessionLog.hpp"
 #include "Server/Packets/MsgListStabledPets.h"
 #include "Server/Packets/CmsgNpcTextQuery.h"
 #include "Storage/MySQLDataStore.hpp"
@@ -35,7 +42,11 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgBuyBankSlot.h"
 #include "Server/Packets/SmsgBuyBankSlotResult.h"
 #include "Server/Packets/SmsgGossipComplete.h"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
 #include "Storage/WorldStrings.h"
+#include "Storage/WDB/WDBStructures.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -45,7 +56,7 @@ void WorldSession::handleTabardVendorActivateOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_TABARDVENDOR_ACTIVATE: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_TABARDVENDOR_ACTIVATE: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr)
@@ -69,7 +80,7 @@ void WorldSession::handleBankerActivateOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BANKER_ACTIVATE: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BANKER_ACTIVATE: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr)
@@ -93,7 +104,7 @@ void WorldSession::handleAuctionHelloOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_HELLO: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_HELLO: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr)
@@ -108,14 +119,14 @@ void WorldSession::sendAuctionList(Creature* creature)
     if (creature == nullptr)
         return;
 
-    const auto auctionHouse = sAuctionMgr.GetAuctionHouse(creature->getEntry());
+    const auto auctionHouse = sAuctionMgr.getAuctionHouse(creature->getEntry());
     if (auctionHouse == nullptr)
         return;
 
     SendPacket(MsgAuctionHello(creature->getGuid(), auctionHouse->getId(), auctionHouse->isEnabled ? 1U : 0U).serialise().get());
 }
 
-//helper
+// helper
 void WorldSession::sendSpiritHealerRequest(Creature* creature)
 {
     SendPacket(SmsgSpiritHealerConfirm(creature->getGuid()).serialise().get());
@@ -127,7 +138,7 @@ void WorldSession::handleTrainerBuySpellOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise((recvPacket)))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_TRAINER_BUY_SPELL: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_TRAINER_BUY_SPELL: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMapCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr)
@@ -138,7 +149,10 @@ void WorldSession::handleTrainerBuySpellOpcode(WorldPacket& recvPacket)
         return;
 
     TrainerSpell const* trainerSpell = nullptr;
-    for (const auto& itr : trainer->Spells)
+
+    auto its = sObjectMgr.getTrainerSpellSetById(trainer->spellset_id);
+
+    for (auto& itr : *its)
     {
         if ((itr.castSpell && itr.castSpell->getId() == srlPacket.spellId) ||
             (itr.learnSpell && itr.learnSpell->getId() == srlPacket.spellId))
@@ -178,11 +192,11 @@ void WorldSession::handleTrainerBuySpellOpcode(WorldPacket& recvPacket)
     if (trainerSpell->deleteSpell)
     {
         if (trainerSpell->learnSpell)
-            _player->removeSpell(trainerSpell->deleteSpell, true, true, trainerSpell->learnSpell->getId());
+            _player->removeSpell(trainerSpell->deleteSpell, true);
         else if (trainerSpell->castSpell)
-            _player->removeSpell(trainerSpell->deleteSpell, true, true, trainerSpell->castSpell->getId());
+            _player->removeSpell(trainerSpell->deleteSpell, true);
         else
-            _player->removeSpell(trainerSpell->deleteSpell, true, false, 0);
+            _player->removeSpell(trainerSpell->deleteSpell, true);
     }
 
     SendPacket(SmsgTrainerBuySucceeded(srlPacket.guid.getRawGuid(), srlPacket.spellId).serialise().get());
@@ -194,7 +208,7 @@ void WorldSession::handleCharterShowListOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_CHARTER_SHOW_LIST: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_CHARTER_SHOW_LIST: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr)
@@ -218,7 +232,7 @@ void WorldSession::handleGossipHelloOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GOSSIP_HELLO: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GOSSIP_HELLO: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature != nullptr)
@@ -230,7 +244,7 @@ void WorldSession::handleGossipHelloOpcode(WorldPacket& recvPacket)
         if (_player->isStealthed())
             _player->removeAllAurasByAuraEffect(SPELL_AURA_MOD_STEALTH);
 
-        _player->onTalkReputation(creature->m_factionEntry);
+        _player->onTalkReputation(creature->getServersideFactionEntry());
 
         if (const auto script = GossipScript::getInterface(creature))
             script->onHello(creature, _player);
@@ -244,7 +258,7 @@ void WorldSession::handleGossipSelectOptionOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GOSSIP_SELECT_OPTION: %u (gossipId), %i (option), %u (guidLow)",
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GOSSIP_SELECT_OPTION: {} (gossipId), {} (option), {} (guidLow)",
         srlPacket.gossip_id, srlPacket.option, srlPacket.guid.getGuidLow());
 
 
@@ -296,7 +310,7 @@ void WorldSession::handleBinderActivateOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BINDER_ACTIVATE: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BINDER_ACTIVATE: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr)
@@ -324,7 +338,7 @@ void WorldSession::sendInnkeeperBind(Creature* creature)
     {
         SendPacket(SmsgGossipComplete().serialise().get());
 
-        SendPacket(SmsgBinderConfirm(creature->getGuid(), _player->GetZoneId()).serialise().get());
+        SendPacket(SmsgBinderConfirm(creature->getGuid(), _player->getZoneId()).serialise().get());
 
         _player->m_hasBindDialogOpen = true;
         return;
@@ -345,7 +359,7 @@ void WorldSession::handleTrainerListOpcode(WorldPacket& recvPacket)
     if (creature == nullptr)
         return;
 
-    _player->onTalkReputation(creature->m_factionEntry);
+    _player->onTalkReputation(creature->getServersideFactionEntry());
     sendTrainerList(creature);
 }
 
@@ -366,24 +380,24 @@ void WorldSession::handleStabledPetList(WorldPacket& recvPacket)
 
 void WorldSession::sendStabledPetList(uint64_t npcguid)
 {
-    std::vector<PlayerStablePetList> stableList;
-    PlayerStablePetList stablePet;
+    std::map<uint8_t, PlayerStablePet> stableList;
+    PlayerStablePet stablePet;
 
-    for (const auto itr : _player->m_pets)
+    for (const auto& [petId, cachedPet] : _player->getPetCacheMap())
     {
-        stablePet.petNumber = itr.first;
-        stablePet.entry = itr.second->entry;
-        stablePet.level = itr.second->level;
-        stablePet.name = itr.second->name;
-        if (itr.second->stablestate == STABLE_STATE_ACTIVE)
-            stablePet.stableState = STABLE_STATE_ACTIVE;
-        else
-            stablePet.stableState = STABLE_STATE_PASSIVE + 1;
-
-        stableList.push_back(stablePet);
+        stablePet.petNumber = petId;
+        stablePet.entry = cachedPet->entry;
+        stablePet.level = cachedPet->level;
+        stablePet.name.assign(cachedPet->name);
+        stableList.emplace(cachedPet->slot, stablePet);
     }
 
-    SendPacket(MsgListStabledPets(npcguid, static_cast<uint8_t>(_player->m_pets.size()), _player->m_stableSlotCount, stableList).serialise().get());
+#if VERSION_STRING >= Cata
+    // Since cata all stable slots are automatically unlocked
+    SendPacket(MsgListStabledPets(npcguid, PET_SLOT_MAX_STABLE_SLOT, stableList).serialise().get());
+#else
+    SendPacket(MsgListStabledPets(npcguid, _player->m_stableSlotCount, stableList).serialise().get());
+#endif
 }
 
 void WorldSession::sendTrainerList(Creature* creature)
@@ -399,13 +413,13 @@ void WorldSession::sendTrainerList(Creature* creature)
     }
 
     std::string uiMessage;
-    if (stricmp(trainer->UIMessage, "DMSG") == 0)
+    if (trainer->UIMessage == "DMSG")
         uiMessage = _player->getSession()->LocalizedWorldSrv(ServerString::SS_WHAT_CAN_I_TEACH_YOU);
     else
         uiMessage = trainer->UIMessage;
 
     const size_t size = 8 + 4 + 4 + 4 + uiMessage.size()
-        + (trainer->Spells.size() * (4 + 1 + 4 + 4 + 4 + 1 + 4 + 4 + 4 + 4 + 4));
+        + (sObjectMgr.getTrainerSpellSetById(trainer->spellset_id)->size() * (4 + 1 + 4 + 4 + 4 + 1 + 4 + 4 + 4 + 4 + 4));
     WorldPacket data(SMSG_TRAINER_LIST, size);
 
     data << creature->getGuid();
@@ -416,35 +430,56 @@ void WorldSession::sendTrainerList(Creature* creature)
 #endif
 
     size_t count_p = data.wpos();
-    data << uint32_t(trainer->Spells.size());
+    data << uint32_t(sObjectMgr.getTrainerSpellSetById(trainer->spellset_id)->size());
 
     uint32_t count = 0;
-    for (const auto& spellItr : trainer->Spells)
-    {
-        auto* const trainerSpell = &spellItr;
 
-        const auto spellInfo = trainerSpell->castRealSpell != nullptr ? trainerSpell->castSpell : trainerSpell->learnSpell;
+    auto its = sObjectMgr.getTrainerSpellSetById(trainer->spellset_id);
+
+    for (auto& spellItr : *sObjectMgr.getTrainerSpellSetById(trainer->spellset_id))
+    {
+        auto trainerSpell = spellItr;
+
+        const auto spellInfo = trainerSpell.castRealSpell != nullptr ? trainerSpell.castSpell : trainerSpell.learnSpell;
         if (spellInfo == nullptr)
             continue;
 
         if (!_player->isSpellFitByClassAndRace(spellInfo->getId()))
             continue;
 
+        if (spellItr.isStatic == 0)
+        {
+            // trainer has max level to train, skip all spells higher.
+            if (trainer->can_train_max_level)
+                if (spellItr.requiredLevel > trainer->can_train_max_level)
+                    continue;
+
+            // trainer has min_skill_value, skip all spells lower
+            if (trainer->can_train_min_skill_value)
+                if (spellItr.requiredSkillLineValue < trainer->can_train_min_skill_value)
+                    continue;
+
+            // trainer has max_skill_value, skip all spells higher
+            if (trainer->can_train_max_skill_value)
+                if (spellItr.requiredSkillLineValue > trainer->can_train_max_skill_value)
+                    continue;
+        }
+
         data << uint32_t(spellInfo->getId());
-        data << uint8_t(trainerGetSpellStatus(trainerSpell));
-        data << uint32_t(trainerSpell->cost);
+        data << uint8_t(trainerGetSpellStatus(&trainerSpell));
+        data << uint32_t(trainerSpell.cost);
 #if VERSION_STRING < Cata
         data << uint32_t(0); // Unk
-        data << uint32_t(trainerSpell->isPrimaryProfession);
+        data << uint32_t(trainerSpell.isPrimaryProfession);
 #endif
-        data << uint8_t(trainerSpell->requiredLevel);
-        data << uint32_t(trainerSpell->requiredSkillLine);
-        data << uint32_t(trainerSpell->requiredSkillLineValue);
+        data << uint8_t(trainerSpell.requiredLevel);
+        data << uint32_t(trainerSpell.requiredSkillLine);
+        data << uint32_t(trainerSpell.requiredSkillLineValue);
 
         // Get the required spells to learn this spell
         uint8_t requiredSpellCount = 0;
         const auto maxRequiredCount = TrainerSpell::getMaxRequiredSpellCount();
-        for (const auto requiredSpell : trainerSpell->requiredSpell)
+        for (const auto requiredSpell : trainerSpell.requiredSpell)
         {
             if (requiredSpell == 0)
                 continue;
@@ -455,11 +490,14 @@ void WorldSession::sendTrainerList(Creature* creature)
             if (requiredSpellCount >= maxRequiredCount)
                 break;
 
-            const auto requiredSpells = sSpellMgr.getSpellsRequiredForSpellBounds(requiredSpell);
-            for (auto itr = requiredSpells.first; itr != requiredSpells.second && requiredSpellCount <= maxRequiredCount; ++itr)
+            const auto requiredSpells = sSpellMgr.getSpellsRequiredRangeForSpell(requiredSpell);
+            for (const auto& itr : requiredSpells)
             {
-                data << uint32_t(itr->second);
+                data << uint32_t(itr.second);
                 ++requiredSpellCount;
+
+                if (requiredSpellCount > maxRequiredCount)
+                    break;
             }
 
             if (requiredSpellCount >= maxRequiredCount)
@@ -473,14 +511,16 @@ void WorldSession::sendTrainerList(Creature* creature)
         }
 
 #if VERSION_STRING >= Cata
-        data << uint32_t(trainerSpell->isPrimaryProfession && _player->getFreePrimaryProfessionPoints() != 0);
-        data << uint32_t(trainerSpell->isPrimaryProfession);
+        data << uint32_t(trainerSpell.isPrimaryProfession && _player->getFreePrimaryProfessionPoints() != 0);
+        data << uint32_t(trainerSpell.isPrimaryProfession);
 #endif
         ++count;
     }
 
     data.put<uint32_t>(count_p, count);
     data << uiMessage;
+
+    sLogger.info("SendTrainerList : {} TrainerSpells in list", count);
 
     SendPacket(&data);
 }
@@ -519,10 +559,10 @@ TrainerSpellState WorldSession::trainerGetSpellStatus(TrainerSpell const* traine
         if (!_player->hasSpell(spellId))
             return TRAINER_SPELL_RED;
 
-        const auto spellsRequired = sSpellMgr.getSpellsRequiredForSpellBounds(spellId);
-        for (auto itr = spellsRequired.first; itr != spellsRequired.second; ++itr)
+        const auto spellsRequired = sSpellMgr.getSpellsRequiredRangeForSpell(spellId);
+        for (const auto& itr : spellsRequired)
         {
-            if (!_player->hasSpell(itr->second))
+            if (!_player->hasSpell(itr.second))
                 return TRAINER_SPELL_RED;
         }
     }
@@ -567,7 +607,7 @@ void WorldSession::handleNpcTextQueryOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received: CMSG_NPC_TEXT_QUERY: %u (textId)", srlPacket.text_id);
+    sLogger.debug("Received: CMSG_NPC_TEXT_QUERY: {} (textId)", srlPacket.text_id);
 
     _player->setTargetGuid(srlPacket.guid);
 
@@ -653,7 +693,7 @@ void WorldSession::handleBuyBankSlotOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BUY_BANK_SLOT: %u (guidLow)", srlPacket.guid.getGuidLow());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BUY_BANK_SLOT: {} (guidLow)", srlPacket.guid.getGuidLow());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr || !creature->isBanker())
@@ -663,7 +703,7 @@ void WorldSession::handleBuyBankSlotOpcode(WorldPacket& recvPacket)
     }
 
     const uint8_t slots = _player->getBankSlots() + 1U;
-    const auto bank_bag_slot_prices = sBankBagSlotPricesStore.LookupEntry(slots);
+    const auto bank_bag_slot_prices = sBankBagSlotPricesStore.lookupEntry(slots);
     if (bank_bag_slot_prices == nullptr)
     {
         SendPacket(SmsgBuyBankSlotResult(BankslotError::TooMany).serialise().get());
@@ -680,7 +720,7 @@ void WorldSession::handleBuyBankSlotOpcode(WorldPacket& recvPacket)
     _player->setBankSlots(slots);
     _player->modCoinage(-static_cast<int32_t>(price));
 #if VERSION_STRING > TBC
-    _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BUY_BANK_SLOT, 1, 0, 0);
+    _player->updateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BUY_BANK_SLOT, 1, 0, 0);
 #endif
 
 }

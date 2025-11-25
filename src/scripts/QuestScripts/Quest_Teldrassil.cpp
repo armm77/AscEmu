@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,6 +18,13 @@
  */
 
 #include "Setup.h"
+#include "Chat/ChatDefines.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Server/Script/QuestScript.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 
 class Zenn_Foulhoof : public QuestScript
 {

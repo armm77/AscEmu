@@ -1,11 +1,18 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Instance_DrakTharonKeep.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Utilities/Random.hpp"
+#include "Utilities/Util.hpp"
 
 class DrakTharonKeepInstanceScript : public InstanceScript
 {
@@ -28,7 +35,7 @@ public:
     {
         invastion_timer = 0;
 
-        if (_isHeroic())
+        if (isHeroic())
         {
             addAISpell(49639, 20.0f, TARGET_ATTACKING, 0, 1);  //crush
             addAISpell(59805, 100.0f, TARGET_SELF, 0, 100);    //Consume
@@ -105,7 +112,7 @@ public:
         invasion_timer = 0;
         handler_timer = 0;
 
-        if (_isHeroic())
+        if (isHeroic())
         {
             addAISpell(59909, 70.0f, TARGET_ATTACKING, 0, 4);        //ArcaneBlast
             addAISpell(59854, 50.0f, TARGET_RANDOM_SINGLE, 0, 6);    //Blizzard
@@ -349,7 +356,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new CrystalHandlerAI(c); }
     explicit CrystalHandlerAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
             addAISpell(59004, 50.0f, TARGET_ATTACKING, 0, 4);    //FlashofDarkness
         else
             addAISpell(49668, 50.0f, TARGET_ATTACKING, 0, 4);    //FlashofDarkness
@@ -383,7 +390,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new KingDreadAI(c); }
     explicit KingDreadAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
         {
             addAISpell(59422, 80.0f, TARGET_ATTACKING, 0, 3);  //GrievousBite
             addAISpell(48873, 40.0f, TARGET_ATTACKING, 0, 2);  //ManglingSlash
@@ -419,7 +426,7 @@ public:
         phase_timer = 0;
         phase_length = 0;
 
-        if (_isHeroic())
+        if (isHeroic())
         {
             addAISpell(59972, 80.0f, TARGET_RANDOM_SINGLE, 0, 7);   //CurseOfLife
             addAISpell(59963, 60.0f, TARGET_RANDOM_SINGLE, 0, 4);   //LightningBreath

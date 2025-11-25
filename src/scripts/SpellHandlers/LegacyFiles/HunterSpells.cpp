@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,18 +18,24 @@
  */
 
 #include "Setup.h"
-#include "Spell/SpellAuras.h"
-#include "Server/Script/ScriptMgr.h"
-#include <Spell/Definitions/SpellMechanics.hpp>
-#include <Objects/Units/Creatures/Pet.h>
+#include "Spell/SpellAura.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/Definitions/SpellMechanics.hpp"
+#include "Objects/Units/Creatures/Pet.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Utilities/Narrow.hpp"
 
 bool Refocus(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    Player* playerTarget = pSpell->GetPlayerTarget();
+    Player* playerTarget = pSpell->getPlayerTarget();
     if (playerTarget == 0) return true;
 
-    SpellSet::const_iterator itr = playerTarget->m_spells.begin();
-    for (; itr != playerTarget->m_spells.end(); ++itr)
+    SpellSet::const_iterator itr = playerTarget->getSpellSet().begin();
+    for (; itr != playerTarget->getSpellSet().end(); ++itr)
     {
         if ((*itr) == 24531)       // skip calling spell.. otherwise spammies! :D
             continue;
@@ -60,7 +66,7 @@ bool MastersCall(uint8_t effectIndex, Spell* pSpell)
     if (caster == NULL)
         return true;
 
-    Pet* Summon = caster->getFirstPetFromSummons();
+    Pet* Summon = caster->getPet();
     if (Summon == NULL || Summon->isDead())
         return true;
 
@@ -137,7 +143,7 @@ bool ExplosiveShot(uint8_t effectIndex, Aura* a, bool apply)
     Unit* m_target = a->getOwner();
 
     int32_t dmg = a->getEffectDamage(effectIndex);
-    dmg += float2int32(m_target->getRangedAttackPower() * 0.16f);
+    dmg += Util::float2int32(m_target->getRangedAttackPower() * 0.16f);
 
     //\ todo: fix me
     //a->EventPeriodicDamage(&a->getAuraEffect(effectIndex), dmg);
@@ -253,7 +259,7 @@ public:
 
 bool ChimeraShot(uint8_t /*effectIndex*/, Spell *spell)
 {
-    Unit *target = spell->GetUnitTarget();
+    Unit *target = spell->getUnitTarget();
 
     HasNameHash condition;
     ChimeraShotAction action;

@@ -1,12 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "UpdateManager.hpp"
 #include <cstdint>
 #include <vector>
+
+#include "UpdateManager.hpp"
+#include "Map/Maps/WorldMap.hpp"
 #include "Objects/Units/Players/Player.hpp"
+#include "Server/Opcodes.hpp"
+#include "Server/WorldSession.h"
 
 UpdateManager::UpdateManager(Player* owner, size_t compressionThreshold, size_t creationBufferInitialSize, size_t updateBufferInitialSize, size_t outOfRangeIdsInitialSize)
     : 
@@ -84,11 +88,11 @@ void UpdateManager::processPendingUpdates()
     m_owner->sendTimeSync();
 }
 
-void UpdateManager::queueDelayedPacket(WorldPacket * packet)
+void UpdateManager::queueDelayedPacket(std::unique_ptr<WorldPacket> packet)
 {
     std::lock_guard packet_guard(m_mutexDelayedPackets);
 
-    m_delayedPackets.emplace_back(std::unique_ptr<WorldPacket>(packet));
+    m_delayedPackets.emplace_back(std::move(packet));
 }
 
 size_t UpdateManager::calculateBufferSize() const

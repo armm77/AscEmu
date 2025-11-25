@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -32,7 +32,7 @@ class SERVER_DECL Logon
     //////////////////////////////////////////////////////////////////////////////////////////
     // InfoCore
     private:
-        Arcemu::PerformanceCounter perfcounter;
+        Ascemu::PerformanceCounter perfcounter;
 
     public:
         float getCPUUsage();

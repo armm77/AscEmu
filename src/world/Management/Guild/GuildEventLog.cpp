@@ -1,13 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "GuildLog.hpp"
 #include "GuildEventLog.hpp"
-#include "WoWGuid.h"
-#include "Server/MainServerDefines.h"
-
+#include "WoWGuid.hpp"
+#include "Server/DatabaseDefinition.hpp"
 
 GuildEventLogEntry::GuildEventLogEntry(uint32_t guildId, uint32_t guid, GuildEventLogTypes eventType, uint32_t playerGuid1, uint32_t playerGuid2, uint8_t newRank) :
     GuildLogEntry(guildId, guid), mEventType(eventType), mPlayerGuid1(playerGuid1), mPlayerGuid2(playerGuid2), mNewRank(newRank)
@@ -81,15 +80,15 @@ void GuildEventLogEntry::writeGuildLogPacket(WorldPacket& data, ByteBuffer& cont
 #else
 void GuildEventLogEntry::writeGuildLogPacket(WorldPacket& data, ByteBuffer& /*content*/) const
 {
-    data << uint8(mEventType);
+    data << uint8_t(mEventType);
     data << WoWGuid(mPlayerGuid1, 0, HIGHGUID_TYPE_PLAYER);
 
     if (mEventType != GE_LOG_JOIN_GUILD && mEventType != GE_LOG_LEAVE_GUILD)
         data << WoWGuid(mPlayerGuid2, 0, HIGHGUID_TYPE_PLAYER);
 
     if (mEventType == GE_LOG_PROMOTE_PLAYER || mEventType == GE_LOG_DEMOTE_PLAYER)
-        data << uint8(mNewRank);
+        data << uint8_t(mNewRank);
 
-    data << uint32(::time(nullptr) - mTimestamp);
+    data << uint32_t(::time(nullptr) - mTimestamp);
 #endif
 }

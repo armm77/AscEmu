@@ -1,13 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Spline.h"
 #include <sstream>
+
+#include "Spline.h"
 #include <G3D/Matrix4.h>
 
-namespace MovementNew {
+namespace MovementMgr {
 
 SplineBase::EvaluationMethtod SplineBase::evaluators[SplineBase::ModesEnd] =
 {
@@ -266,4 +267,4 @@ std::string SplineBase::ToString() const
 
     return str.str();
 }
-} // namespace MovementNew
+} // namespace MovementMgr

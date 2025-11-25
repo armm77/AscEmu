@@ -1,11 +1,11 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
 #include "Chat/Channel.hpp"
 #include "Chat/ChannelMgr.hpp"
+#include "Logging/Logger.hpp"
 #include "Server/Packets/CmsgJoinChannel.h"
 #include "Server/Packets/SmsgChannelMemberCount.h"
 #include "Server/Packets/CmsgChannelDisplayList.h"
@@ -27,7 +27,8 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgGetChannelMemberCount.h"
 #include "Server/WorldSession.h"
 #include "Server/World.h"
-#include "Management/ObjectMgr.h"
+#include "Management/ObjectMgr.hpp"
+#include "Utilities/Strings.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -37,7 +38,7 @@ void WorldSession::handleChannelJoin(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    if (!sWorld.settings.gm.gmClientChannelName.empty() && !stricmp(sWorld.settings.gm.gmClientChannelName.c_str(), srlPacket.channelName.c_str()) && !GetPermissionCount())
+    if (!sWorld.settings.gm.gmClientChannelName.empty() && AscEmu::Util::Strings::isEqual(sWorld.settings.gm.gmClientChannelName.c_str(), srlPacket.channelName.c_str()) && !hasPermissions())
         return;
 
     const auto channel = sChannelMgr.getOrCreateChannel(srlPacket.channelName, _player, srlPacket.dbcId);
@@ -45,7 +46,7 @@ void WorldSession::handleChannelJoin(WorldPacket& recvPacket)
         return;
 
     channel->attemptJoin(_player, srlPacket.password.c_str());
-    sLogger.debug("ChannelJoin %s", srlPacket.channelName.c_str());
+    sLogger.debug("ChannelJoin {}", srlPacket.channelName);
 }
 
 void WorldSession::handleGetChannelMemberCount(WorldPacket& recvPacket)
@@ -99,7 +100,7 @@ void WorldSession::handleChannelSetOwner(WorldPacket& recvPacket)
         return;
 
     const auto channel = sChannelMgr.getChannel(srlPacket.name, _player);
-    const auto player = sObjectMgr.GetPlayer(srlPacket.setName.c_str(), false);
+    const auto player = sObjectMgr.getPlayer(srlPacket.setName.c_str(), false);
     if (channel && player)
         channel->setOwner(_player, player);
 }
@@ -122,7 +123,7 @@ void WorldSession::handleChannelModerator(WorldPacket& recvPacket)
         return;
 
     const auto channel = sChannelMgr.getChannel(srlPacket.name, _player);
-    const auto player = sObjectMgr.GetPlayer(srlPacket.modName.c_str(), false);
+    const auto player = sObjectMgr.getPlayer(srlPacket.modName.c_str(), false);
     if (channel && player)
         channel->giveModerator(_player, player);
 }
@@ -134,7 +135,7 @@ void WorldSession::handleChannelUnmoderator(WorldPacket& recvPacket)
         return;
 
     const auto channel = sChannelMgr.getChannel(srlPacket.name, _player);
-    const auto player = sObjectMgr.GetPlayer(srlPacket.unmodName.c_str(), false);
+    const auto player = sObjectMgr.getPlayer(srlPacket.unmodName.c_str(), false);
     if (channel && player)
         channel->takeModerator(_player, player);
 }
@@ -146,7 +147,7 @@ void WorldSession::handleChannelMute(WorldPacket& recvPacket)
         return;
 
     const auto channel = sChannelMgr.getChannel(srlPacket.name, _player);
-    const auto player = sObjectMgr.GetPlayer(srlPacket.muteName.c_str(), false);
+    const auto player = sObjectMgr.getPlayer(srlPacket.muteName.c_str(), false);
     if (channel && player)
         channel->mutePlayer(_player, player);
 }
@@ -158,7 +159,7 @@ void WorldSession::handleChannelUnmute(WorldPacket& recvPacket)
         return;
 
     const auto channel = sChannelMgr.getChannel(srlPacket.name, _player);
-    const auto player = sObjectMgr.GetPlayer(srlPacket.unmuteName.c_str(), false);
+    const auto player = sObjectMgr.getPlayer(srlPacket.unmuteName.c_str(), false);
     if (channel && player)
         channel->unMutePlayer(_player, player);
 }
@@ -170,7 +171,7 @@ void WorldSession::handleChannelInvite(WorldPacket& recvPacket)
         return;
 
     const auto channel = sChannelMgr.getChannel(srlPacket.name, _player);
-    const auto player = sObjectMgr.GetPlayer(srlPacket.inviteName.c_str(), false);
+    const auto player = sObjectMgr.getPlayer(srlPacket.inviteName.c_str(), false);
     if (channel && player)
         channel->invitePlayer(_player, player);
 }
@@ -182,7 +183,7 @@ void WorldSession::handleChannelKick(WorldPacket& recvPacket)
         return;
 
     const auto channel = sChannelMgr.getChannel(srlPacket.name, _player);
-    const auto player = sObjectMgr.GetPlayer(srlPacket.kickName.c_str(), false);
+    const auto player = sObjectMgr.getPlayer(srlPacket.kickName.c_str(), false);
     if (channel && player)
         channel->kickOrBanPlayer(_player, player, false);
 }
@@ -194,7 +195,7 @@ void WorldSession::handleChannelBan(WorldPacket& recvPacket)
         return;
 
     const auto channel = sChannelMgr.getChannel(srlPacket.name, _player);
-    const auto player = sObjectMgr.GetPlayer(srlPacket.banName.c_str(), false);
+    const auto player = sObjectMgr.getPlayer(srlPacket.banName.c_str(), false);
     if (channel && player)
         channel->kickOrBanPlayer(_player, player, true);
 }
@@ -206,7 +207,7 @@ void WorldSession::handleChannelUnban(WorldPacket& recvPacket)
         return;
 
     const auto channel = sChannelMgr.getChannel(srlPacket.name, _player);
-    const auto playerInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.unbanName);
+    const auto playerInfo = sObjectMgr.getCachedCharacterInfoByName(srlPacket.unbanName);
     if (channel && playerInfo)
         channel->unBanPlayer(_player, playerInfo);
 }

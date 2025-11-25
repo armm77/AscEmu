@@ -1,13 +1,22 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Raid_Karazhan.h"
-#include "Management/Faction.h"
-#include <Spell/Definitions/PowerType.hpp>
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Management/ItemInterface.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Utilities/Random.hpp"
 
 class KarazhanInstanceScript : public InstanceScript
 {
@@ -853,7 +862,7 @@ public:
         for (const auto& itr : getCreature()->getInRangePlayersSet())
         {
             Player* RandomTarget = static_cast<Player*>(itr);
-            if (RandomTarget && RandomTarget->isAlive() && isHostile(getCreature(), itr))
+            if (RandomTarget && RandomTarget->isAlive() && getCreature()->isHostileTo(itr))
                 Target_List.push_back(RandomTarget);
         }
 
@@ -1643,10 +1652,10 @@ public:
         std::vector<Player* > TargetTable;
         for (const auto& itr : getCreature()->getInRangePlayersSet())
         {
-            if (itr && isHostile(getCreature(), itr))
+            if (itr && getCreature()->isHostileTo(itr))
             {
                 Player* RandomTarget = static_cast<Player*>(itr);
-                if (RandomTarget && RandomTarget->isAlive() && isHostile(getCreature(), RandomTarget))
+                if (RandomTarget && RandomTarget->isAlive() && getCreature()->isHostileTo(RandomTarget))
                     TargetTable.push_back(RandomTarget);
             }
         }
@@ -2177,7 +2186,7 @@ public:
         std::vector<Player*> Targets;
         for (const auto& itr: getCreature()->getInRangePlayersSet())
         {
-            if (itr && isHostile(getCreature(), itr))
+            if (itr && getCreature()->isHostileTo(itr))
             {
                 Player* RandomTarget = static_cast<Player*>(itr);
                 if (RandomTarget && RandomTarget->isAlive())
@@ -2291,7 +2300,7 @@ public:
         for (const auto& itr : getCreature()->getInRangePlayersSet())
         {
             Player* RandomTarget = static_cast<Player*>(itr);
-            if (RandomTarget && isHostile(getCreature(), RandomTarget) && RandomTarget->isAlive())
+            if (RandomTarget && getCreature()->isHostileTo(RandomTarget) && RandomTarget->isAlive())
             {
                 TargetTable.push_back(RandomTarget);
             }
@@ -2402,7 +2411,7 @@ public:
             {
                 Unit* RandomTarget = static_cast<Unit*>(itr);
 
-                if (RandomTarget && RandomTarget->isAlive() && isHostile(getCreature(), itr))
+                if (RandomTarget && RandomTarget->isAlive() && getCreature()->isHostileTo(itr))
                     TargetTable.push_back(RandomTarget);
             }
 

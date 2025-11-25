@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,7 +19,9 @@
  */
 
 #include "Setup.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/QuestLogEntry.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
 
 class Dalinda_Malem : public CreatureAIScript
 {

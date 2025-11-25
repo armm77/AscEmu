@@ -1,10 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Server/Script/CreatureAIScript.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //\details <b>Brewfest</b>\n
@@ -74,7 +78,7 @@ public:
         addWaypoint(1, createWaypoint(1, 0, WAYPOINT_MOVE_TYPE_WALK, pCreature->GetPosition()));
     }
 
-    void DoAction(int32 const action) override
+    void DoAction(int32_t const action) override
     {
         if(action == 0)
             setWaypointToMove(1, 1);

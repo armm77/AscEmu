@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -21,7 +22,7 @@ namespace AscEmu::Packets
         }
 
         SmsgAttackStart(uint64_t attackerGuid, uint64_t victimGuid) :
-            ManagedPacket(SMSG_ATTACKSTART, 0),
+            ManagedPacket(SMSG_ATTACK_START, 0),
             attackerGuid(attackerGuid),
             victimGuid(victimGuid)
         {

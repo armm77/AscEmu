@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -18,15 +18,28 @@
  */
 
 #include "Setup.h"
+#include "Management/ItemInterface.h"
 #include "Management/QuestLogEntry.hpp"
 #include "Management/Skill.hpp"
-#include "Management/ItemInterface.h"
 #include "Management/Battleground/Battleground.hpp"
-#include "Storage/MySQLDataStore.hpp"
-#include "Map/Management/MapMgr.hpp"
 #include "Map/Maps/MapScriptInterface.h"
-#include "Spell/SpellAuras.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Movement/MovementManager.h"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Server/Master.h"
+#include "Server/World.h"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Spell/SpellMgr.hpp"
 #include "Spell/Definitions/SpellEffects.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Storage/WDB/WDBStores.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Random.hpp"
 
 enum
 {
@@ -38,7 +51,7 @@ enum
 
 bool FrostWarding(uint8_t /*effectIndex*/, Spell* s)
 {
-    Unit* unitTarget = s->GetUnitTarget();
+    Unit* unitTarget = s->getUnitTarget();
 
     if (!unitTarget)
         return false;
@@ -47,37 +60,25 @@ bool FrostWarding(uint8_t /*effectIndex*/, Spell* s)
 
     unitTarget->removeReflect(spellId, true);
 
-    ReflectSpellSchool* rss = new ReflectSpellSchool;
-
-    rss->chance = s->getSpellInfo()->getProcChance();
-    rss->spellId = s->getSpellInfo()->getId();
-    rss->school = SCHOOL_FROST;
-    rss->infront = false;
-    rss->charges = 0;
-
-    unitTarget->m_reflectSpellSchool.push_back(rss);
+    unitTarget->m_reflectSpellSchool.emplace_back(std::make_unique<ReflectSpellSchool>(
+        spellId, 0, SCHOOL_FROST, s->getSpellInfo()->getProcChance(), false
+    ));
 
     return true;
 }
 
 bool MoltenShields(uint8_t /*effectIndex*/, Spell* s)
 {
-    Unit* unitTarget = s->GetUnitTarget();
+    Unit* unitTarget = s->getUnitTarget();
 
     if (!unitTarget)
         return false;
 
     unitTarget->removeReflect(s->getSpellInfo()->getId(), true);
 
-    ReflectSpellSchool* rss = new ReflectSpellSchool;
-
-    rss->chance = s->getSpellInfo()->getEffectBasePoints(0);
-    rss->spellId = s->getSpellInfo()->getId();
-    rss->school = SCHOOL_FIRE;
-    rss->infront = false;
-    rss->charges = 0;
-
-    unitTarget->m_reflectSpellSchool.push_back(rss);
+    unitTarget->m_reflectSpellSchool.emplace_back(std::make_unique<ReflectSpellSchool>(
+        s->getSpellInfo()->getId(), 0, SCHOOL_FIRE, s->getSpellInfo()->getEffectBasePoints(0), false
+    ));
 
     return true;
 }
@@ -147,7 +148,7 @@ bool GnomishBattleChicken(uint8_t /*effectIndex*/, Spell* s)
 
 bool GiftOfLife(uint8_t /*effectIndex*/, Spell* s)
 {
-    Player* playerTarget = s->GetPlayerTarget();
+    Player* playerTarget = s->getPlayerTarget();
 
     if (!playerTarget)
         return false;
@@ -162,16 +163,16 @@ bool GiftOfLife(uint8_t /*effectIndex*/, Spell* s)
 
 bool Give5kGold(uint8_t /*effectIndex*/, Spell* s)
 {
-    if (s->GetPlayerTarget() != NULL)
+    if (s->getPlayerTarget() != NULL)
     {
-        if (worldConfig.player.isGoldCapEnabled && (s->GetPlayerTarget()->getCoinage() + 50000000) > worldConfig.player.limitGoldAmount)
+        if (worldConfig.player.isGoldCapEnabled && (s->getPlayerTarget()->getCoinage() + 50000000) > worldConfig.player.limitGoldAmount)
         {
-            s->GetPlayerTarget()->setCoinage(worldConfig.player.limitGoldAmount);
-            s->GetPlayerTarget()->getItemInterface()->buildInventoryChangeError(NULL, NULL, INV_ERR_TOO_MUCH_GOLD);
+            s->getPlayerTarget()->setCoinage(worldConfig.player.limitGoldAmount);
+            s->getPlayerTarget()->getItemInterface()->buildInventoryChangeError(NULL, NULL, INV_ERR_TOO_MUCH_GOLD);
         }
         else
         {
-            s->GetPlayerTarget()->modCoinage(50000000);
+            s->getPlayerTarget()->modCoinage(50000000);
         }
     }
     else
@@ -199,13 +200,10 @@ bool NorthRendInscriptionResearch(uint8_t /*effectIndex*/, Spell* s)
         std::vector<uint32_t> discoverableGlyphs;
 
         // how many of these are the right type (minor/major) of glyph, and learnable by the player
-        for (uint32_t idx = 0; idx < sSkillLineAbilityStore.GetNumRows(); ++idx)
+        const auto skillRange = sSpellMgr.getSkillEntryRangeForSkill(SKILL_INSCRIPTION);
+        for (const auto& [_, skill_line_ability] : skillRange)
         {
-            auto skill_line_ability = sSkillLineAbilityStore.LookupEntry(idx);
-            if (skill_line_ability == nullptr)
-                continue;
-
-            if (skill_line_ability->skilline == SKILL_INSCRIPTION && skill_line_ability->next == 0)
+            if (skill_line_ability->next == 0)
             {
                 SpellInfo const* se1 = sSpellMgr.getSpellInfo(skill_line_ability->spell);
                 if (se1 && se1->getEffect(0) == SPELL_EFFECT_CREATE_ITEM)
@@ -217,7 +215,7 @@ bool NorthRendInscriptionResearch(uint8_t /*effectIndex*/, Spell* s)
                         if (se2 && se2->getEffect(0) == SPELL_EFFECT_USE_GLYPH)
                         {
 #if VERSION_STRING > TBC
-                            auto glyph_properties = sGlyphPropertiesStore.LookupEntry(se2->getEffectMiscValue(0));
+                            auto glyph_properties = sGlyphPropertiesStore.lookupEntry(se2->getEffectMiscValue(0));
                             if (glyph_properties)
                             {
                                 if (glyph_properties->Type == glyphType)
@@ -292,7 +290,7 @@ bool WaitingToResurrect(uint8_t /*effectIndex*/, Aura* a, bool apply)
     uint64_t crtguid = p_target->getAreaSpiritHealerGuid();
 
     WoWGuid wowGuid;
-    wowGuid.Init(crtguid);
+    wowGuid.init(crtguid);
 
     Creature* pCreature = p_target->IsInWorld() ? p_target->getWorldMap()->getCreature(wowGuid.getGuidLowPart()) : nullptr;
 
@@ -327,7 +325,7 @@ bool ReturnFlash(uint8_t /*effectIndex*/, Aura* pAura, bool apply)
     if (apply && pAura->getOwner()->isPlayer())
     {
         Player* p_target = static_cast<Player*>(pAura->getOwner());
-        p_target->setDisplayId(p_target->getNativeDisplayId());
+        p_target->resetDisplayId();
     }
     return true;
 }
@@ -382,7 +380,7 @@ bool ChaosBlast(uint8_t /*effectIndex*/, Spell* pSpell)
     if (pSpell->getUnitCaster() == NULL)
         return true;
 
-    pSpell->getUnitCaster()->castSpell(pSpell->GetUnitTarget(), 37675, true);
+    pSpell->getUnitCaster()->castSpell(pSpell->getUnitTarget(), 37675, true);
     return true;
 }
 
@@ -520,7 +518,7 @@ static float IOCTeleOutLocations[6][4] =
 
 bool IOCTeleporterIn(uint8_t /*effectIndex*/, Spell* s)
 {
-    Player* p = s->GetPlayerTarget();
+    Player* p = s->getPlayerTarget();
     if (p == NULL)
         return true;
 
@@ -551,7 +549,7 @@ bool IOCTeleporterIn(uint8_t /*effectIndex*/, Spell* s)
 
 bool IOCTeleporterOut(uint8_t /*effectIndex*/, Spell* s)
 {
-    Player* p = s->GetPlayerTarget();
+    Player* p = s->getPlayerTarget();
     if (p == NULL)
         return true;
 
@@ -593,7 +591,7 @@ const float sotaTransDest[5][4] =
 // 54640
 bool SOTATeleporter(uint8_t /*effectIndex*/, Spell* s)
 {
-    Player* plr = s->GetPlayerTarget();
+    Player* plr = s->getPlayerTarget();
     if (plr == NULL)
         return true;
 
@@ -621,7 +619,7 @@ bool SOTATeleporter(uint8_t /*effectIndex*/, Spell* s)
 // 51892 - Eye of Acherus Visual
 bool EyeOfAcherusVisual(uint8_t /*effectIndex*/, Spell* spell)
 {
-    Player* player = spell->GetPlayerTarget();
+    Player* player = spell->getPlayerTarget();
     if (player == nullptr)
         return true;
 
@@ -634,7 +632,7 @@ bool EyeOfAcherusVisual(uint8_t /*effectIndex*/, Spell* spell)
 // 52694 - Recall Eye of Acherus
 bool RecallEyeOfAcherus(uint8_t /*effectIndex*/, Spell* spell)
 {
-    Player* player = spell->GetPlayerTarget();
+    Player* player = spell->getPlayerTarget();
     if (player == nullptr)
         return true;
 

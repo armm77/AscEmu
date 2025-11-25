@@ -1,17 +1,19 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include <WorldConf.h>
-#include "Map/Area/AreaManagementGlobals.hpp"
+#include "AEVersion.hpp"
 #include "Map/Area/AreaStorage.hpp"
-#include "VMapFactory.h"
-#include "IVMapManager.h"
 #include "G3D/Plane.h"
 #include "TerrainMgr.hpp"
 
+#include "LocationVector.h"
+#include "Storage/WDB/WDBStores.hpp"
 #include "Logging/Logger.hpp"
+#include "Macros/MapsMacros.hpp"
+#include "Server/World.h"
+#include "Storage/WDB/WDBStructures.hpp"
 
 static uint16_t const holetab_h[4] = { 0x1111, 0x2222, 0x4444, 0x8888 };
 static uint16_t const holetab_v[4] = { 0x000F, 0x00F0, 0x0F00, 0xF000 };
@@ -24,24 +26,17 @@ TileMap::TileMap()
 
 TileMap::~TileMap()
 {
-    delete[] m_areaMap;
-    delete[] m_heightMap9F;
-    delete[] m_heightMap8F;
     delete[] m_minHeightPlanes;
-    delete[] m_liquidEntry;
-    delete[] m_liquidFlags;
-    delete[] m_liquidMap;
-    delete[] m_holes;
 }
 
 void TileMap::load(char* filename)
 {
-    sLogger.debug("Loading %s", filename);
+    sLogger.debug("Loading {}", filename);
     FILE* f = fopen(filename, "rb");
 
     if (f == NULL)
     {
-        sLogger.failure("%s does not exist", filename);
+        sLogger.failure("{} does not exist", filename);
         return;
     }
 
@@ -56,7 +51,7 @@ void TileMap::load(char* filename)
 #if VERSION_STRING < Mop
     if (header.buildMagic != BUILD_VERSION)  // wow version
     {
-        sLogger.failure("%s: from incorrect client (you: %u us: %u)", filename, header.buildMagic, BUILD_VERSION);
+        sLogger.failure("{}: from incorrect client (you: {} us: {})", filename, header.buildMagic, BUILD_VERSION);
         fclose(f);
         return;
     }
@@ -90,8 +85,8 @@ void TileMap::loadAreaData(FILE* f, TileMapHeader& header)
     m_tileArea = areaHeader.gridArea;
     if (!(areaHeader.flags & MAP_AREA_NO_AREA))
     {
-        m_areaMap = new uint16_t[16 * 16];
-        if (fread(m_areaMap, sizeof(uint16_t), 16 * 16, f) != 16 * 16)
+        m_areaMap = std::make_unique<uint16_t[]>(16 * 16);
+        if (fread(m_areaMap.get(), sizeof(uint16_t), 16 * 16, f) != 16 * 16)
             return;
     }
 }
@@ -116,10 +111,10 @@ void TileMap::loadHeightData(FILE* f, TileMapHeader& header)
             m_tileHeightMultiplier = (mapHeader.gridMaxHeight - mapHeader.gridHeight) / 65535;
             m_gridGetHeight = &TileMap::getHeightFromUint16;
 
-            m_heightMap9S = new uint16_t[129 * 129];
-            m_heightMap8S = new uint16_t[128 * 128];
-            if (fread(m_heightMap9S, sizeof(uint16_t), 129 * 129, f) != 129 * 129 ||
-                fread(m_heightMap8S, sizeof(uint16_t), 128 * 128, f) != 128 * 128)
+            m_heightMap9S = std::make_unique<uint16_t[]>(129 * 129);
+            m_heightMap8S = std::make_unique<uint16_t[]>(128 * 128);
+            if (fread(m_heightMap9S.get(), sizeof(uint16_t), 129 * 129, f) != 129 * 129 ||
+                fread(m_heightMap8S.get(), sizeof(uint16_t), 128 * 128, f) != 128 * 128)
                 return;
         }
         else if (m_heightMapFlags & MAP_HEIGHT_AS_INT8)
@@ -127,18 +122,18 @@ void TileMap::loadHeightData(FILE* f, TileMapHeader& header)
             m_tileHeightMultiplier = (mapHeader.gridMaxHeight - mapHeader.gridHeight) / 255;
             m_gridGetHeight = &TileMap::getHeightFromUint8;
 
-            m_heightMap9B = new uint8_t[129 * 129];
-            m_heightMap8B = new uint8_t[128 * 128];
-            if (fread(m_heightMap9B, sizeof(uint8_t), 129 * 129, f) != 129 * 129 ||
-                fread(m_heightMap8B, sizeof(uint8_t), 128 * 128, f) != 128 * 128)
+            m_heightMap9B = std::make_unique<uint8_t[]>(129 * 129);
+            m_heightMap8B = std::make_unique<uint8_t[]>(128 * 128);
+            if (fread(m_heightMap9B.get(), sizeof(uint8_t), 129 * 129, f) != 129 * 129 ||
+                fread(m_heightMap8B.get(), sizeof(uint8_t), 128 * 128, f) != 128 * 128)
                 return;
         }
         else
         {
-            m_heightMap9F = new float[129 * 129];
-            m_heightMap8F = new float[128 * 128];
-            if (fread(m_heightMap9F, sizeof(float), 129 * 129, f) != 129 * 129 ||
-                fread(m_heightMap8F, sizeof(float), 128 * 128, f) != 128 * 128)
+            m_heightMap9F = std::make_unique<float[]>(129 * 129);
+            m_heightMap8F = std::make_unique<float[]>(128 * 128);
+            if (fread(m_heightMap9F.get(), sizeof(float), 129 * 129, f) != 129 * 129 ||
+                fread(m_heightMap8F.get(), sizeof(float), 128 * 128, f) != 128 * 128)
                 return;
 
             m_gridGetHeight = &TileMap::getHeightFromFloat;
@@ -170,19 +165,19 @@ void TileMap::loadLiquidData(FILE* f, TileMapHeader& header)
 
     if (!(liquidHeader.flags & MAP_LIQUID_NO_TYPE))
     {
-        m_liquidEntry = new uint16_t[16 * 16];
-        if (fread(m_liquidEntry, sizeof(uint16_t), 16 * 16, f) != 16 * 16)
+        m_liquidEntry = std::make_unique<uint16_t[]>(16 * 16);
+        if (fread(m_liquidEntry.get(), sizeof(uint16_t), 16 * 16, f) != 16 * 16)
             return;
 
-        m_liquidFlags = new uint8_t[16 * 16];
-        if (fread(m_liquidFlags, sizeof(uint8_t), 16 * 16, f) != 16 * 16)
+        m_liquidFlags = std::make_unique<uint8_t[]>(16 * 16);
+        if (fread(m_liquidFlags.get(), sizeof(uint8_t), 16 * 16, f) != 16 * 16)
             return;
     }
 
     if (!(liquidHeader.flags & MAP_LIQUID_NO_HEIGHT))
     {
-        m_liquidMap = new float[m_liquidWidth * m_liquidHeight];
-        if (fread(m_liquidMap, sizeof(float), m_liquidWidth * m_liquidHeight, f) != 16 * 16)
+        m_liquidMap = std::make_unique<float[]>(m_liquidWidth * m_liquidHeight);
+        if (fread(m_liquidMap.get(), sizeof(float), m_liquidWidth * m_liquidHeight, f) != 16 * 16)
             return;
     }
 }
@@ -192,8 +187,8 @@ void TileMap::loadHolesData(FILE* in, TileMapHeader& header)
     if (fseek(in, header.holesOffset, SEEK_SET) != 0)
         return;
 
-    m_holes = new uint16_t[16 * 16];
-    if (fread(m_holes, sizeof(uint16_t), 16 * 16, in) != 16 * 16)
+    m_holes = std::make_unique<uint16_t[]>(16 * 16);
+    if (fread(m_holes.get(), sizeof(uint16_t), 16 * 16, in) != 16 * 16)
         return;
 }
 
@@ -491,13 +486,13 @@ ZLiquidStatus TileMap::getLiquidStatus(LocationVector pos, uint8_t ReqLiquidType
     int idx = (x_int >> 3) * 16 + (y_int >> 3);
     uint8_t type = m_liquidFlags ? m_liquidFlags[idx] : m_liquidGlobalFlags;
     uint32_t entry = m_liquidEntry ? m_liquidEntry[idx] : m_liquidGlobalEntry;
-    if (DBC::Structures::LiquidTypeEntry const* liquidEntry = sLiquidTypeStore.LookupEntry(entry))
+    if (WDB::Structures::LiquidTypeEntry const* liquidEntry = sLiquidTypeStore.lookupEntry(entry))
     {
         type &= MAP_LIQUID_TYPE_DARK_WATER;
         uint32_t liqTypeIdx = liquidEntry->Type;
         if (entry < 21)
         {
-            if (DBC::Structures::AreaTableEntry const* area = sAreaStore.LookupEntry(getArea(pos.x, pos.y)))
+            if (WDB::Structures::AreaTableEntry const* area = sAreaStore.lookupEntry(getArea(pos.x, pos.y)))
             {
 #if VERSION_STRING > Classic
                 uint32_t overrideLiquid = area->liquid_type_override[liquidEntry->Type];
@@ -511,7 +506,7 @@ ZLiquidStatus TileMap::getLiquidStatus(LocationVector pos, uint8_t ReqLiquidType
                 uint32_t overrideLiquid = 0;
 #endif
 
-                if (DBC::Structures::LiquidTypeEntry const* liq = sLiquidTypeStore.LookupEntry(overrideLiquid))
+                if (WDB::Structures::LiquidTypeEntry const* liq = sLiquidTypeStore.lookupEntry(overrideLiquid))
                 {
                     entry = overrideLiquid;
                     liqTypeIdx = liq->Type;
@@ -559,20 +554,17 @@ ZLiquidStatus TileMap::getLiquidStatus(LocationVector pos, uint8_t ReqLiquidType
     // For speed check as int values
     float delta = liquid_level - pos.z;
 
-    if (delta > collisionHeight)                   // Under water
+    if (delta > collisionHeight)        // Under water
         return LIQUID_MAP_UNDER_WATER;
     if (delta > 0.0f)                   // In water
         return LIQUID_MAP_IN_WATER;
-    if (delta > -0.1f)                   // Walk on water
+    if (delta > -0.1f)                  // Walk on water
         return LIQUID_MAP_WATER_WALK;
     // Above water
     return LIQUID_MAP_ABOVE_WATER;
 }
 
-TerrainTile::~TerrainTile()
-{
-    m_parent->m_tiles[m_tx][m_ty] = nullptr;
-}
+TerrainTile::~TerrainTile() = default;
 
 TerrainTile::TerrainTile(TerrainHolder* parent, uint32_t mapid, int32_t x, int32_t y)
 {
@@ -580,7 +572,15 @@ TerrainTile::TerrainTile(TerrainHolder* parent, uint32_t mapid, int32_t x, int32
     m_mapid = mapid;
     m_tx = x;
     m_ty = y;
-    ++m_refs;
+}
+
+void TerrainTile::Load()
+{
+    char filename[1024];
+
+    // Normal map stuff
+    sprintf(filename, "%smaps/%04u_%02u_%02u.map", sWorld.settings.server.dataDir.c_str(), m_mapid, m_tx, m_ty);
+    m_map.load(filename);
 }
 
 TerrainHolder::TerrainHolder(uint32_t mapid)
@@ -630,15 +630,8 @@ TerrainTile* TerrainHolder::getTile(float x, float y)
 
 TerrainTile* TerrainHolder::getTile(int32_t tx, int32_t ty)
 {
-    m_lock[tx][ty].Acquire();
-
-    TerrainTile* terrain_tile = m_tiles[tx][ty];
-    if (terrain_tile != nullptr)
-        terrain_tile->AddRef();
-
-    m_lock[tx][ty].Release();
-
-    return terrain_tile;
+    std::lock_guard lock(m_lock[tx][ty]);
+    return m_tiles[tx][ty].get();
 }
 
 void TerrainHolder::loadTile(float x, float y)
@@ -650,16 +643,14 @@ void TerrainHolder::loadTile(float x, float y)
 
 void TerrainHolder::loadTile(int32_t tx, int32_t ty)
 {
-    m_lock[tx][ty].Acquire();
+    std::lock_guard lock(m_lock[tx][ty]);
 
     ++m_tilerefs[tx][ty];
     if (m_tiles[tx][ty] == nullptr)
     {
-        m_tiles[tx][ty] = new TerrainTile(this, m_mapid, tx, ty);
+        m_tiles[tx][ty] = std::make_unique<TerrainTile>(this, m_mapid, tx, ty);
         m_tiles[tx][ty]->Load();
     }
-
-    m_lock[tx][ty].Release();
 }
 
 void TerrainHolder::unloadTile(float x, float y)
@@ -671,27 +662,13 @@ void TerrainHolder::unloadTile(float x, float y)
 
 void TerrainHolder::unloadTile(int32_t tx, int32_t ty)
 {
-    m_lock[tx][ty].Acquire();
+    std::lock_guard lock(m_lock[tx][ty]);
 
     if (m_tiles[tx][ty] == nullptr)
-    {
-        m_lock[tx][ty].Release();
         return;
-    }
-
-    m_lock[tx][ty].Release();
 
     if (--m_tilerefs[tx][ty] == 0)
-    {
-        m_lock[tx][ty].Acquire();
-
-        if (m_tiles[tx][ty] != nullptr)
-            m_tiles[tx][ty]->DecRef();
-
         m_tiles[tx][ty] = nullptr;
-
-        m_lock[tx][ty].Release();
-    }
 }
 
 void TerrainHolder::getCellLimits(uint32_t& StartX, uint32_t& EndX, uint32_t& StartY, uint32_t& EndY)

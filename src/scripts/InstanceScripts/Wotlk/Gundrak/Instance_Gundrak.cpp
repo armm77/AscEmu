@@ -1,11 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Instance_Gundrak.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Objects/GameObject.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
 
 class GundrakScript : public InstanceScript
 {
@@ -231,7 +234,7 @@ public:
     explicit SladranAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
         CreatureAISpells* sdPoisonNova = nullptr;
-        if (_isHeroic())
+        if (isHeroic())
         {
             addAISpell(59840, 25.0f, TARGET_ATTACKING, 0, 6);
             addAISpell(59839, 18.0f, TARGET_RANDOM_SINGLE, 2, 8);
@@ -264,7 +267,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new GalDarahAI(c); }
     explicit GalDarahAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
             addAISpell(59824, 20.0f, TARGET_SELF, 0, 12);
         else
             addAISpell(55250, 20.0f, TARGET_SELF, 0, 12);

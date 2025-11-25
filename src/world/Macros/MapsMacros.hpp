@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -56,7 +56,7 @@ This file is released under the MIT license. See README-MIT for more information
 #elif VERSION_STRING == Cata
     #define MAX_NUM_MAPS 975
 #elif VERSION_STRING == Mop
-    #define MAX_NUM_MAPS 975
+    #define MAX_NUM_MAPS 975 // up
 #endif
 
 #define CREATURE_SPAWNS_FIELDCOUNT 32

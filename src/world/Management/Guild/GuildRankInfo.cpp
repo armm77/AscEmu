@@ -1,15 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "GuildRankInfo.hpp"
 #include "GuildBankRightsAndSlots.hpp"
-#include "Log.hpp"
+#include "GuildDefinitions.hpp"
+#include "Logging/Log.hpp"
 #include "Database/Database.h"
 #include "Logging/Logger.hpp"
-#include "Server/MainServerDefines.h"
-
+#include "Server/DatabaseDefinition.hpp"
 
 GuildRankInfo::GuildRankInfo() : mGuildId(0), mRankId(GUILD_RANK_NONE), mRights(GR_RIGHT_EMPTY), mBankMoneyPerDay(0)
 {
@@ -26,10 +26,10 @@ GuildRankInfo::GuildRankInfo(uint32_t guildId, uint8_t rankId, std::string const
 
 void GuildRankInfo::loadGuildRankFromDB(Field* fields)
 {
-    mRankId = fields[1].GetUInt8();
-    mName = fields[2].GetString();
-    mRights = fields[3].GetUInt32();
-    mBankMoneyPerDay = fields[4].GetUInt32();
+    mRankId = fields[1].asUint8();
+    mName = fields[2].asCString();
+    mRights = fields[3].asUint32();
+    mBankMoneyPerDay = fields[4].asUint32();
 
     if (mRankId == GR_GUILDMASTER)
     {
@@ -130,7 +130,7 @@ void GuildRankInfo::createMissingTabsIfNeeded(uint8_t tabs, bool /*_delete*/, bo
             rightsAndSlots.SetGuildMasterValues();
 
         if (logOnCreate)
-            sLogger.failure("Guild %u has broken Tab %u for rank %u. Created default tab.", mGuildId, i, static_cast<uint32_t>(mRankId));
+            sLogger.failure("Guild {} has broken Tab {} for rank {}. Created default tab.", mGuildId, i, static_cast<uint32_t>(mRankId));
 
         CharacterDatabase.Execute("REPLACE INTO guild_bank_rights VALUES(%u, %u, %u, %u, %u);",
             mGuildId, i, static_cast<uint32_t>(mRankId), static_cast<uint32_t>(rightsAndSlots.getRights()), rightsAndSlots.getSlots());

@@ -1,16 +1,23 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Instance_ShadowfangKeep.h"
-#include "Server/Script/CreatureAIScript.h"
 
-#include "Spell/SpellAuras.h"
-#include "Spell/Definitions/PowerType.hpp"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Objects/GameObject.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Utilities/Random.hpp"
 
- // Instance script for map 33 (Shadowfang Keep)
+// Instance script for map 33 (Shadowfang Keep)
 class ShadowfangKeepInstance : public InstanceScript
 {
     // Gameobjects low guids
@@ -317,7 +324,7 @@ public:
     void OnCreaturePushToWorld(Creature* pCreature) override
     {
         WoWGuid wowGuid;
-        wowGuid.Init(pCreature->getGuid());
+        wowGuid.init(pCreature->getGuid());
 
         switch (pCreature->getEntry())
         {
@@ -500,7 +507,7 @@ public:
         }
     }
 
-    void DoAction(int32 const action) override
+    void DoAction(int32_t const action) override
     {
         switch (action)
         {
@@ -1068,7 +1075,6 @@ public:
         setAIAgent(AGENT_SPELL);
 
         aiUpdateOriginal = GetAIUpdateFreq();
-        originalRegen = getCreature()->m_pctPowerRegenModifier[POWER_TYPE_MANA];
     }
 
     void OnCastSpell(uint32_t spellId) override
@@ -1083,15 +1089,14 @@ public:
     {
         setAIAgent(AGENT_SPELL);
         getCreature()->getAIInterface()->setMeleeDisabled(true);
-        getCreature()->m_pctPowerRegenModifier[POWER_TYPE_MANA] = originalRegen;
+        getCreature()->removeNpcFlags(UNIT_NPC_FLAG_DISABLE_PWREGEN);
     }
 
     void OnCombatStart(Unit* /*pEnemy*/) override
     {
         // do not regen mana
-        getCreature()->m_pctPowerRegenModifier[POWER_TYPE_MANA] = 0.3f;
+        getCreature()->addNpcFlags(UNIT_NPC_FLAG_DISABLE_PWREGEN);
         aiUpdateOriginal = GetAIUpdateFreq();
-        originalRegen = getCreature()->m_pctPowerRegenModifier[POWER_TYPE_MANA];
 
         // Do not do melee attacks
         getCreature()->getAIInterface()->setMeleeDisabled(true);
@@ -1197,7 +1202,6 @@ protected:
     CreatureAISpells* sVoidBolt;
 
     uint32_t aiUpdateOriginal;
-    float originalRegen;
 };
 
 // Creature entry: 3886

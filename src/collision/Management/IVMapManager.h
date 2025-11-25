@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,9 +20,10 @@
 #ifndef _IVMAPMANAGER_H
 #define _IVMAPMANAGER_H
 
+#include "CommonTypes.hpp"
 #include <string>
 #include <optional>
-#include "Common.hpp"
+#include <cstdint>
 
  //! Optional helper class to wrap optional values within.
 template <class T>

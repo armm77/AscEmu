@@ -1,27 +1,26 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Channel.hpp"
 #include "ChannelMgr.hpp"
-
 #include "ChatDefines.hpp"
-#include "Map/Area/AreaManagementGlobals.hpp"
-#include "Objects/Units/Players/Player.hpp"
-#include "Server/World.h"
-#include "Server/WorldSession.h"
-#include "Server/Packets/SmsgChannelNotify.h"
-#include "Server/Packets/SmsgChannelList.h"
-#include "Server/Packets/SmsgMessageChat.h"
 #include "WorldPacket.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Server/Packets/SmsgChannelList.h"
+#include "Server/Packets/SmsgChannelNotify.h"
+#include "Server/Packets/SmsgMessageChat.h"
+#include "Storage/WDB/WDBStores.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
 
 using namespace AscEmu::Packets;
 
 Channel::Channel(std::string name, uint8_t team, uint32_t channelId/* = 0*/) :
     m_channelName(name), m_channelTeam(team), m_channelId(channelId)
 {
-    const auto channelDbc = sChatChannelsStore.LookupEntry(channelId);
+    const auto channelDbc = sChatChannelsStore.lookupEntry(channelId);
     if (channelDbc != nullptr)
     {
         // Default channels
@@ -89,7 +88,7 @@ void Channel::attemptJoin(Player* plr, std::string password, bool skipCheck/* = 
     {
         const auto areaEntry = plr->GetArea();
 
-        const auto channelDbc = sChatChannelsStore.LookupEntry(getChannelId());
+        const auto channelDbc = sChatChannelsStore.lookupEntry(getChannelId());
         if (!sChannelMgr.canPlayerJoinDefaultChannel(plr, areaEntry, channelDbc))
             return;
     }

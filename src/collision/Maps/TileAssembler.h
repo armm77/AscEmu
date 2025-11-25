@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,13 +20,13 @@
 #ifndef _TILEASSEMBLER_H_
 #define _TILEASSEMBLER_H_
 
+#include "ModelInstance.h"
+#include "WorldModel.h"
+
 #include <G3D/Vector3.h>
 #include <G3D/Matrix3.h>
 #include <map>
 #include <set>
-
-#include "ModelInstance.h"
-#include "WorldModel.h"
 
 namespace VMAP
 {
@@ -53,8 +53,8 @@ namespace VMAP
             void moveToBasePos(const G3D::Vector3& pBasePos) { iPos -= pBasePos; }
     };
 
-    typedef std::map<uint32, ModelSpawn> UniqueEntryMap;
-    typedef std::multimap<uint32, uint32> TileMap;
+    typedef std::map<uint32_t, ModelSpawn> UniqueEntryMap;
+    typedef std::multimap<uint32_t, uint32_t> TileMap;
 
     struct MapSpawns
     {
@@ -62,30 +62,34 @@ namespace VMAP
         TileMap TileEntries;
     };
 
-    typedef std::map<uint32, MapSpawns*> MapData;
+    typedef std::map<uint32_t, std::unique_ptr<MapSpawns>> MapData;
     //===============================================
 
     struct GroupModel_Raw
     {
-        uint32 mogpflags;
-        uint32 GroupWMOID;
+        uint32_t mogpflags;
+        uint32_t GroupWMOID;
 
         G3D::AABox bounds;
-        uint32 liquidflags;
+        uint32_t liquidflags;
         std::vector<MeshTriangle> triangles;
         std::vector<G3D::Vector3> vertexArray;
-        class WmoLiquid* liquid;
+        std::unique_ptr<WmoLiquid> liquid;
 
         GroupModel_Raw() : mogpflags(0), GroupWMOID(0), liquidflags(0),
-            liquid(NULL) { }
+            liquid(nullptr) { }
         ~GroupModel_Raw();
+
+        // Define explicitly for unique_ptr
+        GroupModel_Raw(GroupModel_Raw&&) = default;
+        GroupModel_Raw& operator=(GroupModel_Raw&&) = default;
 
         bool Read(FILE* f);
     };
 
     struct WorldModel_Raw
     {
-        uint32 RootWMOID;
+        uint32_t RootWMOID;
         std::vector<GroupModel_Raw> groupsArray;
 
         bool Read(const char * path);

@@ -1,20 +1,28 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "SpellAuras.h"
-
+#include "Spell/Spell.hpp"
+#include "SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
 #include "Definitions/SpellFamily.hpp"
 #include "Definitions/SpellIsFlags.hpp"
 #include "Definitions/SpellTypes.hpp"
 #include "SpellMgr.hpp"
+#include "Logging/Logger.hpp"
 #include "Management/ItemInterface.h"
-
-#include "Management/ObjectMgr.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Storage/WDB/WDBStores.hpp"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Item.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 #include "Storage/MySQLDataStore.hpp"
 #include "Objects/Units/Creatures/Pet.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Narrow.hpp"
+#include "Utilities/Random.hpp"
 
 pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
 {
@@ -102,11 +110,11 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::SpellAuraSplitDamage,                                            //  81 SPELL_AURA_SPLIT_DAMAGE
     &Aura::SpellAuraWaterBreathing,                                         //  82 SPELL_AURA_WATER_BREATHING
     &Aura::SpellAuraModBaseResistance,                                      //  83 SPELL_AURA_MOD_BASE_RESISTANCE
-    &Aura::spellAuraEffectNotUsed,                                          //  84 SPELL_AURA_MOD_REGEN // Implemented in Player::regenerateHealth
+    &Aura::spellAuraEffectNotUsed,                                          //  84 SPELL_AURA_MOD_HEALTH_REGEN // Implemented in Player::calculateHealthRegenerationValue, Creature::RegenerateHealth
     &Aura::spellAuraEffectModPowerRegen,                                    //  85 SPELL_AURA_MOD_POWER_REGEN
     &Aura::SpellAuraChannelDeathItem,                                       //  86 SPELL_AURA_CHANNEL_DEATH_ITEM
     &Aura::SpellAuraModDamagePercTaken,                                     //  87 SPELL_AURA_MOD_DAMAGE_PERC_TAKEN
-    &Aura::SpellAuraModRegenPercent,                                        //  88 SPELL_AURA_MOD_REGEN_PERCENT
+    &Aura::spellAuraEffectNotUsed,                                          //  88 SPELL_AURA_MOD_HEALTH_REGEN_PERCENT // Implemented in Player::calculateHealthRegenerationValue, Creature::RegenerateHealth
     &Aura::spellAuraEffectPeriodicDamagePercent,                            //  89 SPELL_AURA_PERIODIC_DAMAGE_PERCENT
     &Aura::SpellAuraModResistChance,                                        //  90 SPELL_AURA_MOD_RESIST_CHANCE
     &Aura::SpellAuraModDetectRange,                                         //  91 SPELL_AURA_MOD_DETECT_RANGE
@@ -128,13 +136,13 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::spellAuraEffectAddModifier,                                      // 107 SPELL_AURA_ADD_FLAT_MODIFIER
     &Aura::spellAuraEffectAddModifier,                                      // 108 SPELL_AURA_ADD_PCT_MOD
     &Aura::SpellAuraAddClassTargetTrigger,                                  // 109 SPELL_AURA_ADD_CLASS_TARGET_TRIGGER
-    &Aura::SpellAuraModPowerRegPerc,                                        // 110 SPELL_AURA_MOD_POWER_REG_PERC
+    &Aura::spellAuraEffectModPowerRegen,                                    // 110 SPELL_AURA_MOD_POWER_REGEN_PERCENT
     &Aura::spellAuraEffectNotImplemented,                                   // 111 SPELL_AURA_111
     &Aura::SpellAuraOverrideClassScripts,                                   // 112 SPELL_AURA_OVERRIDE_CLASS_SCRIPTS
     &Aura::SpellAuraModRangedDamageTaken,                                   // 113 SPELL_AURA_MOD_RANGED_DAMAGE_TAKEN
     &Aura::spellAuraEffectNotImplemented,                                   // 114 SPELL_AURA_114
     &Aura::SpellAuraModHealing,                                             // 115 SPELL_AURA_MOD_HEALING
-    &Aura::SpellAuraIgnoreRegenInterrupt,                                   // 116 SPELL_AURA_IGNORE_REGEN_INTERRUPT
+    &Aura::spellAuraEffectNotUsed,                                          // 116 SPELL_AURA_MOD_HEALTH_REGEN_DURING_COMBAT // Implemented in Player::calculateHealthRegenerationValue
     &Aura::SpellAuraModMechanicResistance,                                  // 117 SPELL_AURA_MOD_MECHANIC_RESISTANCE
     &Aura::SpellAuraModHealingPCT,                                          // 118 SPELL_AURA_MOD_HEALING_PCT
     &Aura::spellAuraEffectNotImplemented,                                   // 119 SPELL_AURA_119
@@ -179,7 +187,7 @@ pSpellAura SpellAuraHandler[TOTAL_SPELL_AURAS] =
     &Aura::SpellAuraModBlockValue,                                          // 158 SPELL_AURA_MOD_BLOCK_VALUE
     &Aura::SpellAuraNoPVPCredit,                                            // 159 SPELL_AURA_NO_PVP_CREDIT
     &Aura::spellAuraEffectNotImplemented,                                   // 160 SPELL_AURA_160
-    &Aura::SpellAuraModHealthRegInCombat,                                   // 161 SPELL_AURA_MOD_HEALTH_REG_IN_COMBAT
+    &Aura::spellAuraEffectNotUsed,                                          // 161 SPELL_AURA_MOD_HEALTH_REGEN_ALWAYS // implemented in Player::calculateHealthRegenerationValue
     &Aura::spellAuraEffectPeriodicPowerBurn,                                // 162 SPELL_AURA_PERIODIC_POWER_BURN
     &Aura::SpellAuraModCritDmgPhysical,                                     // 163 SPELL_AURA_MOD_CRIT_DMG_PHYSICAL
     &Aura::spellAuraEffectNotImplemented,                                   // 164 SPELL_AURA_164
@@ -552,11 +560,11 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_SPLIT_DAMAGE",                                              //  81 Split Damage
     "SPELL_AURA_WATER_BREATHING",                                           //  82 Water Breathing
     "SPELL_AURA_MOD_BASE_RESISTANCE",                                       //  83 Mod Base Resistance
-    "SPELL_AURA_MOD_REGEN",                                                 //  84 Mod Health Regen
+    "SPELL_AURA_MOD_HEALTH_REGEN",                                          //  84 Mod Health Regen
     "SPELL_AURA_MOD_POWER_REGEN",                                           //  85 Mod Power Regen
     "SPELL_AURA_CHANNEL_DEATH_ITEM",                                        //  86 Create Death Item
     "SPELL_AURA_MOD_DAMAGE_PERC_TAKEN",                                     //  87 Mod Dmg % Taken
-    "SPELL_AURA_MOD_REGEN_PERCENT",                                         //  88 Mod Health Regen Percent
+    "SPELL_AURA_MOD_HEALTH_REGEN_PERCENT",                                  //  88 Mod Health Regen Percent
     "SPELL_AURA_PERIODIC_DAMAGE_PERCENT",                                   //  89 Periodic Damage Percent
     "SPELL_AURA_MOD_RESIST_CHANCE",                                         //  90 Mod Resist Chance
     "SPELL_AURA_MOD_DETECT_RANGE",                                          //  91 Mod Detect Range
@@ -578,13 +586,13 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_ADD_FLAT_MODIFIER",                                         // 107 Add Flat Modifier
     "SPELL_AURA_ADD_PCT_MOD",                                               // 108 Add % Modifier
     "SPELL_AURA_ADD_CLASS_TARGET_TRIGGER",                                  // 109 Add Class Target Trigger
-    "SPELL_AURA_MOD_POWER_REG_PERC",                                        // 110 Mod Power Regen %
+    "SPELL_AURA_MOD_POWER_REGEN_PERCENT",                                   // 110 Mod Power Regen %
     "SPELL_AURA_111",                                                       // 111 Add Class Caster Hit Trigger
     "SPELL_AURA_OVERRIDE_CLASS_SCRIPTS",                                    // 112 Override Class Scripts
     "SPELL_AURA_MOD_RANGED_DAMAGE_TAKEN",                                   // 113 Mod Ranged Dmg Taken
     "SPELL_AURA_114",                                                       // 114 Mod Ranged % Dmg Taken
     "SPELL_AURA_MOD_HEALING",                                               // 115 Mod Healing
-    "SPELL_AURA_IGNORE_REGEN_INTERRUPT",                                    // 116 Regen During Combat
+    "SPELL_AURA_MOD_HEALTH_REGEN_DURING_COMBAT",                            // 116 Mod Health Regen During Combat
     "SPELL_AURA_MOD_MECHANIC_RESISTANCE",                                   // 117 Mod Mechanic Resistance
     "SPELL_AURA_MOD_HEALING_PCT",                                           // 118 Mod Healing %
     "SPELL_AURA_119",                                                       // 119 Share Pet Tracking
@@ -629,7 +637,7 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_MOD_BLOCK_VALUE",                                           // 158 used Apply Aura: Mod Shield Block // https://classic.wowhead.com/spell=25036/
     "SPELL_AURA_NO_PVP_CREDIT",                                             // 159 used Apply Aura: No PVP Credit // https://classic.wowhead.com/spell=2479/
     "SPELL_AURA_160",                                                       // 160 used Apply Aura: Mod Side/Rear PBAE Damage Taken % // https://classic.wowhead.com/spell=23198
-    "SPELL_AURA_MOD_HEALTH_REG_IN_COMBAT",                                  // 161 Mod Health Regen In Combat
+    "SPELL_AURA_MOD_HEALTH_REGEN_ALWAYS",                                   // 161 Mod Health Regen Always (In combat as well)
     "SPELL_AURA_PERIODIC_POWER_BURN",                                       // 162 Power Burn
     "SPELL_AURA_MOD_CRIT_DMG_PHYSICAL",                                     // 163 missing Apply Aura: Mod Critical Damage Bonus (Physical)
     "SPELL_AURA_164",                                                       // 164 missing used // test spell
@@ -688,7 +696,7 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_MOD_CASTING_SPEED",                                         // 216 // not used
     "SPELL_AURA_217",                                                       // 217 // increases time between ranged attacks
     "SPELL_AURA_218",                                                       // 218 Regenerate mana equal to $s1% of your Intellect every 5 sec, even while casting
-    "SPELL_AURA_REGEN_MANA_STAT_PCT",                                       // 219 Increases your healing spells  by up to $s1% of your Strength // increases your critical strike rating by 35% of your spirit // Molten Armor only?
+    "SPELL_AURA_REGEN_MANA_STAT_PCT",                                       // 219 Increases your healing spells by up to $s1% of your Strength // increases your critical strike rating by 35% of your spirit // Molten Armor only?
     "SPELL_AURA_SPELL_HEALING_STAT_PCT",                                    // 220 Detaunt "Ignores an enemy, forcing the caster to not attack it unless there is no other target nearby. When the effect wears off, the creature will attack the most threatening target."
     "SPELL_AURA_221",                                                       // 221 // not used
     "SPELL_AURA_222",                                                       // 222 // used in one spell, cold stare 43593
@@ -698,7 +706,7 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
     "SPELL_AURA_PERIODIC_TRIGGER_DUMMY",                                    // 226 // used in brewfest spells, headless horseman, Aspect of the Viper
     "SPELL_AURA_PERIODIC_TRIGGER_SPELL_WITH_VALUE",                         // 227 // Used by Mind Flay, Siege Turrets 'Machine gun' and a few other spells.
     "SPELL_AURA_228",                                                       // 228 Stealth Detection. https://www.wowhead.com/spell=34709 // handled in Unit::canSee
-    "SPELL_AURA_REDUCE_AOE_DAMAGE_TAKEN",                                   // 229  Apply Aura:Reduces the damage your pet takes from area of effect attacks // http://www.thottbot.com/s35694
+    "SPELL_AURA_REDUCE_AOE_DAMAGE_TAKEN",                                   // 229 Apply Aura:Reduces the damage your pet takes from area of effect attacks // http://www.thottbot.com/s35694
     "SPELL_AURA_INCREASE_MAX_HEALTH",                                       // 230 Used by Increase Max Health (commanding shout);
     "SPELL_AURA_PROC_TRIGGER_SPELL",                                        // 231 curse a target https://www.wowhead.com/spell=40303
     "SPELL_AURA_REDUCE_EFFECT_DURATION",                                    // 232 // Reduces duration of Magic effects by $s2%.
@@ -918,7 +926,7 @@ const char* SpellAuraNames[TOTAL_SPELL_AURAS] =
 
 void Aura::spellAuraEffectNotImplemented(AuraEffectModifier* aurEff, bool /*apply*/)
 {
-    sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::applyModifiers : Unknown aura id %u for spell id %u", aurEff->getAuraEffectType(), getSpellId());
+    sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::applyModifiers : Unknown aura id {} for spell id {}", aurEff->getAuraEffectType(), getSpellId());
 }
 
 void Aura::spellAuraEffectNotUsed(AuraEffectModifier* /*aurEff*/, bool /*apply*/)
@@ -945,7 +953,7 @@ void Aura::spellAuraEffectPeriodicDamage(AuraEffectModifier* aurEff, bool apply)
                 auto c = GetUnitCaster();
                 if (c != nullptr && c->isPlayer())
                 {
-                    aurEff->setEffectDamage(float2int32(static_cast<Player*>(c)->m_castedAmount[SCHOOL_FIRE] * parentsp->getEffectBasePoints(0) / 100.0f));
+                    aurEff->setEffectDamage(Util::float2int32(static_cast<Player*>(c)->m_castedAmount[SCHOOL_FIRE] * parentsp->getEffectBasePoints(0) / 100.0f));
                 }
                 else if (c != nullptr)
                 {
@@ -957,7 +965,7 @@ void Aura::spellAuraEffectPeriodicDamage(AuraEffectModifier* aurEff, bool apply)
 
                     //this is so not good, maybe parent spell has more then dmg effect and we use it to calc our new dmg :(
                     aurEff->setEffectDamage(0);
-                    for (uint8 i = 0; i < 3; ++i)
+                    for (uint8_t i = 0; i < 3; ++i)
                     {
                         const auto curVal = aurEff->getEffectDamage();
                         aurEff->setEffectDamage(curVal + (spell->calculateEffect(i) * parentsp->getEffectBasePoints(0) / 100));
@@ -975,7 +983,7 @@ void Aura::spellAuraEffectPeriodicDamage(AuraEffectModifier* aurEff, bool apply)
                 if (!c->isPlayer())
                     break;
 
-                uint32 multiplyer = 0;
+                uint32_t multiplyer = 0;
                 if (pSpellId == 12834)
                     multiplyer = 16; //level 1 of the talent should apply 16 of average melee weapon dmg
                 else if (pSpellId == 12849)
@@ -991,10 +999,10 @@ void Aura::spellAuraEffectPeriodicDamage(AuraEffectModifier* aurEff, bool apply)
                     if (it)
                     {
                         aurEff->setEffectDamage(0);
-                        for (uint8 i = 0; i < MAX_ITEM_PROTO_DAMAGES; ++i)
+                        for (uint8_t i = 0; i < MAX_ITEM_PROTO_DAMAGES; ++i)
                             if (it->getItemProperties()->Damage[i].Type == SCHOOL_NORMAL)
-                                aurEff->setEffectDamage(aurEff->getEffectDamage() + int32((it->getItemProperties()->Damage[i].Min + it->getItemProperties()->Damage[i].Max) / 2));
-                        aurEff->setEffectDamage((int32)multiplyer * aurEff->getEffectDamage() / 100);
+                                aurEff->setEffectDamage(aurEff->getEffectDamage() + int32_t((it->getItemProperties()->Damage[i].Min + it->getItemProperties()->Damage[i].Max) / 2));
+                        aurEff->setEffectDamage((int32_t)multiplyer * aurEff->getEffectDamage() / 100);
                     }
                 }
             }
@@ -1051,7 +1059,7 @@ void Aura::spellAuraEffectDummy(AuraEffectModifier* aurEff, bool apply)
     if (sScriptMgr.CallScriptedDummyAura(getSpellId(), aurEff->getEffectIndex(), this, apply))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::spellAuraEffectDummy : Spell %u (%s) has a dummy aura effect, but no handler for it.", m_spellInfo->getId(), m_spellInfo->getName().c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::spellAuraEffectDummy : Spell {} ({}) has a dummy aura effect, but no handler for it.", m_spellInfo->getId(), m_spellInfo->getName());
 }
 
 void Aura::spellAuraEffectPeriodicHeal(AuraEffectModifier* aurEff, bool apply)
@@ -1224,7 +1232,7 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
         }
     }
 
-    const auto shapeshiftForm = sSpellShapeshiftFormStore.LookupEntry(static_cast<uint32_t>(aurEff->getEffectMiscValue()));
+    const auto shapeshiftForm = sSpellShapeshiftFormStore.lookupEntry(static_cast<uint32_t>(aurEff->getEffectMiscValue()));
     if (shapeshiftForm == nullptr)
         return;
 
@@ -1368,8 +1376,6 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
                 getOwner()->castSpell(getOwner(), 54817, true);
                 // Demonic language
                 getOwner()->castSpell(getOwner(), 54879, true);
-                // Demonic spells
-                getOwner()->castSpell(getOwner(), 59673, true);
                 // Enslave immunity
                 getOwner()->castSpell(getOwner(), 61610, true);
             }
@@ -1514,7 +1520,7 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
     if (getPlayerOwner() != nullptr)
     {
         // Apply talents and spells that require this form
-        for (const auto& spell : getPlayerOwner()->m_spells)
+        for (const auto& spell : getPlayerOwner()->getSpellSet())
         {
             const auto spellInfo = sSpellMgr.getSpellInfo(spell);
             if (spellInfo == nullptr)
@@ -1542,7 +1548,7 @@ void Aura::spellAuraEffectModShapeshift(AuraEffectModifier* aurEff, bool apply)
         }
 
         // Apply dummy shapeshift spells
-        for (const auto& spell : getPlayerOwner()->mShapeShiftSpells)
+        for (const auto& spell : getPlayerOwner()->getShapeshiftSpells())
         {
             const auto spellInfo = sSpellMgr.getSpellInfo(spell);
             if (spellInfo == nullptr)
@@ -1580,8 +1586,8 @@ void Aura::spellAuraEffectPeriodicLeech(AuraEffectModifier* aurEff, bool apply)
             if (casterUnit->m_soulSiphon.m_amount)
             {
                 // Use std::map to prevent counting duplicate auras (stacked ones, from the same unit)
-                std::map<uint64_t, std::set<uint32_t> *> auras;
-                std::map<uint64_t, std::set<uint32_t> *>::iterator itx, itx2;
+                std::map<uint64_t, std::unique_ptr<std::set<uint32_t>>> auras;
+                std::map<uint64_t, std::unique_ptr<std::set<uint32_t>>>::iterator itx, itx2;
                 int32_t pct;
                 int32_t count = 0;
 
@@ -1596,11 +1602,10 @@ void Aura::spellAuraEffectPeriodicLeech(AuraEffectModifier* aurEff, bool apply)
                         continue;
 
                     auto _continue = false;
-                    const auto spellSkillBounds = sSpellMgr.getSkillEntryForSpellBounds(aura->getSpellId());
-                    for (auto spellSkillItr = spellSkillBounds.first; spellSkillItr != spellSkillBounds.second; ++spellSkillItr)
+                    const auto spellSkillRange = sSpellMgr.getSkillEntryRangeForSpell(aura->getSpellId());
+                    for (const auto& [_, skill_line_ability] : spellSkillRange)
                     {
-                        auto skill_line_ability = spellSkillItr->second;
-                        if (skill_line_ability == nullptr || skill_line_ability->skilline != SKILL_AFFLICTION)
+                        if (skill_line_ability->skilline != SKILL_AFFLICTION)
                         {
                             _continue = true;
                             break;
@@ -1613,12 +1618,11 @@ void Aura::spellAuraEffectPeriodicLeech(AuraEffectModifier* aurEff, bool apply)
                     itx = auras.find(aura->getCasterGuid());
                     if (itx == auras.end())
                     {
-                        std::set<uint32_t> *ids = new std::set<uint32_t>;
-                        auras.insert(make_pair(aura->getCasterGuid(), ids));
-                        itx = auras.find(aura->getCasterGuid());
+                        const auto [insertItr, _] = auras.emplace(aura->getCasterGuid(), std::make_unique<std::set<uint32_t>>());
+                        itx = insertItr;
                     }
 
-                    std::set<uint32> *ids = itx->second;
+                    const auto& ids = itx->second;
                     if (ids->find(aura->getSpellId()) == ids->end())
                     {
                         ids->insert(aura->getSpellId());
@@ -1632,7 +1636,6 @@ void Aura::spellAuraEffectPeriodicLeech(AuraEffectModifier* aurEff, bool apply)
                     {
                         itx2 = itx++;
                         count += (int32_t)itx2->second->size();
-                        delete itx2->second;
                     }
                 }
 
@@ -1668,7 +1671,7 @@ void Aura::spellAuraEffectTransform(AuraEffectModifier* aurEff, bool apply)
         const auto properties = sMySQLStore.getCreatureProperties(static_cast<uint32_t>(aurEff->getEffectMiscValue()));
         if (properties == nullptr)
         {
-            sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::spellAuraEffectTransform : Unknown creature entry %u in misc value for spell %u", aurEff->getEffectMiscValue(), getSpellId());
+            sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::spellAuraEffectTransform : Unknown creature entry {} in misc value for spell {}", aurEff->getEffectMiscValue(), getSpellId());
             return;
         }
 
@@ -1687,7 +1690,7 @@ void Aura::spellAuraEffectTransform(AuraEffectModifier* aurEff, bool apply)
 
         if (displayId == 0)
         {
-            sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::spellAuraEffectTransform : Creature entry %u has no display id for spell %u", properties->Id, getSpellId());
+            sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Aura::spellAuraEffectTransform : Creature entry {} has no display id for spell {}", properties->Id, getSpellId());
             return;
         }
 
@@ -1763,16 +1766,39 @@ void Aura::spellAuraEffectSchoolAbsorb(AuraEffectModifier* /*aurEff*/, bool /*ap
 
 void Aura::spellAuraEffectModPowerRegen(AuraEffectModifier* aurEff, bool apply)
 {
-    if (getPlayerOwner() == nullptr || aurEff->getEffectDamage() == 0)
+    if (aurEff->getEffectDamage() == 0)
         return;
 
-    // TODO: only mana is handled for now
-    if (aurEff->getEffectMiscValue() != POWER_TYPE_MANA)
-        return;
-
-    const auto value = apply ? aurEff->getEffectDamage() : -aurEff->getEffectDamage();
-    getPlayerOwner()->m_modInterrManaRegen += value;
-    getPlayerOwner()->updateStats();
+    // Update only necessary powers, the rest are handled in regeneratePower
+    switch (aurEff->getEffectMiscValue())
+    {
+        case POWER_TYPE_MANA:
+            // TODO: missing update for creatures
+            if (getPlayerOwner() == nullptr)
+                break;
+            getPlayerOwner()->updateManaRegeneration();
+            break;
+        case POWER_TYPE_RAGE:
+            if (getPlayerOwner() == nullptr)
+                break;
+            getPlayerOwner()->updateRageRegeneration();
+            break;
+        case POWER_TYPE_FOCUS:
+            getOwner()->updateFocusRegeneration();
+            break;
+        case POWER_TYPE_ENERGY:
+            getOwner()->updateEnergyRegeneration();
+            break;
+#if VERSION_STRING >= WotLK
+        case POWER_TYPE_RUNIC_POWER:
+            if (getPlayerOwner() == nullptr)
+                break;
+            getPlayerOwner()->updateRunicPowerRegeneration();
+            break;
+#endif
+        default:
+            break;
+    }
 }
 
 void Aura::spellAuraEffectPeriodicDamagePercent(AuraEffectModifier* aurEff, bool apply)
@@ -1803,7 +1829,7 @@ void Aura::spellAuraEffectAddModifier(AuraEffectModifier* aurEff, bool apply)
 {
     if (aurEff->getEffectMiscValue() >= MAX_SPELLMOD_TYPE)
     {
-        sLogger.failure("Aura::spellAuraEffectAddModifier : Unknown spell modifier type %u in spell %u, skipping", aurEff->getEffectMiscValue(), getSpellId());
+        sLogger.failure("Aura::spellAuraEffectAddModifier : Unknown spell modifier type {} in spell {}, skipping", aurEff->getEffectMiscValue(), getSpellId());
         return;
     }
 
@@ -1831,7 +1857,7 @@ void Aura::spellAuraEffectAddModifier(AuraEffectModifier* aurEff, bool apply)
     // Hunter's beastmastery talents
     if (aurEff->getAuraEffectType() == SPELL_AURA_ADD_FLAT_MODIFIER)
     {
-        const auto pet = getPlayerOwner()->getFirstPetFromSummons();
+        const auto pet = getPlayerOwner()->getPet();
         if (pet != nullptr)
         {
             switch (getSpellInfo()->getId())
@@ -1960,7 +1986,7 @@ void Aura::spellAuraEffectPeriodicTriggerDummy(AuraEffectModifier* aurEff, bool 
     else
     {
         if (!sScriptMgr.CallScriptedDummyAura(getSpellId(), aurEff->getEffectIndex(), this, false))
-            sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Spell aura %u has a periodic trigger dummy effect but no handler for it", getSpellId());
+            sLogger.debugFlag(AscEmu::Logging::LF_AURA_EFF, "Spell aura {} has a periodic trigger dummy effect but no handler for it", getSpellId());
 
 #if VERSION_STRING < Cata
         // Prior to cata periodic timer was resetted on refresh

@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@
 #include "WorldModel.h"
 #include "GameObjectModel.h"
 #include "Logging/Logger.hpp"
-#include "Util.hpp"
+#include "Utilities/Util.hpp"
 #include "MapTree.h"
 
 using G3D::Vector3;
@@ -52,7 +52,7 @@ void LoadGameObjectModelList(std::string const& dataPath)
     FILE* model_list_file = fopen((dataPath + "/" + VMAP::GAMEOBJECT_MODELS).c_str(), "rb");
     if (!model_list_file)
     {
-        sLogger.failure("Unable to open '%s' file.", VMAP::GAMEOBJECT_MODELS);
+        sLogger.failure("Unable to open '{}' file.", VMAP::GAMEOBJECT_MODELS);
         return;
     }
 
@@ -73,13 +73,13 @@ void LoadGameObjectModelList(std::string const& dataPath)
             || fread(&v1, sizeof(Vector3), 1, model_list_file) != 1
             || fread(&v2, sizeof(Vector3), 1, model_list_file) != 1)
         {
-            sLogger.failure("File '%s' seems to be corrupted!", VMAP::GAMEOBJECT_MODELS);
+            sLogger.failure("File '{}' seems to be corrupted!", VMAP::GAMEOBJECT_MODELS);
             break;
         }
 
         if (v1.isNaN() || v2.isNaN())
         {
-            sLogger.failure("File '%s' Model '%s' has invalid v1%s v2%s values!", VMAP::GAMEOBJECT_MODELS, std::string(buff, name_length).c_str(), v1.toString().c_str(), v2.toString().c_str());
+            sLogger.failure("File '{}' Model '{}' has invalid v1{} v2{} values!", VMAP::GAMEOBJECT_MODELS, std::string(buff, name_length), v1.toString(), v2.toString());
             continue;
         }
 
@@ -90,7 +90,7 @@ void LoadGameObjectModelList(std::string const& dataPath)
     }
 
     fclose(model_list_file);
-    sLogger.info("LoadGameObjectModelList : Loaded %u GameObject models in %u ms", uint32_t(model_list.size()), static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    sLogger.info("LoadGameObjectModelList : Loaded {} GameObject models in {} ms", uint32_t(model_list.size()), static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
 }
 
 GameObjectModel::~GameObjectModel()
@@ -109,7 +109,7 @@ bool GameObjectModel::initialize(std::unique_ptr<GameObjectModelOwnerBase> model
     // ignore models with no bounds
     if (mdl_box == G3D::AABox::zero())
     {
-        sLogger.failure("GameObject model %s has zero bounds, loading skipped", it->second.name.c_str());
+        sLogger.failure("GameObject model {} has zero bounds, loading skipped", it->second.name);
         return false;
     }
 
@@ -147,12 +147,11 @@ bool GameObjectModel::initialize(std::unique_ptr<GameObjectModelOwnerBase> model
     return true;
 }
 
-GameObjectModel* GameObjectModel::Create(std::unique_ptr<GameObjectModelOwnerBase> modelOwner, std::string const& dataPath)
+std::unique_ptr<GameObjectModel> GameObjectModel::Create(std::unique_ptr<GameObjectModelOwnerBase> modelOwner, std::string const& dataPath)
 {
-    GameObjectModel* mdl = new GameObjectModel();
+    auto mdl = std::unique_ptr<GameObjectModel>(new GameObjectModel());
     if (!mdl->initialize(std::move(modelOwner), dataPath))
     {
-        delete mdl;
         return nullptr;
     }
 
@@ -257,7 +256,7 @@ bool GameObjectModel::UpdatePosition()
     // ignore models with no bounds
     if (mdl_box == G3D::AABox::zero())
     {
-        sLogger.failure("GameObject model %s has zero bounds, loading skipped", it->second.name.c_str());
+        sLogger.failure("GameObject model {} has zero bounds, loading skipped", it->second.name);
         return false;
     }
 

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -32,7 +32,7 @@ namespace AscEmu::Packets
         bool internalSerialise(WorldPacket& packet) override
         {
 #if VERSION_STRING == Mop
-            ObjectGuid guid = itemGuid;
+            WoWGuid guid = itemGuid;
             packet.writeBit(guid[5]);
             packet.writeBit(guid[3]);
             packet.writeBit(guid[4]);

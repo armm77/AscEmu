@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2009-2012 ArcEmu Team <http://www.arcemu.org>
  *
@@ -18,14 +18,12 @@
  */
 
 #include "Setup.h"
-#include "Objects/Units/Creatures/AIInterface.h"
-#include "Objects/Item.hpp"
-#include "Map/Management/MapMgr.hpp"
-#include "Management/ItemInterface.h"
-#include "Storage/MySQLDataStore.hpp"
-#include <Management/QuestLogEntry.hpp>
-#include "Map/Maps/MapScriptInterface.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Movement/MovementManager.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Server/Script/CreatureAIScript.hpp"
 
 enum
 {

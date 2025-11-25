@@ -1,10 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
+#if VERSION_STRING > TBC
+
+#include <memory>
 #include <utility>
 #include <vector>
 #include <set>
@@ -60,11 +63,11 @@ struct CalendarEvent
 
     uint32_t m_entry;               // entry of the calendar event (unique)
     uint32_t m_creator;             // id of the character
-    std::string m_title;          // title of the calendar event
-    std::string m_description;    // description of the event
-    CalendarEventType m_type;     // the calendar type
+    std::string m_title;            // title of the calendar event
+    std::string m_description;      // description of the event
+    CalendarEventType m_type;       // the calendar type
     uint32_t m_dungeon;             // the dungeon id
-    time_t m_date;                // the date
+    time_t m_date;                  // the date
     uint32_t m_flags;               // the flag
 };
 
@@ -77,30 +80,27 @@ struct CalendarInvite
 
     ~CalendarInvite() = default;
 
-    uint32_t m_inviteId;               // entry of the calendar event (unique)
-    uint32_t m_event;             // id of the character
+    uint32_t m_inviteId;            // entry of the calendar event (unique)
+    uint32_t m_event;               // id of the character
     uint32_t m_invitee;
     uint32_t m_sender;
     CalendarInviteStatus m_status;
     time_t m_statusTime;
     uint32_t m_rank;
     std::string m_text;
-
 };
 
-typedef std::vector<CalendarInvite*> CalendarInviteStore;
-typedef std::set<CalendarEvent*> CalendarEventStore;
+typedef std::vector<std::unique_ptr<CalendarInvite>> CalendarInviteStore;
+typedef std::set<std::unique_ptr<CalendarEvent>> CalendarEventStore;
 typedef std::map<uint64_t /* eventId */, CalendarInviteStore > CalendarEventInviteStore;
 
 class CalendarMgr
 {
 private:
-
     CalendarMgr() = default;
     ~CalendarMgr() = default;
 
 public:
-
     static CalendarMgr& getInstance();
 
     CalendarMgr(CalendarMgr&&) = delete;
@@ -115,3 +115,5 @@ public:
 };
 
 #define sCalendarMgr CalendarMgr::getInstance()
+
+#endif

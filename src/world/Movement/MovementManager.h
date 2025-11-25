@@ -1,15 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Objects/Object.h"
-#include "MovementDefines.h"
-#include "MovementGenerator.h"
-#include "Objects/Units/Creatures/Creature.h"
-#include "Objects/Units/Unit.hpp"
+#include "Movement/MovementDefines.h"
+#include "Movement/MovementGenerator.h"
 
 #include <deque>
 #include <functional>
@@ -24,7 +21,7 @@ struct SplineChainLink;
 struct SplineChainResumeInfo;
 struct WaypointPath;
 
-namespace MovementNew
+namespace MovementMgr
 {
     class MoveSplineInit;
 }
@@ -157,7 +154,7 @@ public:
     // These two movement types should only be used with creatures having landing/takeoff animations
     void moveLand(uint32_t id, LocationVector const& pos, Optional<float> velocity = {});
     void moveTakeoff(uint32_t id, LocationVector const& pos, Optional<float> velocity = {});
-    void moveCharge(float x, float y, float z, float speed = SPEED_CHARGE, uint32_t id = EVENT_CHARGE, bool generatePath = false);
+    void moveCharge(LocationVector const& pos, float speed = SPEED_CHARGE, uint32_t id = EVENT_CHARGE, bool generatePath = false);
     void moveCharge(PathGenerator const& path, float speed = SPEED_CHARGE);
     void moveKnockbackFrom(float srcX, float srcY, float speedXY, float speedZ);
     void moveJumpTo(float angle, float speedXY, float speedZ);
@@ -170,15 +167,17 @@ public:
     void moveAlongSplineChain(uint32_t pointId, std::vector<SplineChainLink> const& chain, bool walk);
     void resumeSplineChain(SplineChainResumeInfo const& info);
     void moveFall(uint32_t id = 0);
-    void moveSeekAssistance(float x, float y, float z);
+    void moveSeekAssistance(LocationVector const& pos);
     void moveSeekAssistanceDistract(uint32_t timer);
+    void moveTaxiFlight(uint32_t path, uint32_t pathnode);
     void moveDistract(uint32_t time, float orientation);
     void movePath(uint32_t pathId, bool repeatable);
     void movePath(WaypointPath& path, bool repeatable);
     void moveRotate(uint32_t id, uint32_t time, RotateDirection direction);
     void moveFormation(Unit* leader, float range, float angle, uint32_t point1, uint32_t point2);
 
-    void launchMoveSpline(MovementNew::MoveSplineInit&& init, uint32_t id = 0, MovementGeneratorPriority priority = MOTION_PRIORITY_NORMAL, MovementGeneratorType type = EFFECT_MOTION_TYPE);
+    void launchMoveSpline(MovementMgr::MoveSplineInit&& init, uint32_t id = 0, MovementGeneratorPriority priority = MOTION_PRIORITY_NORMAL, MovementGeneratorType type = EFFECT_MOTION_TYPE);
+
 private:
     typedef std::unique_ptr<MovementGenerator, MovementGeneratorDeleter> MovementGeneratorPointer;
     typedef std::multiset<MovementGenerator*, MovementGeneratorComparator> MovementManagerContainer;

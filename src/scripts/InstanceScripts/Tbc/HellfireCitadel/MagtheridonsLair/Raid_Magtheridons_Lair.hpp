@@ -1,9 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
 
 // Channelers Coords is list of spawn points of all 5 channelers casting spell on Magtheridon
 static LocationVector Channelers[] =

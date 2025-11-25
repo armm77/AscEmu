@@ -1,26 +1,31 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Vehicle.hpp"
 
+#include "Logging/Logger.hpp"
+#include "Management/ObjectMgr.hpp"
 #include "Storage/MySQLDataStore.hpp"
-#include "Map/Management/MapMgr.hpp"
-#include "Spell/SpellAuras.h"
+#include "Spell/SpellAura.hpp"
 #include "Spell/Definitions/PowerType.hpp"
 #include "Server/Packets/SmsgControlVehicle.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Server/Script/CreatureAIScript.hpp"
 #include "Movement/MovementManager.h"
 #include "Movement/Spline/MoveSplineInit.h"
-#include "Storage/DBC/DBCStructures.hpp"
-#include "Pet.h"
-#include "Macros/ScriptMacros.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Storage/WDB/WDBStores.hpp"
 
 #ifdef FT_VEHICLES
 
-Vehicle::Vehicle(Unit* unit, DBC::Structures::VehicleEntry const* vehInfo, uint32_t creatureEntry) :
+Vehicle::Vehicle(Unit* unit, WDB::Structures::VehicleEntry const* vehInfo, uint32_t creatureEntry) :
     usableSeatNum(0), _owner(unit), _vehicleInfo(vehInfo), _creatureEntry(creatureEntry), _status(STATUS_NONE), _lastShootPos()
-{}
+{
+    initialize();
+}
 
 Vehicle::~Vehicle()
 {
@@ -55,7 +60,7 @@ void Vehicle::deactivate()
 {
     if (_status == STATUS_DEACTIVATED && !getBase()->hasUnitStateFlag(UNIT_STATE_ACCESSORY))
     {
-        sLogger.failure("Vehicle %s attempts to deactivate, but already has STATUS_DEACTIVATED! ", getBase()->getGuid());
+        sLogger.failure("Vehicle {} attempts to deactivate, but already has STATUS_DEACTIVATED! ", std::to_string(getBase()->getGuid()));
         return;
     }
 
@@ -72,7 +77,7 @@ void Vehicle::initSeats()
     for (uint8_t i = 0; i < MAX_VEHICLE_SEATS; ++i)
     {
         if (uint32_t seatId = _vehicleInfo->seatID[i])
-            if (auto veSeat = sVehicleSeatStore.LookupEntry(seatId))
+            if (auto veSeat = sVehicleSeatStore.lookupEntry(seatId))
             {
                 VehicleSeatAddon const* addon = sObjectMgr.getVehicleSeatAddon(seatId);
                 Seats.insert(std::make_pair(i, VehicleSeat(veSeat, addon)));
@@ -198,10 +203,10 @@ void Vehicle::applyAllImmunities()
 
 void Vehicle::loadAllAccessories(bool evading)
 {
-    if (getBase()->getObjectTypeId() == TYPEID_PLAYER || !evading)
+    if (getBase()->isPlayer() || !evading)
         removeAllPassengers();
 
-    VehicleAccessoryList const* accessories = sObjectMgr.getVehicleAccessories(this);
+    VehicleAccessoryList const* accessories = sObjectMgr.getVehicleAccessories(_creatureEntry);
     if (!accessories)
         return;
 
@@ -214,7 +219,7 @@ void Vehicle::loadAccessory(uint32_t entry, int8_t seatId, bool minion, uint8_t 
 {
     if (_status == STATUS_DEACTIVATED)
     {
-        sLogger.failure("Vehicle (%s, Entry: %u) attempts to load accessory (Entry: %u) on seat %d with STATUS_DEACTIVATED! ", getBase()->getGuid(), getEntry(), entry, (int32_t)seatId);
+        sLogger.failure("Vehicle ({}, Entry: {}) attempts to load accessory (Entry: {}) on seat {} with STATUS_DEACTIVATED! ", getBase()->getGuid(), getEntry(), entry, (int32_t)seatId);
         return;
     }
 
@@ -228,8 +233,10 @@ void Vehicle::loadAccessory(uint32_t entry, int8_t seatId, bool minion, uint8_t 
     accessory->setFaction(getBase()->getFactionTemplate());
     accessory->PushToWorld(getBase()->getWorldMap());
 
+#if VERSION_STRING <= WotLK
     accessory->obj_movement_info.addMovementFlag(MOVEFLAG_TRANSPORT);
     accessory->addUnitMovementFlag(MOVEFLAG_TRANSPORT);
+#endif
 
     if (minion)
         accessory->addUnitStateFlag(UNIT_STATE_ACCESSORY);
@@ -237,6 +244,10 @@ void Vehicle::loadAccessory(uint32_t entry, int8_t seatId, bool minion, uint8_t 
     // Delay for a bit so Accessory has time to get Pushed to World
     sEventMgr.AddEvent(getBase()->ToUnit(), &Unit::handleSpellClick, accessory->ToUnit(), seatId, 0, 50, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
 }
+
+Unit* Vehicle::getBase() const { return _owner; }
+WDB::Structures::VehicleEntry const* Vehicle::getVehicleInfo() const { return _vehicleInfo; }
+uint32_t Vehicle::getEntry() const { return _creatureEntry; }
 
 void Vehicle::removeAllPassengers()
 {
@@ -311,6 +322,9 @@ bool Vehicle::isControler(Unit* _unit)
     return false;
 }
 
+void Vehicle::setLastShootPos(LocationVector const& pos) { _lastShootPos.ChangeCoords(pos); }
+LocationVector const& Vehicle::getLastShootPos() const { return _lastShootPos; }
+
 VehicleSeatAddon const* Vehicle::getSeatAddonForSeatOfPassenger(Unit const* passenger) const
 {
     for (SeatMap::const_iterator itr = Seats.begin(); itr != Seats.end(); ++itr)
@@ -324,7 +338,7 @@ bool Vehicle::addPassenger(Unit* unit, int8_t seatId)
 {
     if (_status == STATUS_DEACTIVATED)
     {
-        sLogger.failure("Passenger %s, attempting to board vehicle %s during deactivating! SeatId: %d", unit->getGuid(), getBase()->getGuidHigh(), (int32_t)seatId);
+        sLogger.failure("Passenger {}, attempting to board vehicle {} during deactivating! SeatId: {}", unit->getGuid(), getBase()->getGuidHigh(), (int32_t)seatId);
         return false;
     }
 
@@ -370,14 +384,14 @@ Vehicle* Vehicle::removePassenger(Unit* unit)
     ASSERT(seat != Seats.end());
 
     if (seat->second._seatInfo->canEnterOrExit() && ++usableSeatNum)
-        getBase()->setNpcFlags((getBase()->getObjectTypeId() == TYPEID_PLAYER ? UNIT_NPC_FLAG_PLAYER_VEHICLE : UNIT_NPC_FLAG_SPELLCLICK));
+        getBase()->setNpcFlags((getBase()->isPlayer() ? UNIT_NPC_FLAG_PLAYER_VEHICLE : UNIT_NPC_FLAG_SPELLCLICK));
 
-    if (seat->second._seatInfo->flags & DBC::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_PASSENGER_NOT_SELECTABLE && !seat->second._passenger.isUnselectable)
+    if (seat->second._seatInfo->flags & WDB::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_PASSENGER_NOT_SELECTABLE && !seat->second._passenger.isUnselectable)
         unit->removeUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
 
     seat->second._passenger.reset();
 
-    if (getBase()->getObjectTypeId() == TYPEID_UNIT && unit->getObjectTypeId() == TYPEID_PLAYER && seat->second._seatInfo->flags & DBC::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_CAN_CONTROL)
+    if (getBase()->isCreature() && unit->isPlayer() && seat->second._seatInfo->flags & WDB::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_CAN_CONTROL)
     {
         unit->setCharmGuid(0);
         getBase()->setCharmedByGuid(0);
@@ -406,7 +420,9 @@ Vehicle* Vehicle::removePassenger(Unit* unit)
     {
         if (!getBase()->GetTransport())
         {
+#if VERSION_STRING <= WotLK
             unit->removeUnitMovementFlag(MOVEFLAG_TRANSPORT);
+#endif
             unit->obj_movement_info.clearTransportData();
         }
         else
@@ -444,7 +460,7 @@ void Vehicle::relocatePassengers()
             {
                 float px, py, pz, po;
                 passenger->obj_movement_info.transport_position.getPosition(px, py, pz, po);
-                CalculatePassengerPosition(px, py, pz, &po);
+                calculatePassengerPosition(px, py, pz, &po);
                 seatRelocation.emplace_back(passenger, LocationVector(px, py, pz, po));
             }
         }
@@ -472,7 +488,7 @@ bool Vehicle::isControllableVehicle() const
     return false;
 }
 
-DBC::Structures::VehicleSeatEntry const* Vehicle::getSeatForPassenger(Unit const* passenger) const
+WDB::Structures::VehicleSeatEntry const* Vehicle::getSeatForPassenger(Unit const* passenger) const
 {
     for (SeatMap::const_iterator itr = Seats.begin(); itr != Seats.end(); ++itr)
         if (itr->second._passenger.guid == passenger->getGuid())
@@ -489,6 +505,8 @@ int8_t Vehicle::getSeatForNumberPassenger(Unit const* passenger) const
 
     return -1;
 }
+
+bool Vehicle::hasVehicleFlags(uint32_t flags) { return getVehicleInfo()->flags & flags; }
 
 SeatMap::iterator Vehicle::getSeatIteratorForPassenger(Unit* passenger)
 {
@@ -534,7 +552,7 @@ bool Vehicle::tryAddPassenger(Unit* passenger, SeatMap::iterator &Seat)
 
         if (!usableSeatNum)
         {
-            if (getBase()->getObjectTypeId() == TYPEID_PLAYER)
+            if (getBase()->isPlayer())
                 getBase()->removeUnitFlags(UNIT_NPC_FLAG_PLAYER_VEHICLE);
             else
                 getBase()->removeUnitFlags( UNIT_NPC_FLAG_SPELLCLICK);
@@ -543,7 +561,7 @@ bool Vehicle::tryAddPassenger(Unit* passenger, SeatMap::iterator &Seat)
 
     passenger->removeAllAurasByAuraEffect(SPELL_AURA_MOUNTED);
 
-    DBC::Structures::VehicleSeatEntry const* veSeat = Seat->second._seatInfo;
+    WDB::Structures::VehicleSeatEntry const* veSeat = Seat->second._seatInfo;
     VehicleSeatAddon const* veSeatAddon = Seat->second._seatAddon;
 
     Player* player = passenger->ToPlayer();
@@ -552,24 +570,26 @@ bool Vehicle::tryAddPassenger(Unit* passenger, SeatMap::iterator &Seat)
         WorldPacket data(SMSG_ON_CANCEL_EXPECTED_RIDE_VEHICLE_AURA, 0);
         player->sendPacket(&data);
 
-        if (!veSeat->hasFlag(DBC::Structures::VehicleSeatFlagsB::VEHICLE_SEAT_FLAG_B_KEEP_PET))
+        if (!veSeat->hasFlag(WDB::Structures::VehicleSeatFlagsB::VEHICLE_SEAT_FLAG_B_KEEP_PET))
         {
             // Unsummon Pets
-            player->dismissActivePets();
+            player->unSummonPetTemporarily();
         }
     }
 
-    if (veSeat->hasFlag(DBC::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_PASSENGER_NOT_SELECTABLE))
+    if (veSeat->hasFlag(WDB::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_PASSENGER_NOT_SELECTABLE))
         passenger->addUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
 
     passenger->sendPacket(AscEmu::Packets::SmsgControlVehicle().serialise().get());
 
-    float o = veSeatAddon ? veSeatAddon->SeatOrientationOffset : 0.f;
+    float o = veSeatAddon ? veSeatAddon->seatOrientationOffset : 0.f;
     float x = veSeat->attachmentOffsetX;
     float y = veSeat->attachmentOffsetY;
     float z = veSeat->attachmentOffsetZ;
 
+#if VERSION_STRING <= WotLK
     passenger->addUnitMovementFlag(MOVEFLAG_TRANSPORT);
+#endif
     passenger->obj_movement_info.transport_position.changeCoords(x, y, z, o);
     passenger->obj_movement_info.transport_time = 0;
     passenger->obj_movement_info.transport_seat = Seat->first;
@@ -581,8 +601,8 @@ bool Vehicle::tryAddPassenger(Unit* passenger, SeatMap::iterator &Seat)
     }
 
     // handles SMSG_CLIENT_CONTROL
-    if (getBase()->getObjectTypeId() == TYPEID_UNIT && passenger->getObjectTypeId() == TYPEID_PLAYER &&
-        veSeat->hasFlag(DBC::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_CAN_CONTROL))
+    if (getBase()->isCreature() && passenger->isPlayer() &&
+        veSeat->hasFlag(WDB::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_CAN_CONTROL))
     {
         passenger->sendPacket(AscEmu::Packets::SmsgControlVehicle().serialise().get());
         static_cast<Player*>(passenger)->setFarsightGuid(getBase()->getGuid());
@@ -592,25 +612,22 @@ bool Vehicle::tryAddPassenger(Unit* passenger, SeatMap::iterator &Seat)
         getBase()->setCharmedByGuid(passenger->getGuid());
         getBase()->addUnitFlags(UNIT_FLAG_PLAYER_CONTROLLED_CREATURE);
 
-        WorldPacket spells(SMSG_PET_SPELLS, 100);
-        getBase()->buildPetSpellList(spells);
-        passenger->sendPacket(&spells);
+        if (auto* c = getBase()->ToCreature())
+        {
+            // set Correct Faction
+            c->setFaction(passenger->getFactionTemplate());
+
+            c->sendSpellsToController(passenger, 0);
+        }
 
         static_cast<Player*>(passenger)->setMover(getBase());
-
-        // set Correct Faction
-        if (getBase()->isCreature())
-        {
-            Creature* c = static_cast<Creature*>(getBase());
-            c->setFaction(passenger->getFactionTemplate());
-        }
     }
 
     passenger->setTargetGuid(0);
     passenger->setControlled(true, UNIT_STATE_ROOTED);
     
     // Send movement Spline
-    MovementNew::MoveSplineInit init(passenger);
+    MovementMgr::MoveSplineInit init(passenger);
     init.DisableTransportPathTransformations();
     init.MoveTo(x, y, z, false, true);
     init.SetFacing(o);
@@ -633,4 +650,18 @@ bool Vehicle::tryAddPassenger(Unit* passenger, SeatMap::iterator &Seat)
 
     return true;
 }
+
+    void Vehicle::calculatePassengerPosition(float& x, float& y, float& z, float* o)
+    {
+        TransportBase::CalculatePassengerPosition(x, y, z, o,
+            getBase()->GetPositionX(), getBase()->GetPositionY(),
+            getBase()->GetPositionZ(), getBase()->GetOrientation());
+    }
+
+    void Vehicle::calculatePassengerOffset(float& x, float& y, float& z, float* o)
+    {
+        TransportBase::CalculatePassengerOffset(x, y, z, o,
+            getBase()->GetPositionX(), getBase()->GetPositionY(),
+            getBase()->GetPositionZ(), getBase()->GetOrientation());
+    }
 #endif

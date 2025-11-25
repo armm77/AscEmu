@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -21,7 +22,7 @@ namespace AscEmu::Packets
         }
 
         SmsgDestroyObject(uint64_t guid) : 
-        ManagedPacket(SMSG_DESTROY_OBJECT, 9),
+        ManagedPacket(SMSG_DESTROY_OBJECT, 8),
             guid(guid)
         {
         }
@@ -35,7 +36,7 @@ namespace AscEmu::Packets
             packet << uint8_t(0);
 #endif
 #else
-            ObjectGuid oGuid = guid;
+            WoWGuid oGuid = guid;
 
             packet.writeBit(oGuid[3]);
             packet.writeBit(oGuid[2]);

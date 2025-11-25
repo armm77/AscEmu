@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,8 +7,12 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "Map/Maps/BaseMap.hpp"
 
+#include <list>
+#include <mutex>
+#include <set>
+
 class Object;
-class BaseMap;
+class WorldMap;
 
 class SERVER_DECL MapCell
 {

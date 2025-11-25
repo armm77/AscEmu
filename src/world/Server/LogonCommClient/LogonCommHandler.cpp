@@ -1,16 +1,24 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
 #include "Server/LogonCommClient/LogonCommHandler.h"
-#include "Server/MainServerDefines.h"
+
+#include <sstream>
+
+#include "WorldPacket.h"
 #include "Server/Master.h"
 #include "Config/Config.h"
-#include "Auth/Sha1.h"
+#include "Cryptography/LogonCommDefines.h"
+#include "Cryptography/Sha1.hpp"
+#include "Logging/Logger.hpp"
+#include "Server/ConfigMgr.hpp"
+#include "Server/DatabaseDefinition.hpp"
 #include "Server/World.h"
-#include "Util/Strings.hpp"
+#include "Threading/LegacyThreadPool.h"
+#include "Utilities/Strings.hpp"
+#include "Threading/LegacyThreading.h"
 
 LogonCommHandler& LogonCommHandler::getInstance()
 {
@@ -27,11 +35,11 @@ void LogonCommHandler::initialize()
 
     // sha1 hash it
     Sha1Hash hash;
-    hash.UpdateData(logon_pass);
-    hash.Finalize();
+    hash.updateData(logon_pass);
+    hash.finalize();
 
     memset(sql_passhash, 0, 20);
-    memcpy(sql_passhash, hash.GetDigest(), 20);
+    memcpy(sql_passhash, hash.getDigest(), 20);
 
     server_population = 0;
 
@@ -44,15 +52,8 @@ void LogonCommHandler::initialize()
 
 void LogonCommHandler::finalize()
 {
-    for (std::set<LogonServerStructure*>::iterator itr = servers.begin(); itr != servers.end(); ++itr)
-    {
-        delete(*itr);
-    }
-
-    for (std::set<RealmStructure*>::iterator itr = realms.begin(); itr != realms.end(); ++itr)
-    {
-        delete(*itr);
-    }
+    servers.clear();
+    realms.clear();
 }
 
 class LogonCommWatcherThread : public ThreadBase
@@ -61,8 +62,7 @@ class LogonCommWatcherThread : public ThreadBase
 
     Arcemu::Threading::ConditionVariable cond;
 
-    public:
-
+public:
     LogonCommWatcherThread()
     {
         running = true;
@@ -100,28 +100,29 @@ void LogonCommHandler::startLogonCommHandler()
 void LogonCommHandler::loadAccountPermissions()
 {
     sLogger.info("LogonCommClient : Loading account permissions...");
-    QueryResult* result = CharacterDatabase.Query("SELECT id, permissions FROM account_permissions");
+
+    auto result = CharacterDatabase.Query("SELECT id, permissions FROM account_permissions");
     if (result != nullptr)
     {
         do
         {
-            uint32_t id = result->Fetch()[0].GetUInt32();
-            std::string perm = result->Fetch()[1].GetString();
+            uint32_t id = result->Fetch()[0].asUint32();
+            std::string dbPermission = result->Fetch()[1].asCString();
+            if (AscEmu::Util::Strings::isEqual(dbPermission, "az"))
+                dbPermission = "12stulfbvrjiqdmwcogenaz";
 
-            accountPermissionsStore.insert(make_pair(id, perm));
+            accountPermissionsStore.insert(make_pair(id, dbPermission));
 
         } while (result->NextRow());
-
-        delete result;
     }
 }
 
 void LogonCommHandler::connectToLogonServer()
 {
     sLogger.info("LogonCommClient : Attempting to connect to logon server...");
-    for (std::set<LogonServerStructure*>::iterator itr = servers.begin(); itr != servers.end(); ++itr)
+    for (auto itr = servers.begin(); itr != servers.end(); ++itr)
     {
-        tryLogonServerConnection(*itr);
+        tryLogonServerConnection((*itr).get());
     }
 }
 
@@ -170,7 +171,7 @@ void LogonCommHandler::tryLogonServerConnection(LogonServerStructure* server)
     }
 
     sLogger.info("Authentication successful.");
-    sLogger.info("LogonCommClient : Logonserver was connected on [%s:%u].", server->address.c_str(), server->port);
+    sLogger.info("LogonCommClient : Logonserver was connected on [{}:{}].", server->address, server->port);
 
     // Send the initial ping
     logonCommSocket->SendPing();
@@ -204,7 +205,7 @@ void LogonCommHandler::tryLogonServerConnection(LogonServerStructure* server)
     // Wait for all realms to register
     Arcemu::Sleep(200);
 
-    sLogger.info("LogonCommClient : Logonserver latency is %ums.", logonCommSocket->latency);
+    sLogger.info("LogonCommClient : Logonserver latency is {}ms.", logonCommSocket->latency);
 }
 
 LogonCommClientSocket* LogonCommHandler::createReturnLogonServerConnection(std::string Address, uint32_t Port)
@@ -214,7 +215,7 @@ LogonCommClientSocket* LogonCommHandler::createReturnLogonServerConnection(std::
 
 void LogonCommHandler::addRealmToRealmlist(LogonCommClientSocket* Socket)
 {
-    for (const auto realm : realms)
+    for (const auto& realm : realms)
     {
         WorldPacket data(LRCMSG_REALM_REGISTER_REQUEST, 100);
 
@@ -236,44 +237,25 @@ void LogonCommHandler::setAccountPermission(uint32_t acct, std::string perm)
 {
     AccountPermissionMap::iterator itr = accountPermissionsStore.find(acct);
     if (itr != accountPermissionsStore.end())
-    {
         accountPermissionsStore.erase(acct);
 
-        if (perm.compare("0") == 0)
-        {
-            sLogger.info("LogonCommClient : Permissions removed for Account ID %u!", acct);
-            return;
-        }
-    }
-
-    sLogger.info("LogonCommClient : Permission set to %s for account %u", perm.c_str(), acct);
+    sLogger.info("LogonCommClient : Permission set to {} for account {}", perm, acct);
     accountPermissionsStore.insert(make_pair(acct, perm));
-
 }
 
 void LogonCommHandler::removeAccountPermission(uint32_t acct)
 {
-    AccountPermissionMap::iterator itr = accountPermissionsStore.find(acct);
-    if (itr != accountPermissionsStore.end())
-    {
-        accountPermissionsStore.erase(acct);
-        sLogger.info("LogonCommClient : Permission for Account ID %u removed!", acct);
-    }
-    else
-    {
-        sLogger.info("LogonCommClient : No permissions found for Account ID %u", acct);
-    }
+    setAccountPermission(acct, "");
 }
 
-const std::string* LogonCommHandler::getPermissionStringForAccountId(uint32_t username)
+std::string LogonCommHandler::getPermissionStringForAccountId(uint32_t username)
 {
+    std::string permission = "";
     AccountPermissionMap::iterator itr = accountPermissionsStore.find(username);
-    if (itr == accountPermissionsStore.end())
-    {
-        return nullptr;
-    }
+    if (itr != accountPermissionsStore.end())
+        permission = itr->second;
 
-    return &itr->second;
+    return permission;
 }
 
 void LogonCommHandler::addRealmToRealmlistResult(uint32_t ID, uint32_t ServID)
@@ -306,7 +288,7 @@ float LogonCommHandler::getRealmPopulation()
 
 void LogonCommHandler::updateLogonServerConnection()
 {
-    mapLock.Acquire();
+    mapLock.acquire();
 
     uint32_t time = (uint32_t)UNIXTIME;
 
@@ -330,7 +312,7 @@ void LogonCommHandler::updateLogonServerConnection()
             if (logonCommSocket->last_pong < time && ((time - logonCommSocket->last_pong) > 60))
             {
                 // no pong for 60 seconds -> remove the socket
-                sLogger.info("Logonserver %u connection dropped due to pong timeout!", itr.first->id);
+                sLogger.info("Logonserver {} connection dropped due to pong timeout!", itr.first->id);
                 logonCommSocket->_id = 0;
                 logonCommSocket->Disconnect();
                 itr.second = nullptr;
@@ -353,31 +335,31 @@ void LogonCommHandler::updateLogonServerConnection()
         }
     }
 
-    mapLock.Release();
+    mapLock.release();
 }
 
 void LogonCommHandler::dropLogonServerConnection(uint32_t ID)
 {
-    mapLock.Acquire();
+    mapLock.acquire();
 
     for (auto &itr : logons)
     {
         if (itr.first->id == ID && itr.second != nullptr)
         {
-            sLogger.failure("Logonserver connection %u was dropped. Try to reconnect next loop.", ID);
+            sLogger.failure("Logonserver connection {} was dropped. Try to reconnect next loop.", ID);
             itr.second = nullptr;
             break;
         }
     }
 
-    mapLock.Release();
+    mapLock.release();
 }
 
 uint32_t LogonCommHandler::clientConnectionId(std::string AccountName, WorldSocket* Socket)
 {
     uint32_t request_id = next_request++;
 
-    sLogger.debug(" Send Request for Account: `%s` (request ID: %u).", AccountName.c_str(), request_id);
+    sLogger.debug(" Send Request for Account: `{}` (request ID: {}).", AccountName, request_id);
 
     // Send request packet to server.
     if (logons.empty())
@@ -392,7 +374,7 @@ uint32_t LogonCommHandler::clientConnectionId(std::string AccountName, WorldSock
         return (uint32_t)-1;
     }
 
-    pendingLock.Acquire();
+    pendingLock.acquire();
 
     WorldPacket data(LRCMSG_ACC_SESSION_REQUEST, 100);
     data << request_id;
@@ -410,7 +392,7 @@ uint32_t LogonCommHandler::clientConnectionId(std::string AccountName, WorldSock
     logonCommSocket->SendPacket(&data, false);
 
     pending_logons[request_id] = Socket;
-    pendingLock.Release();
+    pendingLock.release();
 
     updateRealmPopulation();
     return request_id;
@@ -418,9 +400,9 @@ uint32_t LogonCommHandler::clientConnectionId(std::string AccountName, WorldSock
 
 void LogonCommHandler::removeUnauthedClientSocketClose(uint32_t id)
 {
-    pendingLock.Acquire();
+    pendingLock.acquire();
     pending_logons.erase(id);
-    pendingLock.Release();
+    pendingLock.release();
 }
 
 void LogonCommHandler::removeUnauthedClientSocket(uint32_t id)
@@ -430,12 +412,12 @@ void LogonCommHandler::removeUnauthedClientSocket(uint32_t id)
 
 void LogonCommHandler::loadRealmsConfiguration()
 {
-    LogonServerStructure* logonServer = new LogonServerStructure;
+    auto logonServer = std::make_unique<LogonServerStructure>();
     logonServer->id = idhigh++;
     logonServer->name = worldConfig.logonServer.name;
     logonServer->address = worldConfig.logonServer.address;
     logonServer->port = (uint32_t)worldConfig.logonServer.port;
-    servers.insert(logonServer);
+    servers.insert(std::move(logonServer));
 
     uint32_t realmcount = (uint32_t)worldConfig.logonServer.realmCount;
     if (realmcount == 0)
@@ -449,7 +431,7 @@ void LogonCommHandler::loadRealmsConfiguration()
             std::stringstream realmString;
             realmString << "Realm" << i;
 
-            RealmStructure* realmStructure = new RealmStructure;
+            auto realmStructure = std::make_unique<RealmStructure>();
             Config.MainConfig.tryGetInt(realmString.str(), "Id", &realmStructure->id);
             Config.MainConfig.tryGetString(realmString.str(), "Name", &realmStructure->name);
             Config.MainConfig.tryGetString(realmString.str(), "Address", &realmStructure->address);
@@ -484,7 +466,7 @@ void LogonCommHandler::loadRealmsConfiguration()
             }
 
             realmStructure->icon = _realmType;
-            realms.insert(realmStructure);
+            realms.insert(std::move(realmStructure));
         }
     }
 }
@@ -502,24 +484,17 @@ void LogonCommHandler::testConsoleLogon(std::string & username, std::string & pa
 {
     std::string newuser = username;
     std::string newpass = password;
-    std::string srpstr;
 
     AscEmu::Util::Strings::toUpperCase(newuser);
     AscEmu::Util::Strings::toUpperCase(newpass);
 
-    srpstr = newuser + ":" + newpass;
-
     // Send request packet to server.
     if (LogonCommClientSocket* logonCommSocket = getLogonServerSocket())
     {
-        Sha1Hash hash;
-        hash.UpdateData(srpstr);
-        hash.Finalize();
-
         WorldPacket data(LRCMSG_LOGIN_CONSOLE_REQUEST, 100);
         data << requestnum;
         data << newuser;
-        data.append(hash.GetDigest(), 20);
+        data << newpass;
 
         logonCommSocket->SendPacket(&data, false);
     }

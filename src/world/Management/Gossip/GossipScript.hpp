@@ -1,11 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include "CommonTypes.hpp"
+
+#include <cstdint>
 
 class Creature;
 class Item;
@@ -16,9 +18,8 @@ class GameObject;
 class SERVER_DECL GossipScript
 {
 public:
-
-    GossipScript() {}
-    virtual ~GossipScript() {}
+    GossipScript() = default;
+    virtual ~GossipScript() = default;
 
     virtual void onHello(Object* object, Player* player) = 0;
     virtual void onSelectOption(Object* /*object*/, Player* /*player*/, uint32_t /*id*/, const char* /*enteredCode*/, uint32_t /*gossipId*/ = 0) {}
@@ -33,9 +34,8 @@ public:
 class SERVER_DECL GossipSpiritHealer : public GossipScript
 {
 public:
-
-    GossipSpiritHealer() {}
-    virtual ~GossipSpiritHealer() {}
+    GossipSpiritHealer() = default;
+    virtual ~GossipSpiritHealer() = default;
 
     void onHello(Object* object, Player* player) override;
 };
@@ -43,9 +43,8 @@ public:
 class SERVER_DECL GossipVendor : public GossipScript
 {
 public:
-
-    GossipVendor() {}
-    virtual ~GossipVendor() {}
+    GossipVendor() = default;
+    virtual ~GossipVendor() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* plr, uint32_t id, const char* enteredCode, uint32_t gossipId) override;
@@ -54,9 +53,8 @@ public:
 class SERVER_DECL GossipTrainer : public GossipScript
 {
 public:
-
-    GossipTrainer() {}
-    virtual ~GossipTrainer() {}
+    GossipTrainer() = default;
+    virtual ~GossipTrainer() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t id, const char* enteredCode, uint32_t gossipId) override;
@@ -65,9 +63,8 @@ public:
 class SERVER_DECL GossipClassTrainer : public GossipScript
 {
 public:
-
-    GossipClassTrainer() {}
-    virtual ~GossipClassTrainer() {}
+    GossipClassTrainer() = default;
+    virtual ~GossipClassTrainer() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t id, const char* enteredCode, uint32_t gossipId) override;
@@ -76,9 +73,8 @@ public:
 class SERVER_DECL GossipPetTrainer : public GossipScript
 {
 public:
-
-    GossipPetTrainer() {}
-    virtual ~GossipPetTrainer() {}
+    GossipPetTrainer() = default;
+    virtual ~GossipPetTrainer() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t id, const char* enteredCode, uint32_t gossipId) override;
@@ -87,9 +83,8 @@ public:
 class SERVER_DECL GossipFlightMaster : public GossipScript
 {
 public:
-
-    GossipFlightMaster() {}
-    virtual ~GossipFlightMaster() {}
+    GossipFlightMaster() = default;
+    virtual ~GossipFlightMaster() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t Id, const char* EnteredCode, uint32_t gossipId) override;
@@ -98,9 +93,8 @@ public:
 class SERVER_DECL GossipAuctioneer : public GossipScript
 {
 public:
-
-    GossipAuctioneer() {}
-    virtual ~GossipAuctioneer() {}
+    GossipAuctioneer() = default;
+    virtual ~GossipAuctioneer() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t Id, const char* EnteredCode, uint32_t gossipId) override;
@@ -109,9 +103,8 @@ public:
 class SERVER_DECL GossipInnKeeper : public GossipScript
 {
 public:
-
-    GossipInnKeeper() {}
-    virtual ~GossipInnKeeper() {}
+    GossipInnKeeper() = default;
+    virtual ~GossipInnKeeper() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t Id, const char* EnteredCode, uint32_t gossipId) override;
@@ -120,9 +113,8 @@ public:
 class SERVER_DECL GossipBattleMaster : public GossipScript
 {
 public:
-
-    GossipBattleMaster() {}
-    virtual ~GossipBattleMaster() {}
+    GossipBattleMaster() = default;
+    virtual ~GossipBattleMaster() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t Id, const char* EnteredCode, uint32_t gossipId) override;
@@ -131,9 +123,8 @@ public:
 class SERVER_DECL GossipBanker : public GossipScript
 {
 public:
-
-    GossipBanker() {}
-    virtual ~GossipBanker() {}
+    GossipBanker() = default;
+    virtual ~GossipBanker() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t Id, const char* EnteredCode, uint32_t gossipId) override;
@@ -142,9 +133,8 @@ public:
 class SERVER_DECL GossipCharterGiver : public GossipScript
 {
 public:
-
-    GossipCharterGiver() {}
-    virtual ~GossipCharterGiver() {}
+    GossipCharterGiver() = default;
+    virtual ~GossipCharterGiver() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t Id, const char* EnteredCode, uint32_t gossipId) override;
@@ -153,9 +143,8 @@ public:
 class SERVER_DECL GossipTabardDesigner : public GossipScript
 {
 public:
-
-    GossipTabardDesigner() {}
-    virtual ~GossipTabardDesigner() {}
+    GossipTabardDesigner() = default;
+    virtual ~GossipTabardDesigner() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t Id, const char* EnteredCode, uint32_t gossipId) override;
@@ -164,9 +153,8 @@ public:
 class SERVER_DECL GossipStableMaster : public GossipScript
 {
 public:
-
-    GossipStableMaster() {}
-    virtual ~GossipStableMaster() {}
+    GossipStableMaster() = default;
+    virtual ~GossipStableMaster() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t id, const char* enteredCode, uint32_t gossipId) override;
@@ -175,9 +163,8 @@ public:
 class SERVER_DECL GossipGeneric : public GossipScript
 {
 public:
-
-    GossipGeneric() {}
-    virtual ~GossipGeneric() {}
+    GossipGeneric() = default;
+    virtual ~GossipGeneric() = default;
 
     void onHello(Object* object, Player* player) override;
     void onSelectOption(Object* object, Player* player, uint32_t id, const char* enteredCode, uint32_t gossipId) override;

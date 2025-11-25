@@ -1,19 +1,26 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
-file(GLOB sources_Management Management/*.cpp Management/*.h)
-file(GLOB sources_Maps Maps/*.cpp Maps/*.h)
-file(GLOB sources_Models Models/*.cpp Models/*.h)
-file(GLOB sources_localdir *.cpp *.h)
+# set up our project name.
+set(LIBRARY_NAME collision)
 
-set(collision_STAT_SRCS
-    ${collision_STAT_SRCS}
-    ${sources_Management}
-    ${sources_Maps}
-    ${sources_Models}
-    ${sources_localdir}
+file(GLOB SRC_MANAGEMENT Management/*.cpp Management/*.h)
+file(GLOB SRC_MAPS Maps/*.cpp Maps/*.h)
+file(GLOB SRC_MODELS Models/*.cpp Models/*.h)
+file(GLOB SRC_LOCAL_DIR *.cpp *.h)
+
+set(COLLISION_SRCS
+    ${SRC_MANAGEMENT}
+    ${SRC_MAPS}
+    ${SRC_MODELS}
+    ${SRC_LOCAL_DIR}
 )
 
-include_directories(
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(${LIBRARY_NAME} STATIC ${COLLISION_SRCS})
+
+target_include_directories(${LIBRARY_NAME} PUBLIC 
     ${OPENSSL_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/dep/g3dlite/include
     ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Detour/Include
@@ -27,23 +34,15 @@ include_directories(
     ${ZLIB_INCLUDE_DIRS}
 )
 
-add_library(collision STATIC ${collision_STAT_SRCS})
-target_link_libraries(collision g3dlite shared)
-
-if (USE_PCH)
-    target_precompile_headers(collision
-    PRIVATE
-    <set>
-    <sstream>
-    <iomanip>
-    <Common.hpp>
-    <Util.hpp>
-    <Logging/Logger.hpp>
-    Models/ModelInstance.h
-    Models/GameObjectModel.h
-    Models/WorldModel.h
-    Maps/MapTree.h
-    BoundingIntervalHierarchy.h
-    VMapDefinitions.h
+# include library dependencies.
+target_link_libraries(${LIBRARY_NAME}
+  PUBLIC
+    g3dlite
+    shared
 )
+
+# generate precompiled header.
+if (AE_USE_PCH)
+    message(STATUS "Generate PCH for ${LIBRARY_NAME}")
+    target_precompile_headers(${LIBRARY_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pchCollision.hpp)
 endif ()

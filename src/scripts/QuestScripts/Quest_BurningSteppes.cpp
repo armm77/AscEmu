@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2009 WhyScripts Team <http://www.whydb.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,6 +17,12 @@
  */
 
 #include "Setup.h"
+#include "Management/ItemInterface.h"
+#include "Management/QuestLogEntry.hpp"
+#include "Management/QuestProperties.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/QuestScript.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 
 class TabletOfTheSeven : public QuestScript
 {

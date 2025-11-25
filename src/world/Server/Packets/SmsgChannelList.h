@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -21,7 +21,7 @@ namespace AscEmu::Packets
     {
     public:
         bool chatQuery;
-        std::string channelName;
+        utf8_string channelName;
         uint8_t channelFlags;
         std::vector<SmsgChannelListMembers> members;
         uint32_t membersCount;

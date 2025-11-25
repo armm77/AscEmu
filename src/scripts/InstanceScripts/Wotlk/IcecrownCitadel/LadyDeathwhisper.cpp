@@ -1,16 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Setup.h"
 #include "LadyDeathwhisper.hpp"
-#include "Management/Faction.h"
-#include "Objects/Units/Creatures/Summons/Summon.h"
-#include <Management/ObjectMgr.h>
-#include <Management/TransporterHandler.h>
-#include <Objects/Transporter.h>
-#include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Raid_IceCrownCitadel.hpp"
+#include "Movement/MovementManager.h"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Boss: Lady Deathwhisper
@@ -19,7 +19,7 @@ LadyDeathwhisperAI::LadyDeathwhisperAI(Creature* pCreature) : CreatureAIScript(p
     // Instance Script
     mInstance = getInstanceScript();
    
-    dominateMindCount = RAID_MODE<uint8_t>(0, 1, 1, 3);
+    dominateMindCount = static_cast<uint8_t>(getRaidModeValue(0, 1, 1, 3));
     introDone = false;
 
     // Scripted Spells not autocastet
@@ -42,6 +42,9 @@ LadyDeathwhisperAI::LadyDeathwhisperAI(Creature* pCreature) : CreatureAIScript(p
     darkEmpowermentSpell            = addAISpell(SPELL_DARK_EMPOWERMENT_T, 0.0f, TARGET_CUSTOM);
     darkEmpowermentSpell->mIsTriggered = true;
     darkEmpowermentSpell->addDBEmote(SAY_LADY_EMPOWERMENT);
+
+    waveCounter = 0;
+    nextVengefulShadeTargetGUID = 0;
           
 
     // Messages
@@ -121,7 +124,7 @@ void LadyDeathwhisperAI::DoAction(int32_t const action)
             scriptEvents.addEvent(EVENT_P2_TOUCH_OF_INSIGNIFICANCE, Util::getRandomUInt(6000, 9000), PHASE_TWO);
             scriptEvents.addEvent(EVENT_P2_SUMMON_SHADE, Util::getRandomUInt(12000, 15000), PHASE_TWO);
             // on heroic mode Lady Deathwhisper is immune to taunt effects in phase 2 and continues summoning adds
-            if (_isHeroic())
+            if (isHeroic())
             {
                 ///\todo Add SpellImmunities
                 scriptEvents.addEvent(EVENT_P2_SUMMON_WAVE, 45000, PHASE_TWO);
@@ -217,7 +220,7 @@ void LadyDeathwhisperAI::AIUpdate(unsigned long time_passed)
             case EVENT_P1_SUMMON_WAVE:
             {
                 SummonWavePhaseOne();
-                scriptEvents.addEvent(EVENT_P1_SUMMON_WAVE, _isHeroic() ? 45000 : 60000, PHASE_ONE);
+                scriptEvents.addEvent(EVENT_P1_SUMMON_WAVE, isHeroic() ? 45000 : 60000, PHASE_ONE);
                 break;
             }
             case EVENT_P1_SHADOW_BOLT:
@@ -301,7 +304,7 @@ void LadyDeathwhisperAI::AIUpdate(unsigned long time_passed)
 void LadyDeathwhisperAI::SummonWavePhaseOne()
 {    
     uint8_t addIndex1 = waveCounter & 1;
-    uint8_t addIndex2 = uint8(addIndex1 ^ 1);
+    uint8_t addIndex2 = uint8_t(addIndex1 ^ 1);
 
     // Todo summon Darnavan when weekly quest is active
     if (waveCounter)

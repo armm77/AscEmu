@@ -1,24 +1,49 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
 #include "Management/AuctionHouse.h"
+
+#include "MailMgr.h"
+#include "Logging/Log.hpp"
+#include "Logging/Logger.hpp"
+#include "Storage/WDB/WDBStores.hpp"
 #include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
-#include "Server/MainServerDefines.h"
 #include "Map/Management/MapMgr.hpp"
-#include "Management/ObjectMgr.h"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/DatabaseDefinition.hpp"
+#include "Server/WorldSession.h"
 #include "Server/Packets/SmsgAuctionBidderNotification.h"
 #include "Server/Packets/SmsgAuctionOwnerNotification.h"
 #include "Server/Packets/SmsgAuctionOwnerListResult.h"
 #include "Server/Packets/SmsgAuctionBidderListResult.h"
 #include "Server/Packets/SmsgAuctionListResult.h"
 #include "Server/Packets/CmsgAuctionListItems.h"
-#include "Util/Strings.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Narrow.hpp"
+#include "Utilities/Strings.hpp"
 
 using namespace AscEmu::Packets;
+
+Auction::Auction() = default;
+Auction::Auction(Field const* fields, std::unique_ptr<Item> pItem)
+{
+    Id = fields[0].asUint32();
+    auctionItem = std::move(pItem);
+    ownerGuid = fields[3].asUint32();
+    startPrice = fields[4].asUint32();
+    buyoutPrice = fields[5].asUint32();
+    expireTime = fields[6].asUint32();
+    highestBidderGuid = fields[7].asUint32();
+    highestBid = fields[8].asUint32();
+    depositAmount = fields[9].asUint32();
+
+    removedType = AUCTION_REMOVE_EXPIRED;
+    isRemoved = false;
+}
 
 void Auction::deleteFromDB()
 {
@@ -86,7 +111,7 @@ uint64_t Auction::getAuctionOutBid() const
 
 AuctionHouse::AuctionHouse(uint32_t id)
 {
-    auctionHouseEntryDbc = sAuctionHouseStore.LookupEntry(id);
+    auctionHouseEntryDbc = sAuctionHouseStore.lookupEntry(id);
     if (auctionHouseEntryDbc)
     {
         cutPercent = static_cast<float_t>(auctionHouseEntryDbc->tax) / 100.0f;
@@ -99,70 +124,53 @@ AuctionHouse::AuctionHouse(uint32_t id)
     }
 }
 
-AuctionHouse::~AuctionHouse()
-{
-    for (auto itr = auctions.begin(); itr != auctions.end(); ++itr)
-        delete itr->second;
-}
+AuctionHouse::~AuctionHouse() = default;
 
 uint32_t AuctionHouse::getId() const { return auctionHouseEntryDbc ? auctionHouseEntryDbc->id : 0; }
 
 void AuctionHouse::loadAuctionsFromDB()
 {
-    QueryResult* result = CharacterDatabase.Query("SELECT * FROM auctions WHERE auctionhouse =%u", getId());
+    auto result = CharacterDatabase.Query("SELECT * FROM auctions WHERE auctionhouse =%u", getId());
     if (!result)
         return;
 
     do
     {
         Field* fields = result->Fetch();
-        auto auction = new Auction;
-        auction->Id = fields[0].GetUInt32();
+        const auto auctionId = fields[0].asUint32();
 
-        Item* pItem = sObjectMgr.LoadItem(fields[2].GetUInt32());
+        auto pItem = sObjectMgr.loadItem(fields[2].asUint32());
         if (!pItem)
         {
-            CharacterDatabase.Execute("DELETE FROM auctions WHERE auctionId=%u", auction->Id);
-            delete auction;
+            CharacterDatabase.Execute("DELETE FROM auctions WHERE auctionId=%u", auctionId);
             continue;
         }
 
-        auction->auctionItem = pItem;
-        auction->ownerGuid = fields[3].GetUInt32();
-        auction->startPrice = fields[4].GetUInt32();
-        auction->buyoutPrice = fields[5].GetUInt32();
-        auction->expireTime = fields[6].GetUInt32();
-        auction->highestBidderGuid = fields[7].GetUInt32();
-        auction->highestBid = fields[8].GetUInt32();
-        auction->depositAmount = fields[9].GetUInt32();
-
-        auction->removedType = AUCTION_REMOVE_EXPIRED;
-        auction->isRemoved = false;
-
-        auctions.insert(std::unordered_map<uint32_t, Auction*>::value_type(auction->Id, auction));
+        auctions.try_emplace(auctionId, std::make_unique<Auction>(fields, std::move(pItem)));
     }
     while (result->NextRow());
-    delete result;
 }
 
 void AuctionHouse::updateAuctions()
 {
-    std::lock_guard<std::mutex> guard(auctionLock);
-
-    removalLock.Acquire();
+    std::lock_guard guard(auctionLock);
+    std::lock_guard lock(removalLock);
 
     auto const time = static_cast<uint32_t>(UNIXTIME);
     for (auto itr = auctions.begin(); itr != auctions.end();)
     {
-        auto auction = itr->second;
+        const auto& auction = itr->second;
         ++itr;
+
+        if (auction->isRemoved)
+            continue;
 
         if (time >= auction->expireTime)
         {
             if (auction->highestBidderGuid.getGuidLow() == 0)
             {
                 auction->removedType = AUCTION_REMOVE_EXPIRED;
-                this->sendAuctionExpiredNotificationPacket(auction);
+                this->sendAuctionExpiredNotificationPacket(auction.get());
             }
             else
             {
@@ -170,30 +178,26 @@ void AuctionHouse::updateAuctions()
             }
 
             auction->isRemoved = true;
-            removalList.push_back(auction);
+            removalList.push_back(auction.get());
         }
     }
-
-    removalLock.Release();
 }
 
 void AuctionHouse::updateDeletionQueue()
 {
-    removalLock.Acquire();
+    std::lock_guard lock(removalLock);
 
     for (auto auction : removalList)
     {
-        if (!auction->isRemoved)
-            removeAuction(auction);
+        removeAuction(auction);
     }
 
     removalList.clear();
-    removalLock.Release();
 }
 
 void AuctionHouse::removeAuction(Auction* auction)
 {
-    sLogger.debug("%u: Removing auction %u, reason %u.", auctionHouseEntryDbc->id, auction->Id, auction->removedType);
+    sLogger.debug("{}: Removing auction {}, reason {}.", auctionHouseEntryDbc->id, auction->Id, auction->removedType);
 
     char subject[100];
     char body[200];
@@ -208,20 +212,19 @@ void AuctionHouse::removeAuction(Auction* auction)
             sMailSystem.SendAutomatedMessage(MAIL_TYPE_AUCTION, auctionHouseEntryDbc->id, auction->ownerGuid, subject, "", 0, 0, auction->auctionItem->getGuid(), MAIL_STATIONERY_AUCTION, MAIL_CHECK_MASK_COPIED);
         }
         break;
-
         case AUCTION_REMOVE_WON:
         {
             // ItemEntry:0:1
             snprintf(subject, 100, "%u:0:1", auction->auctionItem->getEntry());
 
             // <owner player guid>:bid:buyout
-            snprintf(body, 200, "%X:%u:%u", auction->ownerGuid.getGuidLow(), auction->highestBid, auction->buyoutPrice);
+            snprintf(body, 200, "%X:%s:%s", auction->ownerGuid.getGuidLow(), std::to_string(auction->highestBid).c_str(), std::to_string(auction->buyoutPrice).c_str());
 
             // Auction won by highest bidder. He gets the item.
             sMailSystem.SendAutomatedMessage(MAIL_TYPE_AUCTION, auctionHouseEntryDbc->id, auction->highestBidderGuid, subject, body, 0, 0, auction->auctionItem->getGuid(), MAIL_STATIONERY_AUCTION, MAIL_CHECK_MASK_COPIED);
 
             // Send a mail to the owner with his cut of the price.
-            const auto auction_cut = float2int32(cutPercent * static_cast<float_t>(auction->highestBid));
+            const auto auction_cut = Util::float2int32(cutPercent * static_cast<float_t>(auction->highestBid));
             auto amount = auction->highestBid - auction_cut + auction->depositAmount;
 
             // ItemEntry:0:2
@@ -229,12 +232,12 @@ void AuctionHouse::removeAuction(Auction* auction)
 
             // <hex player guid>:bid:0:deposit:cut
             if (auction->highestBid == auction->buyoutPrice)       // Buyout
-                snprintf(body, 200, "%X:%u:%u:%u:%u", auction->highestBidderGuid.getGuidLow(), auction->highestBid, auction->buyoutPrice, auction->depositAmount, (unsigned int)auction_cut);
+                snprintf(body, 200, "%X:%s:%s:%u:%u", auction->highestBidderGuid.getGuidLow(), std::to_string(auction->highestBid).c_str(), std::to_string(auction->buyoutPrice).c_str(), auction->depositAmount, (unsigned int)auction_cut);
             else
-                snprintf(body, 200, "%X:%u:0:%u:%u", auction->highestBidderGuid.getGuidLow(), auction->highestBid, auction->depositAmount, (unsigned int)auction_cut);
+                snprintf(body, 200, "%X:%s:0:%u:%u", auction->highestBidderGuid.getGuidLow(), std::to_string(auction->highestBid).c_str(), auction->depositAmount, (unsigned int)auction_cut);
 
             // send message away.
-            sMailSystem.SendAutomatedMessage(MAIL_TYPE_AUCTION, auctionHouseEntryDbc->id, auction->ownerGuid, subject, body, amount, 0, 0, MAIL_STATIONERY_AUCTION, MAIL_CHECK_MASK_COPIED);
+            sMailSystem.SendAutomatedMessage(MAIL_TYPE_AUCTION, auctionHouseEntryDbc->id, auction->ownerGuid, subject, body, static_cast<uint32_t>(amount), 0, 0, MAIL_STATIONERY_AUCTION, MAIL_CHECK_MASK_COPIED);
 
             // If it's not a buyout (otherwise the players has been already notified)
             if (auction->highestBid < auction->buyoutPrice || auction->buyoutPrice == 0)
@@ -248,8 +251,8 @@ void AuctionHouse::removeAuction(Auction* auction)
             if (auction->auctionItem)
             {
                 snprintf(subject, 100, "%u:0:5", auction->auctionItem->getEntry());
-                const auto cut = float2int32(cutPercent * static_cast<float_t>(auction->highestBid));
-                Player* plr = sObjectMgr.GetPlayer(auction->ownerGuid.getGuidLow());
+                const auto cut = Util::float2int32(cutPercent * static_cast<float_t>(auction->highestBid));
+                Player* plr = sObjectMgr.getPlayer(auction->ownerGuid.getGuidLow());
                 if (cut && plr && plr->hasEnoughCoinage(static_cast<uint32_t>(cut)))
                     plr->modCoinage(-cut);
 
@@ -258,34 +261,33 @@ void AuctionHouse::removeAuction(Auction* auction)
             // return bidders money
             if (auction->highestBidderGuid)
             {
-                sMailSystem.SendAutomatedMessage(MAIL_TYPE_AUCTION, getId(), auction->highestBidderGuid, subject, "", auction->highestBid, 0, 0, MAIL_STATIONERY_AUCTION, MAIL_CHECK_MASK_COPIED);
+                sMailSystem.SendAutomatedMessage(MAIL_TYPE_AUCTION, getId(), auction->highestBidderGuid, subject, "", static_cast<uint32_t>(auction->highestBid), 0, 0, MAIL_STATIONERY_AUCTION, MAIL_CHECK_MASK_COPIED);
             }
 
         }
         break;
     }
 
+    // Destroy the item from memory (it still remains in the db)
+    auction->auctionItem = nullptr;
+
+    // Finally destroy the auction instance.
+    auction->deleteFromDB();
+
     // Remove the auction from the hashmap.
     auctionLock.lock();
     auctions.erase(auction->Id);
     auctionLock.unlock();
-
-    // Destroy the item from memory (it still remains in the db)
-    if (auction->auctionItem)
-        auction->auctionItem->deleteMe();
-
-    // Finally destroy the auction instance.
-    auction->deleteFromDB();
-    delete auction;
 }
 
-void AuctionHouse::addAuction(Auction* auction)
+Auction* AuctionHouse::addAuction(std::unique_ptr<Auction> auction)
 {
     std::lock_guard<std::mutex> guard(auctionLock);
 
-    auctions.insert(std::unordered_map<uint32_t, Auction*>::value_type(auction->Id, auction));
+    const auto [itr, _] = auctions.try_emplace(auction->Id, std::move(auction));
 
-    sLogger.debug("AuctionHouse : %u: Add auction %u, expire@ %u.", auctionHouseEntryDbc->id, auction->Id, auction->expireTime);
+    sLogger.debug("AuctionHouse : {}: Add auction {}, expire@ {}.", auctionHouseEntryDbc->id, itr->second->Id, itr->second->expireTime);
+    return itr->second.get();
 }
 
 Auction* AuctionHouse::getAuction(uint32_t id)
@@ -293,7 +295,7 @@ Auction* AuctionHouse::getAuction(uint32_t id)
     std::lock_guard<std::mutex> guard(auctionLock);
 
     const auto auctionsMap = auctions.find(id);
-    const auto auction = auctionsMap == auctions.end() ? nullptr : auctionsMap->second;
+    const auto auction = auctionsMap == auctions.end() ? nullptr : auctionsMap->second.get();
 
     return auction;
 }
@@ -305,9 +307,10 @@ void AuctionHouse::queueDeletion(Auction* auction, uint32_t reasonType)
 
     auction->isRemoved = true;
     auction->removedType = reasonType;
-    removalLock.Acquire();
+
+    std::lock_guard lock(removalLock);
+
     removalList.push_back(auction);
-    removalLock.Release();
 }
 
 void AuctionHouse::sendOwnerListPacket(Player* player, WorldPacket* /*packet*/)
@@ -318,7 +321,7 @@ void AuctionHouse::sendOwnerListPacket(Player* player, WorldPacket* /*packet*/)
 
     for (auto& itr : auctions)
     {
-        auto auction = itr.second;
+        const auto& auction = itr.second;
         if (auction->ownerGuid == player->getGuid())
         {
             if (auction->isRemoved)
@@ -337,7 +340,7 @@ void AuctionHouse::updateOwner(uint32_t oldGuid, uint32_t newGuid)
 
     for (auto& itr : auctions)
     {
-        auto auction = itr.second;
+        const auto& auction = itr.second;
         if (auction->ownerGuid.getGuidLow() == oldGuid)
             auction->ownerGuid = newGuid;
 
@@ -357,7 +360,7 @@ void AuctionHouse::sendBidListPacket(Player* player, WorldPacket* /*packet*/)
 
     for (auto itr = auctions.begin(); itr != auctions.end(); ++itr)
     {
-        auto auction = itr->second;
+        const auto& auction = itr->second;
         if (auction->highestBidderGuid == player->getGuid())
         {
             if (auction->isRemoved)
@@ -372,7 +375,7 @@ void AuctionHouse::sendBidListPacket(Player* player, WorldPacket* /*packet*/)
 
 void AuctionHouse::sendAuctionBuyOutNotificationPacket(Auction* auction)
 {
-    Player* bidder = sObjectMgr.GetPlayer(auction->highestBidderGuid.getGuidLow());
+    Player* bidder = sObjectMgr.getPlayer(auction->highestBidderGuid.getGuidLow());
     if (bidder && bidder->IsInWorld())
     {
         auto outbid = (auction->highestBid / 100) * 5;
@@ -382,16 +385,16 @@ void AuctionHouse::sendAuctionBuyOutNotificationPacket(Auction* auction)
         bidder->getSession()->SendPacket(SmsgAuctionBidderNotification(getId(), auction->Id, auction->highestBidderGuid, 0, outbid, auction->auctionItem->getEntry()).serialise().get());
     }
 
-    Player* owner = sObjectMgr.GetPlayer(auction->ownerGuid.getGuidLow());
+    Player* owner = sObjectMgr.getPlayer(auction->ownerGuid.getGuidLow());
     if (owner && owner->IsInWorld())
     {
-        owner->getSession()->SendPacket(SmsgAuctionOwnerNotification(auction->Id, auction->highestBid, auction->auctionItem->getEntry()).serialise().get());
+        owner->getSession()->SendPacket(SmsgAuctionOwnerNotification(auction->Id, static_cast<uint32_t>(auction->highestBid), auction->auctionItem->getEntry()).serialise().get());
     }
 }
 
 void AuctionHouse::sendAuctionOutBidNotificationPacket(Auction* auction, uint64_t newBidder, uint32_t newHighestBid)
 {
-    Player* bidder = sObjectMgr.GetPlayer(auction->highestBidderGuid.getGuidLow());
+    Player* bidder = sObjectMgr.getPlayer(auction->highestBidderGuid.getGuidLow());
     if (bidder && bidder->IsInWorld())
     {
         auto outbid = (auction->highestBid / 100) * 5;
@@ -508,5 +511,5 @@ void AuctionHouse::sendAuctionList(Player* player, AscEmu::Packets::CmsgAuctionL
         ++totalcount;
     }
 
-    player->sendPacket(SmsgAuctionListResult(static_cast<uint32_t>(auctionPacketList.size()), auctionPacketList, static_cast<uint32_t>(auctionPacketList.size()), 300).serialise().get());
+    player->sendPacket(SmsgAuctionListResult(static_cast<uint32_t>(auctionPacketList.size()), auctionPacketList, totalcount, 300).serialise().get());
 }

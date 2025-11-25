@@ -1,18 +1,24 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Storage/WDB/WDBStores.hpp"
 #include "Objects/Item.hpp"
 #include "Management/WeatherMgr.hpp"
 #include "Management/ItemInterface.h"
+#include "Management/Loot/LootMgr.hpp"
+#include "Management/Loot/LootItem.hpp"
 #include "Macros/CorpseMacros.hpp"
-#include "Macros/ScriptMacros.hpp"
 #include "Management/Battleground/Battleground.hpp"
 #include "Server/WorldSocket.h"
 #include "Storage/MySQLDataStore.hpp"
-#include "Server/MainServerDefines.h"
 #include "zlib.h"
+#include "Chat/ChatDefines.hpp"
+#include "Management/AddonMgr.h"
+#include "Management/Group.h"
+#include "Management/ObjectMgr.hpp"
+#include "Management/QuestMgr.h"
 #include "Map/Maps/InstanceDefines.hpp"
 #include "Map/Management/MapMgr.hpp"
 #include "Spell/SpellMgr.hpp"
@@ -22,7 +28,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgSetSelection.h"
 #include "Server/Packets/CmsgTutorialFlag.h"
 #include "Server/Packets/CmsgSetSheathed.h"
-#include "Server/Packets/CmsgPlayedTime.h"
+#include "Server/Packets/CmsgRequestPlayedTime.h"
 #include "Server/Packets/SmsgPlayedTime.h"
 #include "Server/Packets/CmsgSetActionButton.h"
 #include "Server/Packets/CmsgSetWatchedFaction.h"
@@ -40,6 +46,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgOpenItem.h"
 #include "Server/Packets/CmsgSetTitle.h"
 #include "Management/Guild/GuildMgr.hpp"
+#include "Map/Maps/WorldMap.hpp"
 #include "Server/Packets/CmsgZoneupdate.h"
 #include "Server/Packets/CmsgResurrectResponse.h"
 #include "Server/Packets/CmsgBug.h"
@@ -57,7 +64,23 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/SmsgAccountDataTimes.h"
 #include "Server/Packets/SmsgLogoutCancelAck.h"
 #include "Server/Packets/SmsgMotd.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Objects/Transporter.hpp"
+#include "Objects/Units/Creatures/Corpse.hpp"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/DatabaseDefinition.hpp"
+#include "Server/World.h"
+#include "Server/WorldSession.h"
+#include "Server/WorldSessionLog.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/HookInterface.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/Spell.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Random.hpp"
+#include "Utilities/Strings.hpp"
+#include <Server/Packets/SmsgClearTarget.h>
 
 using namespace AscEmu::Packets;
 
@@ -74,20 +97,16 @@ void WorldSession::handleWhoOpcode(WorldPacket& recvPacket)
 {
     CmsgWho srlPacket;
     if (!srlPacket.deserialise(recvPacket))
+    {
         return;
+    }
 
-    bool cname = false;
-    bool gname = false;
+    bool const hasCharName = !srlPacket.player_name.empty();
+    bool const hasGuildName = !srlPacket.guild_name.empty();
 
-    if (srlPacket.player_name.length() > 0)
-        cname = true;
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_WHO with {} zones and {} names", srlPacket.zone_count, srlPacket.name_count);
 
-    if (srlPacket.guild_name.length() > 0)
-        gname = true;
-
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_WHO with %u zones and %u names", srlPacket.zone_count, srlPacket.name_count);
-
-    uint32_t team = _player->getTeam();
+    PlayerTeam const team = _player->getTeam();
 
     uint32_t sent_count = 0;
     uint32_t total_count = 0;
@@ -96,106 +115,118 @@ void WorldSession::handleWhoOpcode(WorldPacket& recvPacket)
     data.SetOpcode(SMSG_WHO);
     data << uint64_t(0);
 
-    sObjectMgr._playerslock.lock();
-    PlayerStorageMap::const_iterator iend = sObjectMgr._players.end();
-    PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin();
-    while (itr != iend && sent_count < 49)
+    sObjectMgr.m_playerLock.lock();
+
+    for (auto const& itr : sObjectMgr.getPlayerStorage())
     {
-        Player* plr = itr->second;
-        ++itr;
-
-        if (!plr->getSession() || !plr->IsInWorld())
-            continue;
-
-        if (!worldConfig.gm.showGmInWhoList && !HasGMPermissions())
+        Player* player = itr.second;
+        if (player == nullptr || player->getSession() == nullptr || !player->IsInWorld())
         {
-            if (plr->getSession()->HasGMPermissions())
-                continue;
+            continue;
+        }
+
+        if (!worldConfig.gm.showGmInWhoList && !HasGMPermissions() && player->getSession()->HasGMPermissions())
+        {
+            continue;
         }
 
         // Team check
-        if (!HasGMPermissions() && plr->getTeam() != team && !plr->getSession()->HasGMPermissions() && !worldConfig.player.isInterfactionMiscEnabled)
+        if (!HasGMPermissions() && player->getTeam() != team && !player->getSession()->HasGMPermissions() && !worldConfig.player.isInterfactionMiscEnabled)
+        {
             continue;
+        }
 
         ++total_count;
 
-        // Add by default, if we don't have any checks
-        bool add = true;
-
         // Chat name
-        if (cname && srlPacket.player_name.compare(plr->getName()) != 0)
+        if (hasCharName && srlPacket.player_name.compare(player->getName()) != 0)
+        {
             continue;
+        }
 
         // Guild name
-        if (gname)
+        if (hasGuildName && (!player->getGuild() || srlPacket.guild_name.compare(player->getGuild()->getName()) != 0))
         {
-            if (!plr->getGuild() || srlPacket.guild_name.compare(plr->getGuild()->getName()) != 0)
-                continue;
+            continue;
         }
 
         // Level check
-        if (srlPacket.min_level && srlPacket.max_level)
+        // skip players outside of level range
+        if (srlPacket.min_level > 0 && srlPacket.max_level > 0 && player->getLevel() < srlPacket.min_level || player->getLevel() > srlPacket.max_level)
         {
-            // skip players outside of level range
-            if (plr->getLevel() < srlPacket.min_level || plr->getLevel() > srlPacket.max_level)
-                continue;
+            continue;
         }
 
         // Zone id compare
-        if (srlPacket.zone_count)
+        if (srlPacket.zone_count > 0)
         {
             // people that fail the zone check don't get added
-            add = false;
+            bool skip = true;
             for (uint32_t i = 0; i < srlPacket.zone_count; ++i)
             {
-                if (srlPacket.zones[i] == plr->GetZoneId())
+                if (srlPacket.zones[i] == player->getZoneId())
                 {
-                    add = true;
+                    skip = false;
                     break;
                 }
             }
+
+            if (skip)
+            {
+                continue;
+            }
         }
 
-        if (!((srlPacket.class_mask >> 1) & plr->getClassMask()) || !((srlPacket.race_mask >> 1) & plr->getRaceMask()))
-            add = false;
-
-        // skip players that fail zone check
-        if (!add)
+        if (((srlPacket.class_mask >> 1) & player->getClassMask()) == 0 || ((srlPacket.race_mask >> 1) & player->getRaceMask()) == 0)
+        {
             continue;
+        }
 
-        if (srlPacket.name_count)
+        if (srlPacket.name_count > 0)
         {
             // people that fail name check don't get added
-            add = false;
+            bool skip = true;
             for (uint32_t i = 0; i < srlPacket.name_count; ++i)
             {
-                if (!strnicmp(srlPacket.names[i].c_str(), plr->getName().c_str(), srlPacket.names[i].length()))
+                if (AscEmu::Util::Strings::isEqual(srlPacket.names[i].c_str(), player->getName().c_str()))
                 {
-                    add = true;
+                    skip = false;
                     break;
                 }
             }
+
+            if (skip)
+            {
+                continue;
+            }
         }
 
-        if (!add)
-            continue;
-
         // if we're here, it means we've passed all tests
-        data << plr->getName().c_str();
+        data << player->getName().c_str();
 
-        if (plr->m_playerInfo->m_guild)
-            data << sGuildMgr.getGuildById(plr->m_playerInfo->m_guild)->getName().c_str();
+        if (player->m_playerInfo->m_guild > 0)
+        {
+            data << sGuildMgr.getGuildById(player->m_playerInfo->m_guild)->getName().c_str();
+        }
         else
+        {
             data << uint8_t(0);
+        }
 
-        data << plr->getLevel();
-        data << uint32_t(plr->getClass());
-        data << uint32_t(plr->getRace());
-        data << plr->getGender();
-        data << uint32_t(plr->GetZoneId());
+        data << player->getLevel();
+        data << uint32_t(player->getClass());
+        data << uint32_t(player->getRace());
+        data << player->getGender();
+        data << uint32_t(player->getZoneId());
+
         ++sent_count;
+        if (sent_count >= 49)
+        {
+            break;
+        }
     }
-    sObjectMgr._playerslock.unlock();
+
+    sObjectMgr.m_playerLock.unlock();
     data.wpos(0);
     data << sent_count;
     data << sent_count;
@@ -241,7 +272,7 @@ void WorldSession::handleTutorialFlag(WorldPacket& recvPacket)
     tutorial_flag |= (1 << tutorial_status);
     _player->setTutorialValueForId(tutorial_index, tutorial_flag);
 
-    sLogger.debug("Received Tutorial flag: (%u).", srlPacket.flag);
+    sLogger.debug("Received Tutorial flag: ({}).", srlPacket.flag);
 }
 
 void WorldSession::handleTutorialClear(WorldPacket& /*recvPacket*/)
@@ -258,14 +289,13 @@ void WorldSession::handleTutorialReset(WorldPacket& /*recvPacket*/)
 
 void WorldSession::handleLogoutRequestOpcode(WorldPacket& /*recvPacket*/)
 {
-#if VERSION_STRING >= TBC // support classic
     if (!sHookInterface.OnLogoutRequest(_player))
     {
         SendPacket(SmsgLogoutResponse(true).serialise().get());
         return;
     }
 
-    if (GetPermissionCount() == 0)
+    if (!hasPermissions())
     {
         if (_player->getCombatHandler().isInCombat() || _player->m_duelPlayer != nullptr)
         {
@@ -280,7 +310,7 @@ void WorldSession::handleLogoutRequestOpcode(WorldPacket& /*recvPacket*/)
         }
     }
 
-    if (GetPermissionCount() > 0)
+    if (hasPermissions())
     {
         if (_player->m_isResting || _player->isOnTaxi() || worldConfig.player.enableInstantLogoutForAccessType > 0)
         {
@@ -299,7 +329,6 @@ void WorldSession::handleLogoutRequestOpcode(WorldPacket& /*recvPacket*/)
     _player->setStandState(STANDSTATE_SIT);
 
     SetLogoutTimer(PLAYER_LOGOUT_DELAY);
-#endif
 }
 
 void WorldSession::handleSetSheathedOpcode(WorldPacket& recvPacket)
@@ -313,11 +342,11 @@ void WorldSession::handleSetSheathedOpcode(WorldPacket& recvPacket)
 
 void WorldSession::handlePlayedTimeOpcode(WorldPacket& recvPacket)
 {
-    CmsgPlayedTime srlPacket;
+    CmsgRequestPlayedTime srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_PLAYED_TIME: displayinui: %u", srlPacket.displayInUi);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_PLAYED_TIME: displayInChatFrame: {}", srlPacket.displayInChatFrame);
 
     const uint32_t playedTime = static_cast<uint32_t>(UNIXTIME) - _player->m_playedTime[2];
     if (playedTime > 0)
@@ -327,9 +356,9 @@ void WorldSession::handlePlayedTimeOpcode(WorldPacket& recvPacket)
         _player->m_playedTime[2] += playedTime;
     }
 
-    SendPacket(SmsgPlayedTime(_player->m_playedTime[1], _player->m_playedTime[0], srlPacket.displayInUi).serialise().get());
+    SendPacket(SmsgPlayedTime(_player->m_playedTime[1], _player->m_playedTime[0], srlPacket.displayInChatFrame).serialise().get());
 
-    sLogger.debug("Sent SMSG_PLAYED_TIME total: %u level: %u", _player->m_playedTime[1], _player->m_playedTime[0]);
+    sLogger.debug("Sent SMSG_PLAYED_TIME total: {} level: {}", _player->m_playedTime[1], _player->m_playedTime[0]);
 }
 
 void WorldSession::handleSetActionButtonOpcode(WorldPacket& recvPacket)
@@ -338,11 +367,11 @@ void WorldSession::handleSetActionButtonOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("BUTTON: %u ACTION: %u TYPE: %u MISC: %u", srlPacket.button, srlPacket.action, srlPacket.type, srlPacket.misc);
+    sLogger.debug("BUTTON: {} ACTION: {} TYPE: {} MISC: {}", srlPacket.button, srlPacket.action, srlPacket.type, srlPacket.misc);
 
     if (srlPacket.action == 0)
     {
-        sLogger.debug("MISC: Remove action from button %u", srlPacket.button);
+        sLogger.debug("MISC: Remove action from button {}", srlPacket.button);
         _player->setActionButton(srlPacket.button, 0, 0, 0);
     }
     else
@@ -352,17 +381,17 @@ void WorldSession::handleSetActionButtonOpcode(WorldPacket& recvPacket)
 
         if (srlPacket.type == 64 || srlPacket.type == 65)
         {
-            sLogger.debug("MISC: Added Macro %u into button %u", srlPacket.action, srlPacket.button);
+            sLogger.debug("MISC: Added Macro {} into button {}", srlPacket.action, srlPacket.button);
             _player->setActionButton(srlPacket.button, srlPacket.action, srlPacket.type, srlPacket.misc);
         }
         else if (srlPacket.type == 128)
         {
-            sLogger.debug("MISC: Added Item %u into button %u", srlPacket.action, srlPacket.button);
+            sLogger.debug("MISC: Added Item {} into button {}", srlPacket.action, srlPacket.button);
             _player->setActionButton(srlPacket.button, srlPacket.action, srlPacket.type, srlPacket.misc);
         }
         else if (srlPacket.type == 0)
         {
-            sLogger.debug("MISC: Added Spell %u into button %u", srlPacket.action, srlPacket.button);
+            sLogger.debug("MISC: Added Spell {} into button {}", srlPacket.action, srlPacket.button);
             _player->setActionButton(srlPacket.button, srlPacket.action, srlPacket.type, srlPacket.misc);
         }
     }
@@ -383,7 +412,7 @@ void WorldSession::handleRandomRollOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_RANDOM_ROLL: %u (min), %u (max)", srlPacket.min, srlPacket.max);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_RANDOM_ROLL: {} (min), {} (max)", srlPacket.min, srlPacket.max);
 
     uint32_t maxValue = srlPacket.max;
     uint32_t minValue = srlPacket.min;
@@ -408,7 +437,7 @@ void WorldSession::handleRealmSplitOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REALM_SPLIT: %u (unk)", srlPacket.unknown);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REALM_SPLIT: {} (unk)", srlPacket.unknown);
 
     const std::string dateFormat = "01/01/01";
 
@@ -421,7 +450,7 @@ void WorldSession::handleSetTaxiBenchmarkOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SET_TAXI_BENCHMARK_MODE: %d (mode)", srlPacket.mode);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SET_TAXI_BENCHMARK_MODE: {} (mode)", srlPacket.mode);
 }
 
 void WorldSession::handleWorldStateUITimerUpdate(WorldPacket& /*recvPacket*/)
@@ -438,14 +467,14 @@ void WorldSession::handleGameobjReportUseOpCode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GAMEOBJ_REPORT_USE: %u (guid.low)", srlPacket.guid.getGuidLow());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GAMEOBJ_REPORT_USE: {} (guid.low)", srlPacket.guid.getGuidLow());
 
     const auto gameobject = _player->getWorldMap()->getGameObject(srlPacket.guid.getGuidLow());
     if (gameobject == nullptr)
         return;
 
     sQuestMgr.OnGameObjectActivate(_player, gameobject);
-    _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_USE_GAMEOBJECT, gameobject->getEntry(), 0, 0);
+    _player->updateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_USE_GAMEOBJECT, gameobject->getEntry(), 0, 0);
 
 #endif
 }
@@ -459,18 +488,17 @@ void WorldSession::handleDungeonDifficultyOpcode(WorldPacket& recvPacket)
     if (srlPacket.difficulty >= InstanceDifficulty::MAX_DUNGEON_DIFFICULTY)
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SET_DUNGEON_DIFFICULTY: %d (difficulty)", srlPacket.difficulty);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SET_DUNGEON_DIFFICULTY: {} (difficulty)", srlPacket.difficulty);
 
     if (InstanceDifficulty::Difficulties(srlPacket.difficulty) == _player->getDungeonDifficulty())
         return;
 
     // cannot reset while in an instance
     WorldMap* map = _player->getWorldMap();
-    if (map && map->getBaseMap()->isDungeon())
+    if (map && map->getBaseMap()->isInstanceMap())
         return;
 
-    Group* group = _player->getGroup();
-    if (group)
+    if (const auto group = _player->getGroup())
     {
         if (_player->isGroupLeader())
         {
@@ -495,18 +523,17 @@ void WorldSession::handleRaidDifficultyOpcode(WorldPacket& recvPacket)
     if (srlPacket.difficulty >= InstanceDifficulty::MAX_RAID_DIFFICULTY)
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SET_RAID_DIFFICULTY: %d (difficulty)", srlPacket.difficulty);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SET_RAID_DIFFICULTY: {} (difficulty)", srlPacket.difficulty);
 
     // cannot reset while in an instance
     WorldMap* map = _player->getWorldMap();
-    if (map && map->getBaseMap()->isDungeon())
+    if (map && map->getBaseMap()->isInstanceMap())
         return;
 
     if (InstanceDifficulty::Difficulties(srlPacket.difficulty) == _player->getRaidDifficulty())
         return;
 
-    Group* group = _player->getGroup();
-    if (group)
+    if (const auto group = _player->getGroup())
     {
         if (_player->isGroupLeader())
         {
@@ -528,7 +555,7 @@ void WorldSession::handleSetAutoLootPassOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_OPT_OUT_OF_LOOT: %u (turnedOn)", srlPacket.turnedOn);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_OPT_OUT_OF_LOOT: {} (turnedOn)", srlPacket.turnedOn);
 
     _player->m_passOnLoot = srlPacket.turnedOn > 0 ? true : false;
 }
@@ -539,9 +566,9 @@ void WorldSession::handleSetActionBarTogglesOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SET_ACTIONBAR_TOGGLES: %d (actionbarId)", srlPacket.actionbarId);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SET_ACTIONBAR_TOGGLES: {} (actionbarId)", srlPacket.actionbarId);
 
-    _player->setActionBarId(srlPacket.actionbarId);
+    _player->setEnabledActionBars(srlPacket.actionbarId);
 }
 
 void WorldSession::handleLootRollOpcode(WorldPacket& recvPacket)
@@ -550,9 +577,9 @@ void WorldSession::handleLootRollOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_LOOT_ROLL: %u (objectGuid) %u (slot) %d (choice)", srlPacket.objectGuid.getGuidLow(), srlPacket.slot, srlPacket.choice);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_LOOT_ROLL: {} (objectGuid) {} (slot) {} (choice)", srlPacket.objectGuid.getGuidLow(), srlPacket.slot, srlPacket.choice);
 
-    LootRoll* lootRoll = nullptr;
+    LootItem* lootItem = nullptr;
 
     const HighGuid guidType = srlPacket.objectGuid.getHigh();
 
@@ -572,7 +599,7 @@ void WorldSession::handleLootRollOpcode(WorldPacket& recvPacket)
                 return;
 
             if (gameObject->getGoType() == GAMEOBJECT_TYPE_CHEST)
-                lootRoll = gameObjectLootable->loot.items[srlPacket.slot].roll;
+                lootItem = &gameObjectLootable->loot.items[srlPacket.slot];
         } break;
         case HighGuid::Unit:
         {
@@ -583,16 +610,16 @@ void WorldSession::handleLootRollOpcode(WorldPacket& recvPacket)
             if (srlPacket.slot >= creature->loot.items.size() || creature->loot.items.empty())
                 return;
 
-            lootRoll = creature->loot.items[srlPacket.slot].roll;
+            lootItem = &creature->loot.items[srlPacket.slot];
         } break;
         default:
             return;
     }
 
-    if (lootRoll == nullptr)
+    if (lootItem == nullptr)
         return;
 
-    lootRoll->playerRolled(_player, srlPacket.choice);
+    lootItem->playerRolled(_player, srlPacket.choice);
 }
 
 void WorldSession::handleOpenItemOpcode(WorldPacket& recvPacket)
@@ -601,7 +628,7 @@ void WorldSession::handleOpenItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_OPEN_ITEM: %u (containerSlot), %u (slot)", srlPacket.containerSlot, srlPacket.slot);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_OPEN_ITEM: {} (containerSlot), {} (slot)", srlPacket.containerSlot, srlPacket.slot);
 
     auto item = _player->getItemInterface()->GetInventoryItem(srlPacket.containerSlot, srlPacket.slot);
     if (item == nullptr)
@@ -635,7 +662,7 @@ void WorldSession::handleOpenItemOpcode(WorldPacket& recvPacket)
     }
 
     uint32_t removeLockItems[LOCK_NUM_CASES] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-    const auto lockEntry = sLockStore.LookupEntry(item->getItemProperties()->LockId);
+    const auto lockEntry = sLockStore.lookupEntry(item->getItemProperties()->LockId);
     if (lockEntry)
     {
         for (uint8_t lockCase = 0; lockCase < LOCK_NUM_CASES; ++lockCase)
@@ -670,8 +697,8 @@ void WorldSession::handleOpenItemOpcode(WorldPacket& recvPacket)
     _player->setLootGuid(item->getGuid());
     if (item->m_loot == nullptr)
     {
-        item->m_loot = new Loot; //eeeeeek
-        sLootMgr.fillItemLoot(_player, item->m_loot, item->getEntry(), 0);
+        item->m_loot = std::make_unique<Loot>();
+        sLootMgr.fillItemLoot(_player, item->m_loot.get(), item->getEntry(), 0);
     }
     _player->sendLoot(item->getGuid(), LOOT_DISENCHANTING, _player->GetMapId());
 }
@@ -702,7 +729,7 @@ void WorldSession::handleToggleCloakOpcode(WorldPacket& /*recvPacket*/)
 
 void WorldSession::handleResetInstanceOpcode(WorldPacket& /*recvPacket*/)
 {
-    if (Group* group = _player->getGroup())
+    if (const auto group = _player->getGroup())
     {
         if (group->GetLeader()->guid == _player->getGuidLow())
             group->resetInstances(INSTANCE_RESET_ALL, false, _player);
@@ -737,7 +764,7 @@ void WorldSession::handleZoneupdate(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    if (_player->GetZoneId() == srlPacket.zoneId)
+    if (_player->getZoneId() == srlPacket.zoneId)
         return;
 
     sWeatherMgr.sendWeather(_player);
@@ -756,7 +783,7 @@ void WorldSession::handleResurrectResponse(WorldPacket& recvPacket)
 
     auto player = _player->getWorldMap()->getPlayer(srlPacket.guid.getGuidLow());
     if (player == nullptr)
-        player = sObjectMgr.GetPlayer(srlPacket.guid.getGuidLow());
+        player = sObjectMgr.getPlayer(srlPacket.guid.getGuidLow());
 
     if (player == nullptr)
         return;
@@ -797,8 +824,8 @@ void WorldSession::handleUpdateAccountData(WorldPacket& recvPacket)
 
     if (srlPacket.uiId > 8)
     {
-        sLogger.failure("WARNING: Accountdata > 8 (%u) was requested to be updated by %s of account %u!",
-            srlPacket.uiId, _player->getName().c_str(), this->GetAccountId());
+        sLogger.failure("WARNING: Accountdata > 8 ({}) was requested to be updated by {} of account {}!",
+            srlPacket.uiId, _player->getName(), this->GetAccountId());
         return;
     }
 
@@ -814,21 +841,21 @@ void WorldSession::handleUpdateAccountData(WorldPacket& recvPacket)
     }
 
     size_t receivedPackedSize = recvPacket.size() - 8;
-    auto data = new char[srlPacket.uiDecompressedSize + 1];
-    memset(data, 0, srlPacket.uiDecompressedSize + 1);
+    auto data = std::make_unique<char[]>(srlPacket.uiDecompressedSize + 1);
+    memset(data.get(), 0, srlPacket.uiDecompressedSize + 1);
 
     if (srlPacket.uiDecompressedSize > receivedPackedSize)
     {
-        const int32_t ZlibResult = uncompress(reinterpret_cast<uint8_t*>(data), &uid, recvPacket.contents() + 8, 
+        const int32_t ZlibResult = uncompress(reinterpret_cast<uint8_t*>(data.get()), &uid, recvPacket.contents() + 8,
             static_cast<uLong>(receivedPackedSize));
 
         switch (ZlibResult)
         {
             case Z_OK:                  //0 no error decompression is OK
             {
-                SetAccountData(srlPacket.uiId, data, false, srlPacket.uiDecompressedSize);
-                sLogger.debug("Successfully decompressed account data %d for %s, and updated storage array.",
-                    srlPacket.uiId, _player->getName().c_str());
+                SetAccountData(srlPacket.uiId, std::move(data), false, srlPacket.uiDecompressedSize);
+                sLogger.debug("Successfully decompressed account data {} for {}, and updated storage array.",
+                    srlPacket.uiId, _player->getName());
             } break;
             case Z_ERRNO:               //-1
             case Z_STREAM_ERROR:        //-2
@@ -837,22 +864,20 @@ void WorldSession::handleUpdateAccountData(WorldPacket& recvPacket)
             case Z_BUF_ERROR:           //-5
             case Z_VERSION_ERROR:       //-6
             {
-                delete[] data;
-                sLogger.failure("Decompression of account data %u for %s FAILED.", srlPacket.uiId, _player->getName().c_str());
+                sLogger.failure("Decompression of account data {} for {} FAILED.", srlPacket.uiId, _player->getName());
             } break;
 
             default:
             {
-                delete[] data;
-                sLogger.failure("Decompression gave a unknown error: %x, of account data %u for %s FAILED.",
-                    ZlibResult, srlPacket.uiId, _player->getName().c_str());
+                sLogger.failure("Decompression gave a unknown error: {:x}, of account data {} for {} FAILED.",
+                    ZlibResult, srlPacket.uiId, _player->getName());
             } break;
         }
     }
     else
     {
-        memcpy(data, recvPacket.contents() + 8, srlPacket.uiDecompressedSize);
-        SetAccountData(srlPacket.uiId, data, false, srlPacket.uiDecompressedSize);
+        memcpy(data.get(), recvPacket.contents() + 8, srlPacket.uiDecompressedSize);
+        SetAccountData(srlPacket.uiId, std::move(data), false, srlPacket.uiDecompressedSize);
     }
 
 #if VERSION_STRING > TBC
@@ -868,11 +893,11 @@ void WorldSession::handleRequestAccountData(WorldPacket& recvPacket)
     uint32_t accountDataId;
     recvPacket >> accountDataId;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_ACCOUNT_DATA id %u.", accountDataId);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_ACCOUNT_DATA id {}.", accountDataId);
 
     if (accountDataId > 8)
     {
-        sLogger.debug("CMSG_REQUEST_ACCOUNT_DATA: Accountdata > 8 (%d) was requested by %s of account %u!", accountDataId, _player->getName().c_str(), this->GetAccountId());
+        sLogger.debug("CMSG_REQUEST_ACCOUNT_DATA: Accountdata > 8 ({}) was requested by {} of account {}!", accountDataId, _player->getName(), this->GetAccountId());
         return;
     }
 
@@ -894,7 +919,7 @@ void WorldSession::handleRequestAccountData(WorldPacket& recvPacket)
             data.resize(accountDataEntry->sz + 800);
 
             uLongf destSize;
-            if (compress(data.contents() + (sizeof(uint32_t) * 2), &destSize, reinterpret_cast<const uint8_t*>(accountDataEntry->data), accountDataEntry->sz) != Z_OK)
+            if (compress(data.contents() + (sizeof(uint32_t) * 2), &destSize, reinterpret_cast<const uint8_t*>(accountDataEntry->data.get()), accountDataEntry->sz) != Z_OK)
             {
                 sLogger.debug("CMSG_REQUEST_ACCOUNT_DATA: Error while compressing data");
                 return;
@@ -904,7 +929,7 @@ void WorldSession::handleRequestAccountData(WorldPacket& recvPacket)
         }
         else
         {
-            data.append(accountDataEntry->data, accountDataEntry->sz);
+            data.append(accountDataEntry->data.get(), accountDataEntry->sz);
         }
     }
 
@@ -924,8 +949,8 @@ void WorldSession::handleBugOpcode(WorldPacket& recv_data)
         sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BUG [Suggestion]");
 
     uint64_t accountId = GetAccountId();
-    uint32_t timeStamp = uint32(UNIXTIME);
-    uint32_t reportId = sObjectMgr.GenerateReportID();
+    uint32_t timeStamp = uint32_t(UNIXTIME);
+    uint32_t reportId = sObjectMgr.generateReportId();
 
     std::stringstream ss;
 
@@ -955,11 +980,11 @@ void WorldSession::handleBugOpcode(WorldPacket& recv_data)
     std::string bugMessage;
     bugMessage = recv_data.ReadString(lenght);
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BUG [Bug Report] lenght: %u message: %s", lenght, bugMessage.c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BUG [Bug Report] lenght: {} message: {}", lenght, bugMessage);
 
     uint64_t accountId = GetAccountId();
     uint32_t timeStamp = uint32_t(UNIXTIME);
-    uint32_t reportId = sObjectMgr.GenerateReportID();
+    uint32_t reportId = sObjectMgr.generateReportId();
 
     std::stringstream ss;
 
@@ -975,9 +1000,9 @@ void WorldSession::handleBugOpcode(WorldPacket& recv_data)
 }
 #endif
 
-#if VERSION_STRING >= Cata
 void WorldSession::handleSuggestionOpcode(WorldPacket& recvPacket)
 {
+#if VERSION_STRING >= Cata
     uint8_t unk1;
     uint8_t unk2;
 
@@ -991,11 +1016,11 @@ void WorldSession::handleSuggestionOpcode(WorldPacket& recvPacket)
     std::string suggestionMessage;
     suggestionMessage = recvPacket.ReadString(lenght);
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SUGGESTIONS [Suggestion] lenght: %u message: %s", lenght, suggestionMessage.c_str());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_SUGGESTIONS [Suggestion] lenght: {} message: {}", lenght, suggestionMessage);
 
     uint64_t accountId = GetAccountId();
     uint32_t timeStamp = uint32_t(UNIXTIME);
-    uint32_t reportId = sObjectMgr.GenerateReportID();
+    uint32_t reportId = sObjectMgr.generateReportId();
 
     std::stringstream ss;
 
@@ -1008,29 +1033,28 @@ void WorldSession::handleSuggestionOpcode(WorldPacket& recvPacket)
     ss << CharacterDatabase.EscapeString(suggestionMessage) << "')";
 
     CharacterDatabase.ExecuteNA(ss.str().c_str());
-}
 #endif
+}
 
-#if VERSION_STRING >= Cata
 void WorldSession::handleReturnToGraveyardOpcode(WorldPacket& /*recvPacket*/)
 {
+#if VERSION_STRING >= Cata
     if (_player->isAlive())
         return;
 
     _player->repopAtGraveyard(_player->GetPositionX(), _player->GetPositionY(), _player->GetPositionZ(), _player->GetMapId());
-}
 #endif
+}
 
-#if VERSION_STRING >= Cata
 void WorldSession::handleLogDisconnectOpcode(WorldPacket& recvPacket)
 {
+#if VERSION_STRING >= Cata
     uint32_t disconnectReason;
-    recvPacket >> disconnectReason;     // 13 - closed window
+    recvPacket >> disconnectReason; // 13 - closed window
 
-    sLogger.debug("Player %s disconnected on %s - Reason %u", _player->getName().c_str(),
-        Util::GetCurrentDateTimeString().c_str(), disconnectReason);
-}
+    sLogger.debug("Player {} disconnected on {} - Reason {}", _player->getName(), Util::GetCurrentDateTimeString(), disconnectReason);
 #endif
+}
 
 void WorldSession::handleCompleteCinematic(WorldPacket& /*recvPacket*/)
 {
@@ -1119,12 +1143,12 @@ void WorldSession::handleCorpseReclaimOpcode(WorldPacket& recvPacket)
     if (srlPacket.guid.getRawGuid() == 0)
         return;
 
-    auto corpse = sObjectMgr.GetCorpse(srlPacket.guid.getGuidLow());
+    auto corpse = sObjectMgr.getCorpseByGuid(srlPacket.guid.getGuidLow());
     if (corpse == nullptr)
         return;
 
     WoWGuid wowGuid;
-    wowGuid.Init(corpse->getOwnerGuid());
+    wowGuid.init(corpse->getOwnerGuid());
 
     if (wowGuid.getGuidLowPart() != _player->getGuidLow() && corpse->getFlags() == 5)
     {
@@ -1138,7 +1162,7 @@ void WorldSession::handleCorpseReclaimOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (time(nullptr) < corpse->GetDeathClock() + CORPSE_RECLAIM_TIME)
+    if (time(nullptr) < corpse->getDeathClock() + CORPSE_RECLAIM_TIME)
     {
         SendPacket(SmsgResurrectFailed(1).serialise().get());
         return;
@@ -1148,33 +1172,40 @@ void WorldSession::handleCorpseReclaimOpcode(WorldPacket& recvPacket)
     _player->setHealth(_player->getMaxHealth() / 2);
 }
 
-#if VERSION_STRING >= Cata
+
 void WorldSession::handleLoadScreenOpcode(WorldPacket& recvPacket)
 {
+#if VERSION_STRING >= Cata
     uint32_t mapId;
 
     recvPacket >> mapId;
     recvPacket.readBit();
+#endif
 }
 
 void WorldSession::handleUITimeRequestOpcode(WorldPacket& /*recvPacket*/)
 {
+#if VERSION_STRING >= Cata
     WorldPacket data(SMSG_UI_TIME, 4);
     data << uint32_t(time(nullptr));
     SendPacket(&data);
+#endif
 }
 
 void WorldSession::handleTimeSyncRespOpcode(WorldPacket& recvPacket)
 {
+#if VERSION_STRING >= Cata
     uint32_t counter;
     uint32_t clientTicks;
     recvPacket >> counter;
     recvPacket >> clientTicks;
+#endif
 }
 
 void WorldSession::handleObjectUpdateFailedOpcode(WorldPacket& recvPacket)
 {
-    ObjectGuid guid;
+#if VERSION_STRING >= Cata
+    WoWGuid guid;
 
 #if VERSION_STRING == Cata
     guid[6] = recvPacket.readBit();
@@ -1214,7 +1245,7 @@ void WorldSession::handleObjectUpdateFailedOpcode(WorldPacket& recvPacket)
     recvPacket.ReadByteSeq(guid[4]);
 #endif
 
-    sLogger.failure("handleObjectUpdateFailedOpcode : Object update failed for playerguid %u", WoWGuid::getGuidLowPartFromUInt64(guid));
+    sLogger.failure("handleObjectUpdateFailedOpcode : Object update failed for playerguid {}", WoWGuid::getGuidLowPartFromUInt64(guid));
 
     if (_player == nullptr)
         return;
@@ -1226,35 +1257,38 @@ void WorldSession::handleObjectUpdateFailedOpcode(WorldPacket& recvPacket)
     }
 
     //_player->updateVisibility();
+#endif
 }
 
-#if VERSION_STRING >= Cata
+
 
 #define DB2_REPLY_SPARSE 2442913102
 #define DB2_REPLY_ITEM   1344507586
 
 void WorldSession::sendItemDb2Reply(uint32_t entry)
 {
+#if VERSION_STRING >= Cata
+#if VERSION_STRING < Mop
     WorldPacket data(SMSG_DB_REPLY, 44);
     ItemProperties const* proto = sMySQLStore.getItemProperties(entry);
     if (!proto)
     {
-        data << uint32_t(-1);         // entry
+        data << uint32_t(-1);                                   // entry
         data << uint32_t(DB2_REPLY_ITEM);
-        data << uint32_t(1322512289); // hotfix date
-        data << uint32_t(0);          // size of next block
+        data << uint32_t(1322512289);                           // hotfix date
+        data << uint32_t(0);                                    // size of next block
         return;
     }
 
     data << uint32_t(entry);
     data << uint32_t(DB2_REPLY_ITEM);
-    data << uint32_t(1322512290);     // hotfix date
+    data << uint32_t(1322512290);                               // hotfix date
 
     ByteBuffer buff;
     buff << uint32_t(entry);
     buff << uint32_t(proto->Class);
     buff << uint32_t(proto->SubClass);
-    buff << int32_t(0);// unk?
+    buff << int32_t(0);                                         // unk?
     buff << uint32_t(proto->LockMaterial);
     buff << uint32_t(proto->DisplayInfoID);
     buff << uint32_t(proto->InventoryType);
@@ -1264,24 +1298,28 @@ void WorldSession::sendItemDb2Reply(uint32_t entry)
     data.append(buff);
 
     SendPacket(&data);
+#endif
+#endif
 }
 
 void WorldSession::sendItemSparseDb2Reply(uint32_t entry)
 {
+#if VERSION_STRING >= Cata
+#if VERSION_STRING < Mop
     WorldPacket data(SMSG_DB_REPLY, 526);
     ItemProperties const* proto = sMySQLStore.getItemProperties(entry);
     if (!proto)
     {
-        data << uint32_t(-1);         // entry
+        data << uint32_t(-1);                                   // entry
         data << uint32_t(DB2_REPLY_SPARSE);
-        data << uint32_t(1322512289); // hotfix date
-        data << uint32_t(0);          // size of next block
+        data << uint32_t(1322512289);                           // hotfix date
+        data << uint32_t(0);                                    // size of next block
         return;
     }
 
     data << uint32_t(entry);
     data << uint32_t(DB2_REPLY_SPARSE);
-    data << uint32_t(1322512290);     // hotfix date
+    data << uint32_t(1322512290);                               // hotfix date
 
     ByteBuffer buff;
     buff << uint32_t(entry);
@@ -1300,31 +1338,53 @@ void WorldSession::sendItemSparseDb2Reply(uint32_t entry)
     buff << uint32_t(proto->RequiredLevel);
     buff << uint32_t(proto->RequiredSkill);
     buff << uint32_t(proto->RequiredSkillRank);
-    buff << uint32_t(0);// req spell
+    buff << uint32_t(0);                                        // req spell
     buff << uint32_t(proto->RequiredPlayerRank1);
     buff << uint32_t(proto->RequiredPlayerRank2);
     buff << uint32_t(proto->RequiredFactionStanding);
     buff << uint32_t(proto->RequiredFaction);
     buff << int32_t(proto->MaxCount);
-    buff << int32_t(0);//stackable
+    buff << int32_t(0);                                         // stackable
     buff << uint32_t(proto->ContainerSlots);
 
-    for (uint32_t x = 0; x < MAX_ITEM_PROTO_STATS; ++x)
-        buff << uint32_t(proto->Stats[x].Type);
+    auto it = proto->generalStatsMap.begin();
+    for (uint8_t i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
+    {
+        if (it != proto->generalStatsMap.end())
+        {
+            data << it->first;
+            ++it;
+        }
+        else
+        {
+            data << uint32_t(0);
+        }
+    }
+
+    auto it2 = proto->generalStatsMap.begin();
+    for (uint8_t i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
+    {
+        if (it2 != proto->generalStatsMap.end())
+        {
+            data << it2->second;
+            ++it;
+        }
+        else
+        {
+            data << int32_t(0);
+        }
+    }
 
     for (uint32_t x = 0; x < MAX_ITEM_PROTO_STATS; ++x)
-        buff << int32_t(proto->Stats[x].Value);
+        buff << int32_t(0);                                     // unk
 
     for (uint32_t x = 0; x < MAX_ITEM_PROTO_STATS; ++x)
-        buff << int32_t(0);//unk
-
-    for (uint32_t x = 0; x < MAX_ITEM_PROTO_STATS; ++x)
-        buff << int32_t(0);//unk
+        buff << int32_t(0);                                     // unk
 
     buff << uint32_t(proto->ScalingStatsEntry);
-    buff << uint32_t(0);// damage type
+    buff << uint32_t(0);                                        // damage type
     buff << uint32_t(proto->Delay);
-    buff << float(40);// ranged range
+    buff << float(40);                                          // ranged range
 
     for (uint32_t x = 0; x < MAX_ITEM_PROTO_SPELLS; ++x)
         buff << int32_t(0);
@@ -1347,12 +1407,12 @@ void WorldSession::sendItemSparseDb2Reply(uint32_t entry)
     buff << uint32_t(proto->Bonding);
 
     // item name
-    std::string name = proto->Name;
+    utf8_string name = proto->Name;
     buff << uint16_t(name.length());
     if (name.length())
         buff << name;
 
-    for (uint32_t i = 0; i < 3; ++i) // other 3 names
+    for (uint32_t i = 0; i < 3; ++i)                            // other 3 names
         buff << uint16_t(0);
 
     std::string desc = proto->Description;
@@ -1388,27 +1448,28 @@ void WorldSession::sendItemSparseDb2Reply(uint32_t entry)
     buff << int32_t(proto->ExistingDuration);
     buff << uint32_t(proto->ItemLimitCategory);
     buff << uint32_t(proto->HolidayId);
-    buff << float(proto->ScalingStatsFlag);                  // StatScalingFactor
-    buff << uint32_t(0);            // archaeology unk
-    buff << uint32_t(0);         // archaeology findinds count
+    buff << float(proto->ScalingStatsFlag);                     // StatScalingFactor
+    buff << uint32_t(0);                                        // archaeology unk
+    buff << uint32_t(0);                                        // archaeology findinds count
 
     data << uint32_t(buff.size());
     data.append(buff);
 
     SendPacket(&data);
-}
-
 #endif
+#endif
+}
 
 void WorldSession::handleRequestHotfix(WorldPacket& recvPacket)
 {
+#if VERSION_STRING >= Cata
 #if VERSION_STRING == Cata
     uint32_t type;
     recvPacket >> type;
 
     uint32_t count = recvPacket.readBits(23);
 
-    ObjectGuid* guids = new ObjectGuid[count];
+    auto guids = std::make_unique<WoWGuid[]>(count);
     for (uint32_t i = 0; i < count; ++i)
     {
         guids[i][0] = recvPacket.readBit();
@@ -1443,7 +1504,7 @@ void WorldSession::handleRequestHotfix(WorldPacket& recvPacket)
                 sendItemSparseDb2Reply(entry);
                 break;
             default:
-                sLogger.debug("Received unknown hotfix type %u", type);
+                sLogger.debug("Received unknown hotfix type {}", type);
                 recvPacket.clear();
                 break;
         }
@@ -1452,9 +1513,15 @@ void WorldSession::handleRequestHotfix(WorldPacket& recvPacket)
     uint32_t type;
     recvPacket >> type;
 
+    if (type != DB2_REPLY_ITEM && type != DB2_REPLY_SPARSE)
+    {
+        recvPacket.rfinish();
+        return;
+    }
+
     uint32_t count = recvPacket.readBits(21);
 
-    ObjectGuid* guids = new ObjectGuid[count];
+    auto guids = std::make_unique<WoWGuid[]>(count);
     for (uint32_t i = 0; i < count; ++i)
     {
         guids[i][6] = recvPacket.readBit();
@@ -1480,19 +1547,19 @@ void WorldSession::handleRequestHotfix(WorldPacket& recvPacket)
         recvPacket.ReadByteSeq(guids[i][2]);
         recvPacket.ReadByteSeq(guids[i][3]);
 
-        /*switch (type)
+        switch (type)
         {
-            case DB2_REPLY_ITEM:
-                SendItemDb2Reply(entry);
+            /*case DB2_REPLY_ITEM:
+                sendItemDb2Reply(entry);
                 break;
             case DB2_REPLY_SPARSE:
-                SendItemSparseDb2Reply(entry);
-                break;
+                sendItemSparseDb2Reply(entry);
+                break;*/
             default:
-                sLogger.debug("Received unknown hotfix type %u", type);
+                sLogger.debug("Received unknown hotfix type {}", type);
                 recvPacket.clear();
                 break;
-        }*/
+        }
 
         WorldPacket data(SMSG_DB_REPLY, 16);
         data << uint32_t(entry);
@@ -1503,18 +1570,19 @@ void WorldSession::handleRequestHotfix(WorldPacket& recvPacket)
         SendPacket(&data);
     }
 #endif
-    delete[] guids;
+#endif
 }
 
 void WorldSession::handleRequestCemeteryListOpcode(WorldPacket& /*recvPacket*/)
 {
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_CEMETERY_LIST");
 
-    QueryResult* result = WorldDatabase.Query("SELECT id FROM graveyards WHERE faction = %u OR faction = 3;", _player->getTeam());
+#if VERSION_STRING == Cata
+    auto result = WorldDatabase.Query("SELECT id FROM graveyards WHERE faction = %u OR faction = 3;", _player->getTeam());
     if (result)
     {
         WorldPacket data(SMSG_REQUEST_CEMETERY_LIST_RESPONSE, 8 * result->GetRowCount());
-        data.writeBit(false);               //unk bit
+        data.writeBit(false); // unk bit
         data.flushBits();
         data.writeBits(result->GetRowCount(), 24);
         data.flushBits();
@@ -1522,18 +1590,34 @@ void WorldSession::handleRequestCemeteryListOpcode(WorldPacket& /*recvPacket*/)
         do
         {
             Field* field = result->Fetch();
-            data << uint32_t(field[0].GetUInt32());
+            data << uint32_t(field[0].asUint32());
         } while (result->NextRow());
-        delete result;
 
         SendPacket(&data);
     }
-}
-#endif
+#else // Mop
+    auto result = WorldDatabase.Query("SELECT id FROM graveyards WHERE faction = %u OR faction = 3;", _player->getTeam());
+    if (result)
+    {
+        WorldPacket data(SMSG_REQUEST_CEMETERY_LIST_RESPONSE, 8 * result->GetRowCount());
+        data.writeBits(result->GetRowCount(), 22);
+        data.writeBit(false); // triggered gossip
+        do
+        {
+            Field* field = result->Fetch();
+            data << uint32_t(field[0].asUint32());
+        } while (result->NextRow());
 
-#if VERSION_STRING > TBC
+        SendPacket(&data);
+    }
+#endif
+}
+
+
+
 void WorldSession::handleRemoveGlyph(WorldPacket& recvPacket)
 {
+#if VERSION_STRING > TBC
     CmsgRemoveGlyph srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -1545,19 +1629,18 @@ void WorldSession::handleRemoveGlyph(WorldPacket& recvPacket)
     if (glyphId == 0)
         return;
 
-    const auto glyphPropertiesEntry = sGlyphPropertiesStore.LookupEntry(glyphId);
+    const auto glyphPropertiesEntry = sGlyphPropertiesStore.lookupEntry(glyphId);
     if (!glyphPropertiesEntry)
         return;
 
     _player->setGlyph(srlPacket.glyphNumber, 0);
     _player->removeAllAurasById(glyphPropertiesEntry->SpellID);
-    _player->m_specs[_player->m_talentActiveSpec].glyphs[srlPacket.glyphNumber] = 0;
+    _player->m_specs[_player->m_talentActiveSpec].setGlyph(0, srlPacket.glyphNumber);
     _player->smsg_TalentsInfo(false);
-}
 #endif
+}
 
 #if VERSION_STRING > TBC
-
 namespace BarberShopResult
 {
     enum
@@ -1566,9 +1649,11 @@ namespace BarberShopResult
         NoMoney = 1
     };
 }
+#endif
 
 void WorldSession::handleBarberShopResult(WorldPacket& recvPacket)
 {
+#if VERSION_STRING > TBC
     // todo: Here was SMSG_BARBER_SHOP:RESULT... maybe itr is MSG or it was just wrong. Check it!
     CmsgAlterAppearance srlPacket;
     if (!srlPacket.deserialise(recvPacket))
@@ -1582,7 +1667,7 @@ void WorldSession::handleBarberShopResult(WorldPacket& recvPacket)
 
     uint32_t cost = 0;
 
-    const auto barberShopHair = sBarberShopStyleStore.LookupEntry(srlPacket.hair);
+    const auto barberShopHair = sBarberShopStyleStore.lookupEntry(srlPacket.hair);
     if (!barberShopHair)
         return;
 
@@ -1590,13 +1675,13 @@ void WorldSession::handleBarberShopResult(WorldPacket& recvPacket)
 
     const auto newHairColor = srlPacket.hairColor;
 
-    const auto barberShopFacial = sBarberShopStyleStore.LookupEntry(srlPacket.facialHairOrPiercing);
+    const auto barberShopFacial = sBarberShopStyleStore.lookupEntry(srlPacket.facialHairOrPiercing);
     if (!barberShopFacial)
         return;
 
     const auto newFacial = barberShopFacial->hair_id;
 
-    const auto barberShopSkinColor = sBarberShopStyleStore.LookupEntry(srlPacket.skinColor);
+    const auto barberShopSkinColor = sBarberShopStyleStore.lookupEntry(srlPacket.skinColor);
     if (barberShopSkinColor && barberShopSkinColor->race != _player->getRace())
         return;
 
@@ -1604,7 +1689,7 @@ void WorldSession::handleBarberShopResult(WorldPacket& recvPacket)
     if (level >= 100)
         level = 100;
 
-    const auto gtBarberShopCostBaseEntry = sBarberShopCostBaseStore.LookupEntry(level - 1);
+    const auto gtBarberShopCostBaseEntry = sBarberShopCostBaseStore.lookupEntry(level - 1);
     if (!gtBarberShopCostBaseEntry)
         return;
 
@@ -1633,10 +1718,10 @@ void WorldSession::handleBarberShopResult(WorldPacket& recvPacket)
     _player->modCoinage(-static_cast<int32_t>(cost));
 
     _player->setStandState(STANDSTATE_STAND);
-    _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_VISIT_BARBER_SHOP, 1, 0, 0);
-    _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GOLD_SPENT_AT_BARBER, cost, 0, 0);
-}
+    _player->updateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_VISIT_BARBER_SHOP, 1, 0, 0);
+    _player->updateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GOLD_SPENT_AT_BARBER, cost, 0, 0);
 #endif
+}
 
 void WorldSession::handleRepopRequestOpcode(WorldPacket& /*recvPacket*/)
 {
@@ -1645,7 +1730,7 @@ void WorldSession::handleRepopRequestOpcode(WorldPacket& /*recvPacket*/)
     if (_player->getDeathState() != JUST_DIED)
         return;
 
-    if (_player->obj_movement_info.hasMovementFlag(MOVEFLAG_TRANSPORT))
+    if (_player->getTransGuid())
     {
         auto transport = _player->GetTransport();
         if (transport != nullptr)
@@ -1661,7 +1746,7 @@ void WorldSession::handleWhoIsOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Received WHOIS command from player %s for character %s", _player->getName().c_str(), srlPacket.characterName.c_str());
+    sLogger.debug("Received WHOIS command from player {} for character {}", _player->getName(), srlPacket.characterName);
 
     if (!_player->getSession()->CanUseCommand('3'))
     {
@@ -1675,55 +1760,50 @@ void WorldSession::handleWhoIsOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    QueryResult* resultAcctId = CharacterDatabase.Query("SELECT acct FROM characters WHERE name = '%s'", srlPacket.characterName.c_str());
+    auto resultAcctId = CharacterDatabase.Query("SELECT acct FROM characters WHERE name = '%s'", srlPacket.characterName.c_str());
     if (!resultAcctId)
     {
         SendNotification("%s does not exit!", srlPacket.characterName.c_str());
-        delete resultAcctId;
         return;
     }
 
     Field* fields_acctID = resultAcctId->Fetch();
-    const uint32_t accId = fields_acctID[0].GetUInt32();
-    delete resultAcctId;
+    const uint32_t accId = fields_acctID[0].asUint32();
 
     //todo: this will not work! no table accounts in character_db!!!
-    QueryResult* accountInfoResult = CharacterDatabase.Query("SELECT acct, login, gm, email, lastip, muted FROM accounts WHERE acct = %u", accId);
+    auto accountInfoResult = CharacterDatabase.Query("SELECT acct, login, gm, email, lastip, muted FROM accounts WHERE acct = %u", accId);
     if (!accountInfoResult)
     {
         SendNotification("Account information for %s not found!", srlPacket.characterName.c_str());
-        delete accountInfoResult;
         return;
     }
 
     Field* fields = accountInfoResult->Fetch();
-    std::string acctID = fields[0].GetString();
+    std::string acctID = fields[0].asCString();
     if (acctID.empty())
         acctID = "Unknown";
 
-    std::string acctName = fields[1].GetString();
+    std::string acctName = fields[1].asCString();
     if (acctName.empty())
         acctName = "Unknown";
 
-    std::string acctPerms = fields[2].GetString();
+    std::string acctPerms = fields[2].asCString();
     if (acctPerms.empty())
         acctPerms = "Unknown";
 
-    std::string acctEmail = fields[3].GetString();
+    std::string acctEmail = fields[3].asCString();
     if (acctEmail.empty())
         acctEmail = "Unknown";
 
-    std::string acctIP = fields[4].GetString();
+    std::string acctIP = fields[4].asCString();
     if (acctIP.empty())
         acctIP = "Unknown";
 
-    std::string acctMuted = fields[5].GetString();
+    std::string acctMuted = fields[5].asCString();
     if (acctMuted.empty())
         acctMuted = "Unknown";
 
-    delete accountInfoResult;
-
-    std::string msg = srlPacket.characterName + "'s " + "account information: acctID: " + acctID + ", Name: " 
+    std::string msg = srlPacket.characterName + "'s " + "account information: acctID: " + acctID + ", Name: "
     + acctName + ", Permissions: " + acctPerms + ", E-Mail: " + acctEmail + ", lastIP: " + acctIP + ", Muted: " + acctMuted;
 
     WorldPacket data(SMSG_WHOIS, msg.size() + 1);
@@ -1789,11 +1869,11 @@ void WorldSession::handleAmmoSetOpcode(WorldPacket& recvPacket)
     }
     switch (_player->getClass())
     {
-        case PRIEST:  // allowing priest, warlock, mage to equip ammo will mess up wand shoot. stop it.
+        case PRIEST:        // allowing priest, warlock, mage to equip ammo will mess up wand shoot. stop it.
         case WARLOCK:
         case MAGE:
-        case SHAMAN: // these don't get messed up since they don't use wands, but they don't get to use bows/guns/crossbows anyways
-        case DRUID:  // we wouldn't want them cheating extra stats from ammo, would we?
+        case SHAMAN:        // these don't get messed up since they don't use wands, but they don't get to use bows/guns/crossbows anyways
+        case DRUID:         // we wouldn't want them cheating extra stats from ammo, would we?
         case PALADIN:
 #if VERSION_STRING > TBC
         case DEATHKNIGHT:
@@ -1819,7 +1899,7 @@ void WorldSession::handleGameObjectUse(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GAMEOBJ_USE: %u (gobj guidLow)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GAMEOBJ_USE: {} (gobj guidLow)", srlPacket.guid.getGuidLowPart());
 
     auto gameObject = _player->getWorldMap()->getGameObject(srlPacket.guid.getGuidLowPart());
     if (!gameObject)
@@ -1832,7 +1912,7 @@ void WorldSession::handleGameObjectUse(WorldPacket& recvPacket)
     //////////////////////////////////////////////////////////////////////////////////////////
     //\brief: the following lines are handled in gobj class
 
-    sObjectMgr.CheckforScripts(_player, gameObjectProperties->raw.parameter_9);
+    sObjectMgr.checkForScripts(_player, gameObjectProperties->raw.parameter_9);
 
     if (gameObject->GetScript())
         gameObject->GetScript()->OnActivate(_player);
@@ -1861,7 +1941,7 @@ void WorldSession::handleGameObjectUse(WorldPacket& recvPacket)
             gameObject->onUse(_player);
             break;
         default:
-            sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GAMEOBJ_USE for unhandled type %u.", gameObject->getGoType());
+            sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_GAMEOBJ_USE for unhandled type {}.", gameObject->getGoType());
             break;
     }
 }
@@ -1873,7 +1953,7 @@ void WorldSession::handleInspectOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_INSPECT: %u (player guid)", static_cast<uint32_t>(srlPacket.guid));
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_INSPECT: {} (player guid)", static_cast<uint32_t>(srlPacket.guid));
 
     auto inspectedPlayer = _player->getWorldMap()->getPlayer(static_cast<uint32_t>(srlPacket.guid));
     if (inspectedPlayer == nullptr)
@@ -1892,7 +1972,7 @@ void WorldSession::handleInspectOpcode(WorldPacket& recvPacket)
     packedGuid.appendPackGUID(inspectedPlayer->getGuid());
     data.append(packedGuid);
 
-    data << uint32_t(inspectedPlayer->getActiveSpec().GetTP());
+    data << uint32_t(inspectedPlayer->getActiveSpec().getTalentPoints());
     data << uint8_t(inspectedPlayer->m_talentSpecsCount);
     data << uint8_t(inspectedPlayer->m_talentActiveSpec);
     for (uint8_t s = 0; s < inspectedPlayer->m_talentSpecsCount; ++s)
@@ -1911,9 +1991,9 @@ void WorldSession::handleInspectOpcode(WorldPacket& recvPacket)
         for (uint8_t i = 0; i < 3; ++i)
         {
             const uint32_t talentTabId = talentTabIds[i];
-            for (uint32_t j = 0; j < sTalentStore.GetNumRows(); ++j)
+            for (uint32_t j = 0; j < sTalentStore.getNumRows(); ++j)
             {
-                const auto talentInfo = sTalentStore.LookupEntry(j);
+                const auto talentInfo = sTalentStore.lookupEntry(j);
                 if (talentInfo == nullptr)
                     continue;
 
@@ -1944,7 +2024,7 @@ void WorldSession::handleInspectOpcode(WorldPacket& recvPacket)
 #ifdef FT_GLYPHS
         data << uint8_t(GLYPHS_COUNT);
 
-        for (auto glyph : playerSpec.glyphs)
+        for (const auto& glyph : playerSpec.getGlyphs())
             data << uint16_t(glyph);
 #endif
     }
@@ -1991,7 +2071,7 @@ void WorldSession::handleInspectOpcode(WorldPacket& recvPacket)
     {
         data << guild->getGUID();
         data << uint32_t(guild->getLevel());
-        data << uint64(guild->getExperience());
+        data << uint64_t(guild->getExperience());
         data << uint32_t(guild->getMembersCount());
     }
 #endif
@@ -2000,9 +2080,10 @@ void WorldSession::handleInspectOpcode(WorldPacket& recvPacket)
 #endif
 }
 
-#if VERSION_STRING >= Cata
+
 void WorldSession::readAddonInfoPacket(ByteBuffer &recvPacket)
 {
+#if VERSION_STRING >= Cata
     if (recvPacket.rpos() + 4 > recvPacket.size())
         return;
 
@@ -2014,7 +2095,7 @@ void WorldSession::readAddonInfoPacket(ByteBuffer &recvPacket)
 
     if (recvSize > 0xFFFFF)
     {
-        sLogger.debug("recvSize %u too long", recvSize);
+        sLogger.debug("recvSize {} too long", recvSize);
         return;
     }
 
@@ -2046,7 +2127,7 @@ void WorldSession::readAddonInfoPacket(ByteBuffer &recvPacket)
             unpackedInfo >> crc;
             unpackedInfo >> unknown;
 
-            sLogger.debug("AddOn: %s (CRC: 0x%x) - enabled: 0x%x - Unknown2: 0x%x", addonName.c_str(), crc, enabledState, unknown);
+            sLogger.debug("AddOn: {} (CRC: 0x{:x}) - enabled: 0x{:x} - Unknown2: 0x{:x}", addonName, crc, enabledState, unknown);
 #if VERSION_STRING < Mop
             AddonEntry addon(addonName, enabledState, crc, 2, true);
 #else
@@ -2057,14 +2138,14 @@ void WorldSession::readAddonInfoPacket(ByteBuffer &recvPacket)
             if (savedAddon)
             {
                 if (addon.crc != savedAddon->crc)
-                    sLogger.debug("Addon: %s: modified (CRC: 0x%x) - accountID %d)", addon.name.c_str(), savedAddon->crc, GetAccountId());
+                    sLogger.debug("Addon: {}: modified (CRC: 0x{:x}) - accountID {})", addon.name, savedAddon->crc, GetAccountId());
                 else
-                    sLogger.debug("Addon: %s: validated (CRC: 0x%x) - accountID %d", addon.name.c_str(), savedAddon->crc, GetAccountId());
+                    sLogger.debug("Addon: {}: validated (CRC: 0x{:x}) - accountID {}", addon.name, savedAddon->crc, GetAccountId());
             }
             else
             {
                 sAddonMgr.SaveAddon(addon);
-                sLogger.debug("Addon: %s: unknown (CRC: 0x%x) - accountId %d (storing addon name and checksum to database)", addon.name.c_str(), addon.crc, GetAccountId());
+                sLogger.debug("Addon: {}: unknown (CRC: 0x{:x}) - accountId {} (storing addon name and checksum to database)", addon.name, addon.crc, GetAccountId());
             }
 
             m_addonList.push_back(addon);
@@ -2077,10 +2158,13 @@ void WorldSession::readAddonInfoPacket(ByteBuffer &recvPacket)
     {
         sLogger.failure("Decompression of addon section of CMSG_AUTH_SESSION failed.");
     }
+#endif
+
 }
 
 void WorldSession::sendAddonInfo()
 {
+#if VERSION_STRING >= Cata
 #if VERSION_STRING < Mop
     WorldPacket data(SMSG_ADDON_INFO, 4);
     for (auto itr : m_addonList)
@@ -2091,12 +2175,12 @@ void WorldSession::sendAddonInfo()
         data << uint8_t(crcpub);
         if (crcpub)
         {
-            uint8_t usepk = (itr.crc != STANDARD_ADDON_CRC); // standard addon CRC
+            uint8_t usepk = (itr.crc != STANDARD_ADDON_CRC);    // standard addon CRC
             data << uint8_t(usepk);
-            if (usepk)                                      // add public key if crc is wrong
+            if (usepk)                                          // add public key if crc is wrong
             {
-                sLogger.debug("AddOn: %s: CRC checksum mismatch: got 0x%x - expected 0x%x - sending pubkey to accountID %d",
-                    itr.name.c_str(), itr.crc, STANDARD_ADDON_CRC, GetAccountId());
+                sLogger.debug("AddOn: {}: CRC checksum mismatch: got 0x{:x} - expected 0x{:x} - sending pubkey to accountID {}",
+                    itr.name, itr.crc, STANDARD_ADDON_CRC, GetAccountId());
 
                 data.append(PublicKey, sizeof(PublicKey));
             }
@@ -2109,7 +2193,7 @@ void WorldSession::sendAddonInfo()
 
     m_addonList.clear();
 
-    BannedAddonList const* bannedAddons = sAddonMgr.getBannedAddonsList();
+    std::list<BannedAddon> const* bannedAddons = sAddonMgr.getBannedAddonsList();
     data << uint32_t(bannedAddons->size());
     for (auto itr = bannedAddons->begin(); itr != bannedAddons->end(); ++itr)
     {
@@ -2117,14 +2201,14 @@ void WorldSession::sendAddonInfo()
         data.append(itr->nameMD5, sizeof(itr->nameMD5));
         data.append(itr->versionMD5, sizeof(itr->versionMD5));
         data << uint32_t(itr->timestamp);
-        data << uint32_t(1);  // banned?
+        data << uint32_t(1); // banned?
     }
 
     SendPacket(&data);
 #else
     WorldPacket data(SMSG_ADDON_INFO, 1000);
 
-    BannedAddonList const* bannedAddons = sAddonMgr.getBannedAddonsList();
+    std::list<BannedAddon> const* bannedAddons = sAddonMgr.getBannedAddonsList();
 
     data.writeBits(static_cast<uint32_t>(bannedAddons->size()), 18);
     data.writeBits(static_cast<uint32_t>(m_addonList.size()), 23);
@@ -2153,10 +2237,10 @@ void WorldSession::sendAddonInfo()
         if (itr.enabled)
         {
             data << uint8_t(itr.enabled);
-            data << uint32_t(0);
+            data << uint64_t(0); // sch: normal value - uint32_t
         }
 
-        data << uint8(itr.state);
+        data << uint8_t(itr.state);
     }
 
     m_addonList.clear();
@@ -2164,20 +2248,22 @@ void WorldSession::sendAddonInfo()
     for (auto itr = bannedAddons->begin(); itr != bannedAddons->end(); ++itr)
     {
         data << uint32_t(itr->id);
-        data << uint32_t(1);  // banned?
+        data << uint32_t(1); // banned?
 
-        for (int32 i = 0; i < 8; i++)
-            data << uint32(0);
+        for (int32_t i = 0; i < 8; i++)
+            data << uint32_t(0);
 
         data << uint32_t(itr->timestamp);
     }
 
     SendPacket(&data);
 #endif
+#endif
 }
 
 bool WorldSession::isAddonRegistered(const std::string& addon_name) const
 {
+#if VERSION_STRING >= Cata
     if (!isAddonMessageFiltered)
         return true;
 
@@ -2186,17 +2272,29 @@ bool WorldSession::isAddonRegistered(const std::string& addon_name) const
 
     auto itr = std::find(mRegisteredAddonPrefixesVector.begin(), mRegisteredAddonPrefixesVector.end(), addon_name);
     return itr != mRegisteredAddonPrefixesVector.end();
+#else
+    return false;
+#endif
 }
 
 void WorldSession::handleUnregisterAddonPrefixesOpcode(WorldPacket& /*recvPacket*/)
 {
+#if VERSION_STRING >= Cata
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_UNREGISTER_ALL_ADDON_PREFIXES");
 
     mRegisteredAddonPrefixesVector.clear();
+#endif
+}
+
+void WorldSession::handleClearTargetOpcode(WorldPacket& /*recvPacket*/)
+{
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received handleClearTargetOpcode");
+    SendPacket(SmsgClearTarget().serialise().get());
 }
 
 void WorldSession::handleAddonRegisteredPrefixesOpcode(WorldPacket& recvPacket)
 {
+#if VERSION_STRING >= Cata
     uint32_t addonCount = recvPacket.readBits(25);
 
     if (addonCount > 64)
@@ -2220,13 +2318,15 @@ void WorldSession::handleAddonRegisteredPrefixesOpcode(WorldPacket& recvPacket)
     }
 
     isAddonMessageFiltered = true;
+#endif
 }
 
 void WorldSession::handleReportOpcode(WorldPacket& recvPacket)
 {
+#if VERSION_STRING >= Cata
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REPORT");
 
-    uint8_t spam_type;                                        // 0 - mail, 1 - chat
+    uint8_t spam_type;                                      // 0 - mail, 1 - chat
     uint64_t spammer_guid;
     uint32_t unk1 = 0;
     uint32_t unk2 = 0;
@@ -2234,47 +2334,49 @@ void WorldSession::handleReportOpcode(WorldPacket& recvPacket)
     uint32_t unk4 = 0;
 
     std::string description;
-    recvPacket >> spam_type;                                 // unk 0x01 const, may be spam type (mail/chat)
-    recvPacket >> spammer_guid;                              // player guid
+    recvPacket >> spam_type;                                // unk 0x01 const, may be spam type (mail/chat)
+    recvPacket >> spammer_guid;                             // player guid
 
     switch (spam_type)
     {
         case 0:
         {
-            recvPacket >> unk1;                              // const 0
-            recvPacket >> unk2;                              // probably mail id
-            recvPacket >> unk3;                              // const 0
+            recvPacket >> unk1;                             // const 0
+            recvPacket >> unk2;                             // probably mail id
+            recvPacket >> unk3;                             // const 0
 
-            sLogger.debug("Received REPORT SPAM: type %u, guid %u, unk1 %u, unk2 %u, unk3 %u", spam_type, WoWGuid::getGuidLowPartFromUInt64(spammer_guid), unk1, unk2, unk3);
+            sLogger.debug("Received REPORT SPAM: type {}, guid {}, unk1 {}, unk2 {}, unk3 {}", spam_type, WoWGuid::getGuidLowPartFromUInt64(spammer_guid), unk1, unk2, unk3);
 
         } break;
         case 1:
         {
-            recvPacket >> unk1;                              // probably language
-            recvPacket >> unk2;                              // message type?
-            recvPacket >> unk3;                              // probably channel id
-            recvPacket >> unk4;                              // unk random value
-            recvPacket >> description;                       // spam description string (messagetype, channel name, player name, message)
+            recvPacket >> unk1;                             // probably language
+            recvPacket >> unk2;                             // message type?
+            recvPacket >> unk3;                             // probably channel id
+            recvPacket >> unk4;                             // unk random value
+            recvPacket >> description;                      // spam description string (messagetype, channel name, player name, message)
 
-            sLogger.debug("Received REPORT SPAM: type %u, guid %u, unk1 %u, unk2 %u, unk3 %u, unk4 %u, message %s", spam_type, WoWGuid::getGuidLowPartFromUInt64(spammer_guid), unk1, unk2, unk3, unk4, description.c_str());
+            sLogger.debug("Received REPORT SPAM: type {}, guid {}, unk1 {}, unk2 {}, unk3 {}, unk4 {}, message {}", spam_type, WoWGuid::getGuidLowPartFromUInt64(spammer_guid), unk1, unk2, unk3, unk4, description);
 
         } break;
     }
 
     // Complaint Received message
     WorldPacket data(SMSG_REPORT_RESULT, 1);
-    data << uint8_t(0);     // 1 reset reported player 0 ignore
+    data << uint8_t(0);                                     // 1 reset reported player 0 ignore
     data << uint8_t(0);
 
     SendPacket(&data);
+#endif
 }
 
 void WorldSession::handleReportPlayerOpcode(WorldPacket& recvPacket)
 {
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REPORT_PLAYER %u", static_cast<uint32_t>(recvPacket.size()));
+#if VERSION_STRING >= Cata
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REPORT_PLAYER {}", static_cast<uint32_t>(recvPacket.size()));
 
-    uint8_t unk3 = 0;   // type
-    uint8_t unk4 = 0;   // guid - 1
+    uint8_t unk3 = 0;                                       // type
+    uint8_t unk4 = 0;                                       // guid - 1
     uint32_t unk5 = 0;
     uint64_t unk6 = 0;
     uint32_t unk7 = 0;
@@ -2282,46 +2384,45 @@ void WorldSession::handleReportPlayerOpcode(WorldPacket& recvPacket)
 
     std::string message;
 
-    uint32_t length = recvPacket.readBits(9);    // length * 2
-    recvPacket >> unk3;                          // type
-    recvPacket >> unk4;                          // guid - 1?
-    message = recvPacket.ReadString(length / 2);   // message
-    recvPacket >> unk5;                          // unk
-    recvPacket >> unk6;                          // unk
-    recvPacket >> unk7;                          // unk
-    recvPacket >> unk8;                          // unk
+    uint32_t length = recvPacket.readBits(9);               // length * 2
+    recvPacket >> unk3;                                     // type
+    recvPacket >> unk4;                                     // guid - 1?
+    message = recvPacket.ReadString(length / 2);            // message
+    recvPacket >> unk5;                                     // unk
+    recvPacket >> unk6;                                     // unk
+    recvPacket >> unk7;                                     // unk
+    recvPacket >> unk8;                                     // unk
 
     switch (unk3)
     {
         case 0:     // chat spamming
-            sLogger.debug("Chat spamming report for guid: %u received.", unk4 + 1);
+            sLogger.debug("Chat spamming report for guid: {} received.", unk4 + 1);
             break;
         case 2:     // cheat
             recvPacket >> message;
-            sLogger.debug("Cheat report for guid: %u received. Message %s", unk4 + 1, message.c_str());
+            sLogger.debug("Cheat report for guid: {} received. Message {}", unk4 + 1, message);
             break;
         case 6:     // char name
             recvPacket >> message;
-            sLogger.debug("char name report for guid: %u received. Message %s", unk4 + 1, message.c_str());
+            sLogger.debug("char name report for guid: {} received. Message {}", unk4 + 1, message);
             break;
         case 12:     // guild name
             recvPacket >> message;
-            sLogger.debug("guild name report for guid: %u received. Message %s", unk4 + 1, message.c_str());
+            sLogger.debug("guild name report for guid: {} received. Message {}", unk4 + 1, message);
             break;
         case 18:     // arena team name
             recvPacket >> message;
-            sLogger.debug("arena team name report for guid: %u received. Message %s", unk4 + 1, message.c_str());
+            sLogger.debug("arena team name report for guid: {} received. Message {}", unk4 + 1, message);
             break;
         case 20:     // chat language
-            sLogger.debug("Chat language report for guid: %u received.", unk4 + 1);
+            sLogger.debug("Chat language report for guid: {} received.", unk4 + 1);
             break;
         default:
-            sLogger.debug("type is %u", unk3);
+            sLogger.debug("type is {}", unk3);
             break;
     }
-}
-
 #endif
+}
 
 void WorldSession::HandleMirrorImageOpcode(WorldPacket& recv_data)
 {
@@ -2420,16 +2521,16 @@ void WorldSession::HandleMirrorImageOpcode(WorldPacket& recv_data)
     sLogger.debug("Sent SMSG_MIRRORIMAGE_DATA");
 }
 
-#if VERSION_STRING > TBC
-void WorldSession::sendClientCacheVersion(uint32 version)
+void WorldSession::sendClientCacheVersion(uint32_t version)
 {
+#if VERSION_STRING > TBC
     WorldPacket data(SMSG_CLIENTCACHE_VERSION, 4);
     data << uint32_t(version);
     SendPacket(&data);
-}
 #endif
+}
 
-void WorldSession::sendAccountDataTimes(uint32 mask)
+void WorldSession::sendAccountDataTimes(uint32_t mask)
 {
     SendPacket(SmsgAccountDataTimes(static_cast<uint32_t>(UNIXTIME), 1, mask, NUM_ACCOUNT_DATA_TYPES).serialise().get());
 }
@@ -2474,4 +2575,10 @@ void WorldSession::handleInstanceLockResponse(WorldPacket& recvPacket)
         _player->repopAtGraveyard(_player->GetPositionX(), _player->GetPositionY(), _player->GetPositionZ(), _player->GetMapId());
 
     _player->setPendingBind(0, 0);
+}
+
+void WorldSession::handleViolenceLevel(WorldPacket& recvPacket)
+{
+    uint8_t violenceLevel;
+    recvPacket >> violenceLevel;
 }

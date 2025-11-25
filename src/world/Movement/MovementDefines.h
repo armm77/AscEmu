@@ -1,12 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "CommonTypes.hpp"
 #include <optional>
+#include <cstdint>
+#include "CommonTypes.hpp"
 
 //! Optional helper class to wrap optional values within.
 template <class T>
@@ -46,6 +47,7 @@ enum MovementGeneratorType : uint8_t
     CONFUSED_MOTION_TYPE            = 4,     // ConfusedMovementGenerator.h
     CHASE_MOTION_TYPE               = 5,     // ChaseMovementGenerator.h
     HOME_MOTION_TYPE                = 6,     // HomeMovementGenerator.h
+    FLIGHT_MOTION_TYPE              = 7,     // FlightPathMovementGenerator.h
     POINT_MOTION_TYPE               = 8,     // PointMovementGenerator.h
     FLEEING_MOTION_TYPE             = 9,     // FleeingMovementGenerator.h
     DISTRACT_MOTION_TYPE            = 10,    // IdleMovementGenerator.h

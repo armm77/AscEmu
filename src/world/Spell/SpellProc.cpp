@@ -1,15 +1,24 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "SpellProc.hpp"
-
-#include "Definitions/ProcFlags.hpp"
 #include "SpellMgr.hpp"
+#include "SpellProc.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Definitions/ProcFlags.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Objects/Units/Players/Player.hpp"
 
-#include "Server/Script/ScriptMgr.h"
+SpellProc::SpellProc()
+{
+    mOverrideEffectDamage = std::make_shared<SpellForcedBasePoints>();
+}
 
+SpellProc::~SpellProc()
+{
+}
 
 void SpellProc::init(Object* /*obj*/) { }
 
@@ -170,13 +179,13 @@ void SpellProc::setCastedOnProcOwner(bool enable) { m_castOnProcOwner = enable; 
 int32_t SpellProc::getOverrideEffectDamage(uint8_t effIndex) const
 {
     int32_t overrideValue = 0;
-    mOverrideEffectDamage.get(effIndex, &overrideValue);
+    mOverrideEffectDamage->get(effIndex, &overrideValue);
     return overrideValue;
 }
 
 void SpellProc::setOverrideEffectDamage(uint8_t effIndex, int32_t damage)
 {
-    mOverrideEffectDamage.set(effIndex, damage);
+    mOverrideEffectDamage->set(effIndex, damage);
 }
 
 Aura* SpellProc::getCreatedByAura() const { return m_createdByAura; }
@@ -214,12 +223,12 @@ void SpellProcMgr::addByIds(uint32_t* spellIds, spell_proc_factory_function spel
     }
 }
 
-SpellProc* SpellProcMgr::newSpellProc(Unit* owner, uint32_t spellId, uint32_t origSpellId, uint64_t casterGuid, uint32_t procChance, SpellProcFlags procFlags, SpellExtraProcFlags exProcFlags, uint32_t const* spellFamilyMask, uint32_t const* procClassMask, Aura* createdByAura, Object* obj)
+std::unique_ptr<SpellProc> SpellProcMgr::newSpellProc(Unit* owner, uint32_t spellId, uint32_t origSpellId, uint64_t casterGuid, uint32_t procChance, SpellProcFlags procFlags, SpellExtraProcFlags exProcFlags, uint32_t const* spellFamilyMask, uint32_t const* procClassMask, Aura* createdByAura, Object* obj)
 {
     return newSpellProc(owner, sSpellMgr.getSpellInfo(spellId), sSpellMgr.getSpellInfo(origSpellId), casterGuid, procChance, procFlags, exProcFlags, spellFamilyMask, procClassMask, createdByAura, obj);
 }
 
-SpellProc* SpellProcMgr::newSpellProc(Unit* owner, SpellInfo const* spellInfo, SpellInfo const* origSpellInfo, uint64_t casterGuid, uint32_t procChance, SpellProcFlags procFlags, SpellExtraProcFlags exProcFlags, uint32_t const* spellFamilyMask, uint32_t const* procClassMask, Aura* createdByAura, Object* obj)
+std::unique_ptr<SpellProc> SpellProcMgr::newSpellProc(Unit* owner, SpellInfo const* spellInfo, SpellInfo const* origSpellInfo, uint64_t casterGuid, uint32_t procChance, SpellProcFlags procFlags, SpellExtraProcFlags exProcFlags, uint32_t const* spellFamilyMask, uint32_t const* procClassMask, Aura* createdByAura, Object* obj)
 {
     if (spellInfo == nullptr)
         return nullptr;
@@ -231,11 +240,11 @@ SpellProc* SpellProcMgr::newSpellProc(Unit* owner, SpellInfo const* spellInfo, S
     if (itr != mSpellProc.end())
         ptr = itr->second;
 
-    SpellProc* result = nullptr;
+    std::unique_ptr<SpellProc> result = nullptr;
     if (ptr != nullptr)
-        result = (*ptr)();      // Found, create a new object of this specific class
+        result = (*ptr)();                      // Found, create a new object of this specific class
     else
-        result = new SpellProc; // Not found, create a new object of generic SpellProc
+        result = std::make_unique<SpellProc>(); // Not found, create a new object of generic SpellProc
 
     result->mSpell = spellInfo;
     result->mOrigSpell = origSpellInfo;
@@ -275,7 +284,7 @@ SpellProc* SpellProcMgr::newSpellProc(Unit* owner, SpellInfo const* spellInfo, S
     }
 
     if (sScriptMgr.getSpellScript(spellInfo->getId()) != nullptr)
-        sScriptMgr.callScriptedSpellProcCreate(result, obj);
+        sScriptMgr.callScriptedSpellProcCreate(result.get(), obj);
     else
         result->init(obj);
 

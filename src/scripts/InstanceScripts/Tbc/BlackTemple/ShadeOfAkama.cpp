@@ -1,12 +1,11 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include <StdAfx.h>
-#include "../Setup.h"
-#include "../Base.h"
+#include "Setup.h"
 
+/*
 enum
 {
     // Shade of AkamaAI
@@ -52,7 +51,7 @@ public:
             m_spellcheck[i] = false;
 
         }
-        spells[0].info = dbcSpell.LookupEntry(SINFUL_BEAM0);
+        spells[0].info = dbcSpell.lookupEntry(SINFUL_BEAM0);
         spells[0].targettype = TARGET_VARIOUS;
         spells[0].instant = false;
         spells[0].perctrigger = 0.0f;
@@ -284,7 +283,7 @@ public:
             m_spellcheck[i] = false;
         }
 
-        spells[0].info = dbcSpell.LookupEntry(DEBILITATING_STRIKE);
+        spells[0].info = dbcSpell.lookupEntry(DEBILITATING_STRIKE);
         spells[0].targettype = TARGET_ATTACKING;
         spells[0].instant = true;
         spells[0].perctrigger = 3.0f;
@@ -387,7 +386,7 @@ public:
             m_spellcheck[i] = false;
         }
 
-        spells[0].info = dbcSpell.LookupEntry(RAIN_OF_FIRE);
+        spells[0].info = dbcSpell.lookupEntry(RAIN_OF_FIRE);
         spells[0].targettype = TARGET_ATTACKING;
         spells[0].instant = false;
         spells[0].perctrigger = 5.0f;
@@ -490,7 +489,7 @@ public:
             m_spellcheck[i] = false;
         }
 
-        spells[0].info = dbcSpell.LookupEntry(DEBILITATING_POISON);
+        spells[0].info = dbcSpell.lookupEntry(DEBILITATING_POISON);
         spells[0].targettype = TARGET_ATTACKING;
         spells[0].instant = false;
         spells[0].perctrigger = 5.0f;
@@ -593,13 +592,13 @@ public:
             m_spellcheck[i] = false;
         }
 
-        spells[0].info = dbcSpell.LookupEntry(SPIRIT_MEND);
+        spells[0].info = dbcSpell.lookupEntry(SPIRIT_MEND);
         spells[0].targettype = TARGET_SELF;
         spells[0].instant = true;
         spells[0].perctrigger = 5.0f;
         spells[0].attackstoptimer = 1000;
 
-        spells[1].info = dbcSpell.LookupEntry(AS_CHAIN_HEAL);
+        spells[1].info = dbcSpell.lookupEntry(AS_CHAIN_HEAL);
         spells[1].targettype = TARGET_SELF;
         spells[1].instant = false;
         spells[1].perctrigger = 5.0f;
@@ -745,3 +744,4 @@ void SetupShadeOfAkama(ScriptMgr* mgr)
     mgr->register_creature_script(CN_ASHTONGUE_SPIRITBINDER, &AshtonguespiritbinderAI::Create);
     mgr->register_creature_script(CN_ASHTONGUE_CHANNELER, &AshtongueChannelerAI::Create);
 }
+*/

@@ -1,15 +1,27 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "DynamicTree.h"
 #include "Map/Cells/TerrainMgr.hpp"
+#include <array>
+#include <memory>
+#include <string>
+#include <vector>
 
-#include "Storage/MySQLStructures.h"
-#include "Storage/DBC/DBCStructures.hpp"
+namespace WDB::Structures
+{
+    struct MapEntry;
+}
+
+namespace MySQLStructure
+{
+    struct CreatureSpawn;
+    struct GameobjectSpawn;
+    struct MapInfo;
+}
 
 typedef std::vector<MySQLStructure::CreatureSpawn*> CreatureSpawnList;
 typedef std::vector<MySQLStructure::GameobjectSpawn*> GameobjectSpawnList;
@@ -31,22 +43,23 @@ enum LineOfSightChecks : uint8_t
 class SERVER_DECL BaseMap
 {
 public:
-    BaseMap(uint32_t mapid, MySQLStructure::MapInfo const* inf, DBC::Structures::MapEntry const*);
+    BaseMap(uint32_t mapid, MySQLStructure::MapInfo const* inf, WDB::Structures::MapEntry const*);
     ~BaseMap();
 
     std::string getMapName();
     MySQLStructure::MapInfo const* getMapInfo() const { return _mapInfo; }
 
     // MapEntry
-    DBC::Structures::MapEntry const* getMapEntry() const { return _mapEntry; }
+    WDB::Structures::MapEntry const* getMapEntry() const { return _mapEntry; }
     uint32_t getMapId() const;
-    bool instanceable() const;
     bool isDungeon() const;
-    bool isNonRaidDungeon() const;
     bool isRaid() const;
     bool isBattleground() const;
-    bool isBattleArena() const;
+    bool isArena() const;
     bool isBattlegroundOrArena() const;
+    bool isWorldMap() const;
+    bool isInstanceMap() const;
+    bool isInstanceableMap() const;
     bool getEntrancePos(int32_t& mapid, float& x, float& y) const;
 
     // Cell
@@ -61,11 +74,11 @@ public:
     CellSpawns areaWideSpawns;
 
 private:
-    DBC::Structures::MapEntry const* _mapEntry = nullptr;
+    WDB::Structures::MapEntry const* _mapEntry = nullptr;
     MySQLStructure::MapInfo const* _mapInfo = nullptr;
     uint32_t _mapId;
    
     std::string name;
 
-    CellSpawns** spawns[Map::Cell::_sizeX];
+    std::array<std::unique_ptr<std::array<std::unique_ptr<CellSpawns>, Map::Cell::_sizeY>>, Map::Cell::_sizeX> spawns = { nullptr };
 };

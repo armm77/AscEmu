@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -18,7 +18,10 @@
  */
 
 #include "Setup.h"
-#include "Server/Script/ScriptSetup.h"
+
+#include "Server/ServerState.h"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Server/Script/ScriptSetup.hpp"
 
 extern "C" SCRIPT_DECL void _exp_set_serverstate_singleton(ServerState* state)
 {
@@ -35,8 +38,9 @@ extern "C" SCRIPT_DECL void _exp_script_register(ScriptMgr* mgr)
     SetupGoHandlers(mgr);
     SetupRandomScripts(mgr);
     SetupMiscCreatures(mgr);
-    //InitializeGameObjectTeleportTable(mgr);
+    InitializeGameObjectTeleportTable(mgr);
     SetupCityDalaran(mgr);
+    SetupNeutralGuards(mgr);
 }
 
 #ifdef WIN32

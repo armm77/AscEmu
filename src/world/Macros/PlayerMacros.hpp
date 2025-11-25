@@ -1,11 +1,11 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "WorldConf.h"
+#include "AEVersion.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // DBC_NUM_RACES
@@ -150,7 +150,7 @@ This file is released under the MIT license. See README-MIT for more information
 #if VERSION_STRING == Classic
     #define PLAYER_ACTION_BUTTON_COUNT 120
 #elif VERSION_STRING == TBC
-    #define PLAYER_ACTION_BUTTON_COUNT 120
+    #define PLAYER_ACTION_BUTTON_COUNT 132
 #elif VERSION_STRING == WotLK
     #define PLAYER_ACTION_BUTTON_COUNT 136
 #elif VERSION_STRING == Cata
@@ -186,7 +186,7 @@ This file is released under the MIT license. See README-MIT for more information
 #elif VERSION_STRING == Cata
     #define GLYPHS_COUNT 9
 #elif VERSION_STRING == Mop
-    #define GLYPHS_COUNT 9
+    #define GLYPHS_COUNT 6
 #endif
 
 //////////////////////////////////////////////////////////////////////////////////////////

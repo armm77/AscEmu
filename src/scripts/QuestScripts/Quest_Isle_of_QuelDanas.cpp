@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2009-2010 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,8 +18,15 @@
  */
 
 #include "Setup.h"
-#include "Management/TaxiMgr.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/QuestLogEntry.hpp"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
 
 class ScryingOrb : public GameObjectAIScript
 {
@@ -64,20 +71,18 @@ public:
         menu.sendGossipPacket(pPlayer);
     }
 
-    void onSelectOption(Object* /*pObject*/, Player* pPlayer, uint32_t Id, const char* /*Code*/, uint32_t /*gossipId*/) override
+    void onSelectOption(Object* pObject, Player* pPlayer, uint32_t Id, const char* /*Code*/, uint32_t /*gossipId*/) override
     {
         switch (Id)
         {
             case 1:
             {
-                TaxiPath* pPath = sTaxiMgr.GetTaxiPath(779);
-                pPlayer->startTaxiPath(pPath, 22840, 0);
+                pPlayer->activateTaxiPathTo(779, pObject->ToCreature());
                 pPlayer->removeUnitFlags(UNIT_FLAG_MOUNTED_TAXI);
             } break;
             case 2:
             {
-                TaxiPath* pPath = sTaxiMgr.GetTaxiPath(784);
-                pPlayer->startTaxiPath(pPath, 22840, 0);
+                pPlayer->activateTaxiPathTo(784, pObject->ToCreature());
                 pPlayer->removeUnitFlags(UNIT_FLAG_MOUNTED_TAXI);
             } break;
         }
@@ -98,10 +103,9 @@ public:
         menu.sendGossipPacket(pPlayer);
     }
 
-    void onSelectOption(Object* /*pObject*/, Player* pPlayer, uint32_t /*Id*/, const char* /*Code*/, uint32_t /*gossipId*/) override
+    void onSelectOption(Object* pObject, Player* pPlayer, uint32_t /*Id*/, const char* /*Code*/, uint32_t /*gossipId*/) override
     {
-        TaxiPath* pPath = sTaxiMgr.GetTaxiPath(788);
-        pPlayer->startTaxiPath(pPath, 22840, 0);
+        pPlayer->activateTaxiPathTo(788, pObject->ToCreature());
         pPlayer->removeUnitFlags(UNIT_FLAG_MOUNTED_TAXI);
     }
 };

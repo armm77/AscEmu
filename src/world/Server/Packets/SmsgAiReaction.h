@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -35,9 +35,8 @@ namespace AscEmu::Packets
         {
 #if VERSION_STRING <= Cata
             packet << unpackedGuid << reaction;
-#else
-            ObjectGuid guid = unpackedGuid;
-
+#elif VERSION_STRING == Mop
+            WoWGuid guid = unpackedGuid;
             packet.writeBit(guid[5]);
             packet.writeBit(guid[7]);
             packet.writeBit(guid[0]);

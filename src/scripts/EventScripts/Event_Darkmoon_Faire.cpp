@@ -1,12 +1,24 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Event_Darkmoon_Faire.h"
 
-#include "Server/Script/CreatureAIScript.h"
+#include "Setup.h"
+#include "Management/ItemInterface.h"
+#include "Management/ObjectMgr.hpp"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Item.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Master.h"
+#include "Server/WorldSession.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
  //\details <b>Darkmoon Faire (Elwynn Forest)</b>\n
@@ -55,7 +67,7 @@ public:
 
     void AIUpdate() override
     {
-        auto CurrentPlayer = sObjectMgr.GetPlayer(mPlayerGuid);
+        auto CurrentPlayer = sObjectMgr.getPlayer(mPlayerGuid);
         if (CurrentPlayer == nullptr)
         {
             RemoveAIUpdateEvent();
@@ -566,15 +578,14 @@ public:
                 }
                 else
                 {
-                    auto item = sObjectMgr.CreateItem(19422, plr);
+                    auto item = sObjectMgr.createItem(19422, plr);
                     if (item == nullptr)
                         return;
 
-                    auto result = plr->getItemInterface()->SafeAddItem(item, slotresult.ContainerSlot, slotresult.Slot);
+                    const auto [result, returnedItem] = plr->getItemInterface()->SafeAddItem(std::move(item), slotresult.ContainerSlot, slotresult.Slot);
                     if (!result)
                     {
-                        DLLLogDetail("Error while adding item %u to player %s", item->getEntry(), plr->getName().c_str());
-                        item->deleteMe();
+                        DLLLogDetail("Error while adding item %u to player %s", returnedItem->getEntry(), plr->getName().c_str());
                         return;
                     }
                 }

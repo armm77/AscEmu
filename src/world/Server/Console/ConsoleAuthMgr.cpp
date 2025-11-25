@@ -1,9 +1,7 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
-
-
 
 #include "ConsoleAuthMgr.h"
 
@@ -15,53 +13,39 @@ ConsoleAuthMgr& ConsoleAuthMgr::getInstance()
 
 void ConsoleAuthMgr::initialize()
 {
-    consoleAuthMgrLock.Acquire();
+    std::lock_guard lock(consoleAuthMgrLock);
 
     authRequestId = 1;
-
-    consoleAuthMgrLock.Release();
 }
 
 uint32_t ConsoleAuthMgr::getGeneratedId()
 {
-    consoleAuthMgrLock.Acquire();
+    std::lock_guard lock(consoleAuthMgrLock);
 
     uint32_t requestId = authRequestId++;
-
-    consoleAuthMgrLock.Release();
 
     return requestId;
 }
 
 void ConsoleAuthMgr::addRequestIdSocket(uint32_t id, ConsoleSocket* sock)
 {
-    consoleAuthMgrLock.Acquire();
+    std::lock_guard lock(consoleAuthMgrLock);
 
     if (sock == nullptr)
-    {
         consoleRequestMap.erase(id);
-    }
     else
-    {
         consoleRequestMap.insert(std::make_pair(id, sock));
-    }
-
-    consoleAuthMgrLock.Release();
 }
 
 ConsoleSocket* ConsoleAuthMgr::getSocketByRequestId(uint32_t id)
 {
     ConsoleSocket* consoleSocket = nullptr;
 
-    consoleAuthMgrLock.Acquire();
+    std::lock_guard lock(consoleAuthMgrLock);
 
     std::map<uint32_t, ConsoleSocket*>::iterator itr = consoleRequestMap.find(id);
     if (itr != consoleRequestMap.end())
-    {
         consoleSocket = itr->second;
-    }
-
-    consoleAuthMgrLock.Release();
 
     return consoleSocket;
 }

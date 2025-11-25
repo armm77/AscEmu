@@ -1,32 +1,32 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
 if (NOT BUILD_MISCSCRIPTS)
     message("\tMiscScripts was skipped because BUILD_MISCSCRIPTS is unchecked.")
     return()
 endif ()
 
-# set up our project name
-project(MiscScripts CXX)
+# set up our project name.
+set(LIBRARY_NAME MiscScripts)
 
-# sources - contains source files for our library.
-set(sources
-    City_Dalaran.cpp
-    Creatures.cpp
-    GameObjects.cpp
-    GameObjectTeleportTable.cpp
-    RandomScripts.cpp
-    Setup.cpp
-    # required for linker
+file(GLOB SRC_LOCAL_DIR *.cpp *.h *.hpp)
+
+# required for linker.
+set(SRC_MISCSCRIPTS
     ../../world/Server/ServerState.cpp
 )
 
-set(headers
-    Setup.h
+set(MISCSCRIPTS_SRCS
+    ${SRC_MISCSCRIPTS}
+    ${SRC_LOCAL_DIR}
 )
 
-include_directories(
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(${LIBRARY_NAME} SHARED ${MISCSCRIPTS_SRCS})
+
+target_include_directories(${LIBRARY_NAME} PUBLIC 
     ${OPENSSL_INCLUDE_DIR}
-    ${PCRE_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Detour/Include
     ${CMAKE_SOURCE_DIR}/src/collision
     ${CMAKE_SOURCE_DIR}/src/collision/Management
@@ -38,23 +38,19 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${ZLIB_INCLUDE_DIRS}
 )
-add_library(${PROJECT_NAME} SHARED ${sources} ${headers})
 
-target_link_libraries(${PROJECT_NAME} world)
-
-if (USE_PCH)
-    ##gen_cxx_pch(${PROJECT_NAME} Setup.h ${CMAKE_CURRENT_SOURCE_DIR}/Setup.cpp)
-endif ()
-
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${ASCEMU_SCRIPTLIB_PATH} LIBRARY DESTINATION ${ASCEMU_SCRIPTLIB_PATH})
-
-if (USE_PCH)
-    target_precompile_headers(${PROJECT_NAME}
-    PRIVATE
-    Setup.h
-    <Server/Script/CreatureAIScript.h>
+# include library dependencies.
+target_link_libraries(${LIBRARY_NAME}
+  PUBLIC
+    world
 )
+
+# generate precompiled header.
+if (AE_USE_PCH)
+    message(STATUS "Generate PCH for ${LIBRARY_NAME}")
+    target_precompile_headers(${LIBRARY_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pchMiscScripts.hpp)
 endif ()
 
-unset(sources)
-unset(headers)
+install(TARGETS ${LIBRARY_NAME} RUNTIME DESTINATION ${ASCEMU_SCRIPTLIB_PATH} LIBRARY DESTINATION ${ASCEMU_SCRIPTLIB_PATH})
+
+unset(MISCSCRIPTS_SRCS)

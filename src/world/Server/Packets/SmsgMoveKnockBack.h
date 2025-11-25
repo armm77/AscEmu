@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -46,7 +47,7 @@ namespace AscEmu::Packets
 #if VERSION_STRING < Cata
             packet << guid << time << cos << sin << horizontal << vertical;
 #else
-            ObjectGuid objectGuid = guid.getRawGuid();
+            WoWGuid objectGuid = guid.getRawGuid();
 
             packet.WriteByteMask(objectGuid[0]);
             packet.WriteByteMask(objectGuid[3]);

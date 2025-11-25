@@ -1,12 +1,17 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Ichron.hpp"
-#include "Objects/Units/Creatures/Summons/Summon.h"
+
+#include "Movement/MovementManager.h"
 #include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "CommonTime.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //  Ichron AI
@@ -34,9 +39,9 @@ void IchronAI::OnLoad()
     initialize();
 
     getCreature()->getMovementManager()->moveTargetedHome();
-    getCreature()->getAIInterface()->setImmuneToNPC(true);
-    getCreature()->getAIInterface()->setImmuneToPC(true);
-    getCreature()->addUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+    getCreature()->getAIInterface()->setIgnoreCreatureCombat(true);
+    getCreature()->getAIInterface()->setIgnorePlayerCombat(true);
+    getCreature()->addUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
 
     /// for some reason ichoron can't walk back to it's water basin on evade
     getCreature()->addUnitStateFlag(UNIT_STATE_IGNORE_PATHFINDING);
@@ -90,11 +95,11 @@ void IchronAI::DoAction(int32_t actionId)
             getCreature()->castSpell(getCreature(), Ichron::SPELL_DRAINED, true);
 
             uint32_t damage = getCreature()->getPctFromMaxHealth(30);
-            getCreature()->modHealth(-std::min<int32>(damage, getCreature()->getHealth() - 1));
+            getCreature()->modHealth(-std::min<int32_t>(damage, getCreature()->getHealth() - 1));
 
             for (auto spell : mCreatureAISpells)
             {
-                spell->setCooldownTimer(spell->mCooldownTimer.getExpireTime() + 15 * TimeVarsMs::Second);
+                spell->setCooldownTimer(spell->mCooldownTimer->getExpireTime() + 15 * TimeVarsMs::Second);
             }
             break;
         }
@@ -198,10 +203,10 @@ void IchronGlobuleAI::DamageTaken(Unit* /*attacker*/, uint32_t* damage)
 /// Spell: 54269 - Merge
 SpellScriptCheckDummy IchronMerge::onDummyOrScriptedEffect(Spell* spell, uint8_t /*effIndex*/)
 {
-    if (spell->GetUnitTarget() == nullptr)
+    if (spell->getUnitTarget() == nullptr)
         return SpellScriptCheckDummy::DUMMY_OK;
 
-    if (Creature* target =  spell->GetUnitTarget()->ToCreature())
+    if (Creature* target =  spell->getUnitTarget()->ToCreature())
     {
         if (Aura* aura = target->getAuraWithId(Ichron::SPELL_SHRINK))
             aura->refreshOrModifyStack(false, -1);

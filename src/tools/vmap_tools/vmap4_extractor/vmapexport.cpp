@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2011 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,6 +18,8 @@
  */
 
 #define _CRT_SECURE_NO_DEPRECATE
+
+#include "AEVersion.hpp"
 
 #include "adtfile.h"
 #include "wdtfile.h"
@@ -53,7 +55,7 @@ typedef struct
 }map_id;
 
 map_id * map_ids;
-uint16 *LiqType = 0;
+uint16_t *LiqType = 0;
 uint32_t map_count;
 char output_path[128]=".";
 char input_path[1024]=".";
@@ -95,10 +97,10 @@ void ReadLiquidTypeTableDBC()
 
     size_t LiqType_count = dbc.getRecordCount();
     size_t LiqType_maxid = dbc.getRecord(LiqType_count - 1).getUInt(0);
-    LiqType = new uint16[LiqType_maxid + 1];
-    memset(LiqType, 0xff, (LiqType_maxid + 1) * sizeof(uint16));
+    LiqType = new uint16_t[LiqType_maxid + 1];
+    memset(LiqType, 0xff, (LiqType_maxid + 1) * sizeof(uint16_t));
 
-    for(uint32 x = 0; x < LiqType_count; ++x)
+    for(uint32_t x = 0; x < LiqType_count; ++x)
         LiqType[dbc.getRecord(x).getUInt(0)] = dbc.getRecord(x).getUInt(3);
 
     printf("Done! (%u LiqTypes loaded)\n", (unsigned int)LiqType_count);
@@ -177,7 +179,7 @@ bool ExtractSingleWmo(std::string& fname)
     //printf("root has %d groups\n", froot->nGroups);
     if (froot.nGroups !=0)
     {
-        for (uint32 i = 0; i < froot.nGroups; ++i)
+        for (uint32_t i = 0; i < froot.nGroups; ++i)
         {
             char temp[1024];
             strncpy(temp, fname.c_str(), 1024);
@@ -243,11 +245,7 @@ void ParsMapFiles()
 
 void getGamePath()
 {
-#ifdef _WIN32
-    strcpy(input_path,"Data\\");
-#else
-    strcpy(input_path,"Data/");
-#endif
+    strcpy(input_path, "Data/");
 }
 
 bool scan_patches(char* scanmatch, std::vector<std::string>& pArchiveNames)
@@ -289,6 +287,8 @@ bool fillArchiveNameVector(std::vector<std::string>& pArchiveNames)
 
     char path[512];
     std::string in_path(input_path);
+
+#if VERSION_STRING >= TBC
     std::vector<std::string> locales, searchLocales;
 
     searchLocales.push_back("enGB");
@@ -322,16 +322,54 @@ bool fillArchiveNameVector(std::vector<std::string>& pArchiveNames)
     printf("Adding data files from locale directories.\n");
     for (std::vector<std::string>::iterator i = locales.begin(); i != locales.end(); ++i)
     {
+#if VERSION_STRING == TBC
+        pArchiveNames.push_back(in_path + *i + "/patch-" + *i + ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/patch-" + *i + "-2" ".MPQ");
         pArchiveNames.push_back(in_path + *i + "/locale-" + *i + ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/speech-" + *i + ".MPQ");
         pArchiveNames.push_back(in_path + *i + "/expansion-locale-" + *i + ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/expansion-speech-" + *i + ".MPQ");
+#elif VERSION_STRING == WotLK
+        pArchiveNames.push_back(in_path + *i + "/patch-" + *i + ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/patch-" + *i + "-2" ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/patch-" + *i + "-3" ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/locale-" + *i + ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/speech-" + *i + ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/expansion-locale-" + *i + ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/expansion-speech-" + *i + ".MPQ");
         pArchiveNames.push_back(in_path + *i + "/lichking-locale-" + *i + ".MPQ");
+        pArchiveNames.push_back(in_path + *i + "/lichking-speech-" + *i + ".MPQ");
+#endif
     }
+#endif
 
     // open expansion and common files
+#if VERSION_STRING == Classic
+    pArchiveNames.push_back(input_path + std::string("patch.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("patch-2.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("wmo.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("texture.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("terrain.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("speech.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("sound.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("model.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("misc.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("dbc.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("base.MPQ"));
+#elif VERSION_STRING == TBC
+    pArchiveNames.push_back(input_path + std::string("patch.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("patch-2.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("expansion.MPQ"));
     pArchiveNames.push_back(input_path + std::string("common.MPQ"));
-    pArchiveNames.push_back(input_path + std::string("common-2.MPQ"));
+#elif VERSION_STRING == WotLK
+    pArchiveNames.push_back(input_path + std::string("patch.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("patch-2.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("patch-3.MPQ"));
     pArchiveNames.push_back(input_path + std::string("expansion.MPQ"));
     pArchiveNames.push_back(input_path + std::string("lichking.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("common.MPQ"));
+    pArchiveNames.push_back(input_path + std::string("common-2.MPQ"));
+#endif
 
     // now, scan for the patch levels in the core dir
     printf("Scanning patch levels from data directory.\n");
@@ -339,6 +377,9 @@ bool fillArchiveNameVector(std::vector<std::string>& pArchiveNames)
     if (!scan_patches(path, pArchiveNames))
         return(false);
 
+#if VERSION_STRING == Classic
+    printf("\n");
+#else
     // now, scan for the patch levels in locale dirs
     printf("Scanning patch levels from locale directories.\n");
     bool foundOne = false;
@@ -354,9 +395,10 @@ bool fillArchiveNameVector(std::vector<std::string>& pArchiveNames)
 
     if(!foundOne)
     {
-        printf("no locale found\n");
+        printf("No locale found\n");
         return false;
     }
+#endif
 
     return true;
 }

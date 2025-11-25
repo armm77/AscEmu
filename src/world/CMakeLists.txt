@@ -1,152 +1,46 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
-# set up our project name
-project(world CXX)
+# set up our project name.
+set(EXECUTABLE_NAME world)
 
-include(Game${ASCEMU_VERSION}/CMakeLists.txt)
-
-include(Chat/CMakeLists.txt)
-include(Chat/Commands/CMakeLists.txt)
-include(Data/CMakeLists.txt)
-include(Management/CMakeLists.txt)
-include(Management/Battleground/CMakeLists.txt)
-include(Management/Gossip/CMakeLists.txt)
-include(Management/Guild/CMakeLists.txt)
-include(Management/LFG/CMakeLists.txt)
-include(Management/ObjectUpdates/CMakeLists.txt)
-include(Management/Tickets/CMakeLists.txt)
-include(Macros/CMakeLists.txt)
-include(Map/CMakeLists.txt)
-include(Map/Area/CMakeLists.txt)
-include(Map/Cells/CMakeLists.txt)
-include(Map/Management/CMakeLists.txt)
-include(Map/Maps/CMakeLists.txt)
-include(Movement/CMakeLists.txt)
-include(Movement/Spline/CMakeLists.txt)
-include(Movement/MovementGenerators/CMakeLists.txt)
-include(Objects/CMakeLists.txt)
-include(Server/CMakeLists.txt)
-include(Server/Console/CMakeLists.txt)
-include(Server/LogonCommClient/CMakeLists.txt)
-include(Server/Packets/CMakeLists.txt)
-include(Server/Packets/Handlers/CMakeLists.txt)
-include(Server/Packets/Movement/CMakeLists.txt)
-include(Server/Script/CMakeLists.txt)
-include(Server/Warden/CMakeLists.txt)
-include(Spell/CMakeLists.txt)
-include(Spell/Customization/CMakeLists.txt)
-include(Spell/Definitions/CMakeLists.txt)
-include(Storage/CMakeLists.txt)
-
-if ("${ASCEMU_VERSION}" STREQUAL "Cata")
-    include(Storage/DB2/CMakeLists.txt)
-endif ()
-
-if ("${ASCEMU_VERSION}" STREQUAL "Mop")
-    include(Storage/DB2/CMakeLists.txt)
-endif ()
-
-include(Storage/DBC/CMakeLists.txt)
-include(Objects/Units/CMakeLists.txt)
-include(Objects/Units/Creatures/CMakeLists.txt)
-include(Objects/Units/Players/CMakeLists.txt)
-include(Objects/Units/Creatures/Summons/CMakeLists.txt)
+file(GLOB_RECURSE SRC_CHAT Chat/*.cpp Chat/*.h Chat/*.hpp)
+file(GLOB_RECURSE SRC_COMMAND Chat/Commands/*.cpp Chat/Commands/*.h Chat/Commands/*.hpp)
+file(GLOB_RECURSE SRC_DATA Data/*.cpp Data/*.h Data/*.hpp)
+file(GLOB_RECURSE SRC_MACROS Macros/*.cpp Macros/*.h Macros/*.hpp)
+file(GLOB_RECURSE SRC_MANAGEMENT Management/*.cpp Management/*.h Management/*.hpp)
+file(GLOB_RECURSE SRC_MAP Map/*.cpp Map/*.h Map/*.hpp)
+file(GLOB_RECURSE SRC_MOVEMENT Movement/*.cpp Movement/*.h Movement/*.hpp)
+file(GLOB_RECURSE SRC_OBJECTS Objects/*.cpp Objects/*.h Objects/*.hpp)
+file(GLOB_RECURSE SRC_SERVER Server/*.cpp Server/*.h Server/*.hpp)
+file(GLOB_RECURSE SRC_SPELL Spell/*.cpp Spell/*.h Spell/*.hpp)
+file(GLOB_RECURSE SRC_STORAGE Storage/*.cpp Storage/*.h Storage/*.hpp)
+file(GLOB SRC_LOCAL *.cpp *.h *.hpp)
 
 if (WIN32)
-    set(SRC_WORLD_PROJECT ${SRC_WORLD_PROJECT} ${CMAKE_CURRENT_SOURCE_DIR}/resources.rc)
+    set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/resources.rc")
 endif ()
 
-source_group(world FILES ${SRC_WORLD_PROJECT})
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
 
-set(sources
-    ${SRC_GAMECLASSIC_FILES}
-    ${SRC_GAMECLASSIC_STORAGE_FILES}
-   
-    ${SRC_GAMEBC_FILES}
-    ${SRC_GAMEBC_STORAGE_FILES}
-   
-    ${SRC_GAMELK_FILES}
-    ${SRC_GAMELK_STORAGE_FILES}
-
-    ${SRC_GAMECATA_FILES}
-    ${SRC_GAMECATA_MANAGEMENT_FILES}
-    ${SRC_GAMECATA_STORAGE_FILES}
-   
-    ${SRC_GAMEMOP_FILES}
-    ${SRC_GAMEMOP_MANAGEMENT_FILES}
-    ${SRC_GAMEMOP_STORAGE_FILES}
-
-    ${SRC_AI_FILES}
-    ${SRC_MACROS_FILES}
-    ${SRC_CHAT_FILES}
-    ${SRC_COMMAND_FILES}
-    ${SRC_DATA_FILES}
-    ${SRC_MANAGEMENT_FILES}
-    ${SRC_MANAGEMENT_BATTLEGROUND_FILES}
-    ${SRC_MANAGEMENT_GOSSIP_FILES}
-    ${SRC_MANAGEMENT_GUILD_FILES}
-    ${SRC_MANAGEMENT_LFG_FILES}
-    ${SRC_MANAGEMENT_OBJECTUPDATES_FILES}
-    ${SRC_MANAGEMENT_TICKETS_FILES}
-    ${SRC_MAP_FILES}
-    ${SRC_MAP_AREA_FILES}
-    ${SRC_MAP_AREA_FILES}
-    ${SRC_MAP_CELLS_FILES}
-    ${SRC_MAP_MANAGEMENT_FILES}
-    ${SRC_MAP_MAPS_FILES}
-    ${SRC_MOVEMENT_FILES}
-    ${SRC_MOVEMENT_SPLINE_FILES}
-    ${SRC_MOVEMENT_MOVEMENTGENERATOR_FILES}
-    ${SRC_OBJECTS_FILES}
-    ${SRC_PACKET_FILES}
-    ${SRC_PACKET_HANDLER_FILES}
-    ${SRC_PACKET_MOVEMENT_FILES}
-    ${SRC_SERVER_FILES}
-    ${SRC_SERVER_CONSOLE_FILES}
-    ${SRC_SERVER_SCRIPT_FILES}
-    ${SRC_SERVER_WARDEN_FILES}
-    ${SRC_LOGON_COMMUNICATION_CLIENT_FILES}
-    ${SRC_SPELL_FILES}
-    ${SRC_SPELL_CUSTOM_FILES}
-    ${SRC_SPELL_DEFINITIONS_FILES}
-    ${SRC_STORAGE_FILES}
-    ${SRC_STORAGE_DBC_FILES}
-    ${SRC_UNITS_FILES}
-    ${SRC_UNITS_CREATURES_FILES}
-    ${SRC_UNITS_PLAYERS_FILES}
-    ${SRC_UNITS_SUMMONS_FILES}
-    ${SRC_WORLD_PROJECT}
-
-    # required for linker
-    ../collision/Management/VMapFactory.cpp
-    ../collision/Management/VMapManager2.cpp
-    ../collision/Management/MMapFactory.cpp
-    ../collision/Management/MMapManager.cpp
-    ../collision/Models/ModelInstance.cpp
-    ../collision/Models/WorldModel.cpp
-    ../collision/Models/GameObjectModel.cpp
-    ../collision/Maps/MapTree.cpp
-    ../collision/Maps/TileAssembler.cpp
-    ../collision/DynamicTree.cpp
-    ../collision/BoundingIntervalHierarchy.cpp
+add_executable(${EXECUTABLE_NAME}
+    ${SRC_CHAT}
+    ${SRC_COMMAND}
+    ${SRC_DATA}
+    ${SRC_MACROS}
+    ${SRC_MANAGEMENT}
+    ${SRC_MAP}
+    ${SRC_MOVEMENT}
+    ${SRC_OBJECTS}
+    ${SRC_SERVER}
+    ${SRC_SPELL}
+    ${SRC_STORAGE}
+    ${SRC_LOCAL}
+    ${APP_ICON_RESOURCE_WINDOWS}
 )
-
-if ("${ASCEMU_VERSION}" STREQUAL "Cata")
-    set(sources
-        ${sources}
-        ${SRC_STORAGE_DB2_FILES}
-    )
-endif ()
-if ("${ASCEMU_VERSION}" STREQUAL "Mop")
-    set(sources
-        ${sources}
-        ${SRC_STORAGE_DB2_FILES}
-    )
-endif ()
 
 include_directories(
     ${OPENSSL_INCLUDE_DIR}
-    ${PCRE_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Detour/Include
     ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Recast/Include
     ${CMAKE_SOURCE_DIR}/src/collision
@@ -161,108 +55,29 @@ include_directories(
     ${ZLIB_INCLUDE_DIRS}
 )
 
-add_executable(${PROJECT_NAME} ${sources})
-
-if (WIN32 AND NOT USE_PCH)
-    set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "/INCREMENTAL:NO")
+if (WIN32 AND NOT AE_USE_PCH)
+    set_target_properties(${EXECUTABLE_NAME} PROPERTIES LINK_FLAGS "/INCREMENTAL:NO")
 endif ()
 
-if (APPLE)
-    target_link_libraries(${PROJECT_NAME} c++)
-elseif (CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "kFreeBSD")
-    target_link_libraries(${PROJECT_NAME} c++experimental)
-endif ()
+set_target_properties(${EXECUTABLE_NAME} PROPERTIES ENABLE_EXPORTS TRUE)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES ENABLE_EXPORTS TRUE)
-add_dependencies(${PROJECT_NAME} shared g3dlite Detour Recast)
-if (BUILD_ASCEMUSCRIPTS AND BUILD_LUAENGINE)
-    add_dependencies(${PROJECT_NAME} lualib)
-endif ()
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/WorldConf.h.in ${CMAKE_CURRENT_SOURCE_DIR}/WorldConf.h)
 
-target_link_libraries(${PROJECT_NAME} shared g3dlite Detour Recast ${PCRE_LIBRARIES})
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION .)
-
-if (USE_PCH)
-    message(STATUS "Generate PCH for ${PROJECT_NAME}")
-	
-    target_precompile_headers(${PROJECT_NAME}
-    PRIVATE
-    <string>
-    <map>
-    <vector>
-    <array>
-    <set>
-    <cstdio>
-    <cstdlib>
-    <cstring>
-    <CommonDefines.hpp>
-    <CommonTypes.hpp>
-    <Common.hpp>
-    <Config/Config.h>
-    <WorldPacket.h>
-    <Log.hpp>
-    <Logging/Logger.hpp>
-    <ByteBuffer.h>
-    <Config/Config.h>
-    <LocationVector.h>
-    <Util/Strings.hpp>
-    <Util.hpp>
-    <Auth/BigNumber.h>
-    <Auth/WowCrypt.hpp>
-    <VMapManager2.h>
-    <IVMapManager.h>
-    <VMapFactory.h>
-    <GameObjectModel.h>
-    <LogonCommDefines.h>
-    WorldConf.h
-    Chat/ChatDefines.hpp
-    Chat/CommandTableStorage.hpp
-    Chat/ChatHandler.hpp
-    Macros/ScriptMacros.hpp
-    Management/Faction.h
-    Management/ItemInterface.h
-    Management/QuestLogEntry.hpp
-    Map/Area/AreaStorage.hpp
-    Map/Management/MapMgr.hpp
-    Movement/Spline/Spline.h
-    Movement/Spline/SplineImpl.h
-    Movement/Spline/MoveSpline.h
-    Movement/Spline/MoveSplineInit.h
-    Objects/GameObject.h
-    Objects/Item.hpp
-    Objects/ItemDefines.hpp
-    Objects/MovementDefines.h
-    Objects/MovementInfo.h
-    Objects/Object.h
-    Objects/ObjectDefines.h
-    Objects/Units/Creatures/Creature.h
-    Objects/Units/Creatures/CreatureDefines.hpp
-    Objects/Units/Players/Player.hpp
-    Objects/Units/Unit.hpp
-    Objects/Units/UnitDefines.hpp
-    Server/Definitions.h
-    Server/EventableObject.h
-    Server/LogonCommClient/LogonCommHandler.h
-    Server/LogonCommClient/LogonCommClient.h
-    Server/Opcodes.hpp
-    Server/Packets/SmsgMessageChat.h
-    Server/Script/ScriptMgr.h
-    Server/WorldConfig.h
-    Server/WorldSession.h
-    Server/WorldSocket.h
-    Spell/Definitions/SpellEffects.hpp
-    Spell/Spell.h
-    Spell/SpellAuras.h
-    Spell/SpellInfo.hpp
-    Spell/SpellMgr.hpp
-    Spell/SpellProc.hpp
-    Spell/SpellScript.hpp
-    Spell/SpellTarget.h
-    Storage/MySQLDataStore.hpp
-    Objects/Units/Players/Player.hpp
-    Objects/Units/Unit.hpp
-    Management/ObjectMgr.h
+# include library dependencies.
+target_link_libraries(${EXECUTABLE_NAME}
+  PUBLIC
+    shared
+    collision
+    g3dlite
+    Detour
+    Recast
 )
 
+# generate precompiled header.
+if (AE_USE_PCH)
+  message(STATUS "Generate PCH for ${EXECUTABLE_NAME}")
+  target_sources(${EXECUTABLE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pchWorld.hpp)
+  target_precompile_headers(${EXECUTABLE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pchWorld.hpp)
 endif ()
+
+install(TARGETS ${EXECUTABLE_NAME} RUNTIME DESTINATION .)

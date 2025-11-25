@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2011 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,14 +18,18 @@
  */
 
 #include "Setup.h"
-#include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
 #include "Map/Management/MapMgr.hpp"
-#include "Spell/SpellAuras.h"
-#include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.hpp"
-#include <Spell/Definitions/SpellIsFlags.hpp>
-#include <Spell/Definitions/SpellMechanics.hpp>
+#include "Objects/Item.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Spell/Definitions/SpellIsFlags.hpp"
+#include "Spell/Definitions/SpellMechanics.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
 
 //Alice : Correct formula for Rogue - Preparation
 
@@ -43,7 +47,7 @@ bool Preparation(uint8_t /*effectIndex*/, Spell* pSpell)
     pSpell->getPlayerCaster()->clearCooldownForSpell(26889);         // Vanish Rank 3
     pSpell->getPlayerCaster()->clearCooldownForSpell(14177);         // Cold Blood
     pSpell->getPlayerCaster()->clearCooldownForSpell(36554);         // Shadowstep
-    if (pSpell->getPlayerCaster()->hasAurasWithId(56819))                   // Glyph of Preparation item = 42968 casts 57127 that apply aura 56819.
+    if (pSpell->getPlayerCaster()->hasAurasWithId(56819))            // Glyph of Preparation item = 42968 casts 57127 that apply aura 56819.
     {
         pSpell->getPlayerCaster()->clearCooldownForSpell(13877);     // Blade Flurry
         pSpell->getPlayerCaster()->clearCooldownForSpell(51722);     // Dismantle
@@ -54,7 +58,7 @@ bool Preparation(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool Shiv(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    Unit* pTarget = pSpell->GetUnitTarget();
+    Unit* pTarget = pSpell->getUnitTarget();
     if (!pSpell->getPlayerCaster() || !pTarget) return true;
 
     pSpell->getPlayerCaster()->castSpell(pTarget->getGuid(), 5940, true);
@@ -66,7 +70,7 @@ bool Shiv(uint8_t /*effectIndex*/, Spell* pSpell)
     EnchantmentInstance* ench = it->getEnchantment(TEMP_ENCHANTMENT_SLOT);
     if (ench)
     {
-        DBC::Structures::SpellItemEnchantmentEntry const* Entry = ench->Enchantment;
+        WDB::Structures::SpellItemEnchantmentEntry const* Entry = ench->Enchantment;
         for (uint8_t c = 0; c < 3; c++)
         {
             if (Entry->type[c] && Entry->spell[c])
@@ -88,7 +92,7 @@ bool ImprovedSprint(uint8_t effectIndex, Spell* pSpell)
 {
     if (effectIndex == 0)
     {
-        Unit* target = pSpell->GetUnitTarget();
+        Unit* target = pSpell->getUnitTarget();
         if (target == NULL)
             return true;
 
@@ -107,7 +111,7 @@ bool ImprovedSprint(uint8_t effectIndex, Spell* pSpell)
 
 bool CloakOfShadows(uint8_t /*effectIndex*/, Spell* s)
 {
-    Unit* unitTarget = s->GetUnitTarget();
+    Unit* unitTarget = s->getUnitTarget();
 
     if (!unitTarget || !unitTarget->isAlive())
         return false;

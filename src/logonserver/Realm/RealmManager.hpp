@@ -1,12 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Common.hpp"
 #include "Auth/AuthSocket.h"
+#include <chrono>
 
 namespace AscEmu::Realm
 {
@@ -51,7 +51,7 @@ namespace AscEmu::Realm
 
         void loadRealms();
 
-        std::shared_ptr<Realm> getRealmById(uint32_t id) const;
+        Realm* getRealmById(uint32_t id) const;
 
         void setStatusForRealm(uint8_t realm_id, uint8_t status);
 
@@ -61,8 +61,8 @@ namespace AscEmu::Realm
 
         void sendRealms(::AuthSocket* Socket);
 
-        Mutex& getServerSocketLock() { return serverSocketLock; }
-        Mutex& getRealmLock() { return realmLock; }
+        std::mutex& getServerSocketLock() { return serverSocketLock; }
+        std::mutex& getRealmLock() { return realmLock; }
 
         void timeoutSockets();
         void checkServers();
@@ -77,10 +77,10 @@ namespace AscEmu::Realm
         RealmManager() = default;
         ~RealmManager() = default;
 
-        std::vector<std::shared_ptr<Realm>> realms;
+        std::vector<std::unique_ptr<Realm>> realms;
         std::set<::LogonCommServerSocket*> serverSockets;
-        Mutex serverSocketLock;
-        Mutex realmLock;
+        std::mutex serverSocketLock;
+        std::mutex realmLock;
 
         bool usePings;
 

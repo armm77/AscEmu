@@ -1,10 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "GossipMenu.hpp"
 #include "Management/QuestDefines.hpp"
+#include "Management/QuestProperties.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
 #include "Server/Packets/SmsgGossipMessage.h"
 #include "Server/Packets/SmsgGossipComplete.h"
 

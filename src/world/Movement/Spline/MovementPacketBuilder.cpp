@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -8,7 +8,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include "ByteBuffer.h"
 #include "MoveSpline.h"
 
-namespace MovementNew {
+namespace MovementMgr {
 
 inline void operator<<(ByteBuffer& b, Vector3 const& v)
 {
@@ -107,7 +107,7 @@ void WriteLinearPath(Spline<int32_t> const& spline, ByteBuffer& data)
         for (uint32_t i = 1; i < last_idx; ++i)
         {
             offset = middle - real_path[i];
-            data << LocationVector(offset.x, offset.y, offset.z);
+            data.appendPackXYZ(offset.x, offset.y, offset.z);
         }
     }
 }
@@ -234,7 +234,7 @@ void PacketBuilder::WriteCreateData(MoveSpline const& moveSpline, ByteBuffer& da
             data << moveSpline.facing.angle;
         else if (splineFlags.final_target)
         {
-            ObjectGuid facingGuid = moveSpline.facing.target;
+            WoWGuid facingGuid = moveSpline.facing.target;
             data.WriteByteSeq(facingGuid[5]);
             data.WriteByteSeq(facingGuid[3]);
             data.WriteByteSeq(facingGuid[7]);
@@ -245,8 +245,8 @@ void PacketBuilder::WriteCreateData(MoveSpline const& moveSpline, ByteBuffer& da
             data.WriteByteSeq(facingGuid[0]);
         }
 
-        uint32 nodes = static_cast<uint32_t>(moveSpline.getPath().size());
-        for (uint32 i = 0; i < nodes; ++i)
+        uint32_t nodes = static_cast<uint32_t>(moveSpline.getPath().size());
+        for (uint32_t i = 0; i < nodes; ++i)
         {
             data << float(moveSpline.getPath()[i].z);
             data << float(moveSpline.getPath()[i].x);
@@ -282,14 +282,14 @@ void PacketBuilder::WriteCreateBits(MoveSpline const& moveSpline, ByteBuffer& da
     if (!data.writeBit(!moveSpline.Finalized()))
         return;
 
-    data.writeBits(uint8(moveSpline.spline.mode()), 2);
+    data.writeBits(uint8_t(moveSpline.spline.mode()), 2);
     data.writeBit(moveSpline.splineflags & (MoveSplineFlag::Parabolic | MoveSplineFlag::Animation));
     data.writeBits(moveSpline.getPath().size(), 22);
     switch (moveSpline.splineflags & MoveSplineFlag::Mask_Final_Facing)
     {
     case MoveSplineFlag::Final_Target:
     {
-        ObjectGuid targetGuid = moveSpline.facing.target;
+        WoWGuid targetGuid = moveSpline.facing.target;
         data.writeBits(2, 2);
         data.writeBit(targetGuid[4]);
         data.writeBit(targetGuid[3]);
@@ -320,4 +320,4 @@ void PacketBuilder::WriteSplineSync(MoveSpline const& move_spline, ByteBuffer& d
 {
     data << (float)move_spline.timePassed() / move_spline.Duration();
 }
-} // namespace MovementNew
+} // namespace MovementMgr

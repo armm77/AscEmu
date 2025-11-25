@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,9 +17,18 @@
  */
 
 #include "Setup.h"
-#include "Server/Script/CreatureAIScript.h"
-#include "Objects/Units/Creatures/Creature.h"
-#include "Objects/Units/Creatures/Summons/Summon.h"
+#include "Management/QuestLogEntry.hpp"
+#include "Management/QuestMgr.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Spell/Spell.hpp"
+#include "Storage/MySQLDataStore.hpp"
 
 enum 
 {
@@ -324,7 +333,7 @@ public:
 
     void onSelectOption(Object* pObject, Player* pPlayer, uint32_t /*Id*/, const char* /*Code*/, uint32_t /*gossipId*/) override
     {
-        pPlayer->getSession()->sendTaxiList(static_cast<Creature*>(pObject));
+        pPlayer->getSession()->sendTaxiMenu(static_cast<Creature*>(pObject));
     }
 };
 
@@ -604,7 +613,7 @@ bool PlaceCart(uint8_t /*effectIndex*/, Spell* pSpell)
     if (pPlayer == nullptr)
         return true;
 
-    Creature* pCreature = pSpell->GetTargetConstraintCreature();
+    Creature* pCreature = pSpell->getTargetConstraintCreature();
     auto* questLog = pPlayer->getQuestLogByQuestId(11897);
     if (questLog == nullptr)
         return true;
@@ -658,7 +667,7 @@ bool PlaceOil(uint8_t /*effectIndex*/, Spell* pSpell)
     if (pPlayer == nullptr)
         return true;
 
-    Creature* pCreature = pSpell->GetTargetConstraintCreature();
+    Creature* pCreature = pSpell->getTargetConstraintCreature();
     auto* questLog = pPlayer->getQuestLogByQuestId(11715);
     if (questLog == nullptr)
         return true;

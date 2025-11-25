@@ -1,9 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Objects/Units/Players/PlayerDefines.hpp"
+#include "Utilities/Random.hpp"
 
 void GuardsOnSalute(Player* pPlayer, Unit* pUnit)
 {
@@ -11,7 +17,7 @@ void GuardsOnSalute(Player* pPlayer, Unit* pUnit)
         return;
 
     // Check if we are friendly with our Guards (they will salute only when You are)
-    if (((pUnit->getEntry() == 68 || pUnit->getEntry() == 1976) && pPlayer->getFactionStandingRank(72) >= STANDING_FRIENDLY) || (pUnit->getEntry() == 3296 && pPlayer->getFactionStandingRank(76) >= STANDING_FRIENDLY))
+    if (((pUnit->getEntry() == 68 || pUnit->getEntry() == 1976) && pPlayer->getFactionStandingRank(72) >= Standing::FRIENDLY) || (pUnit->getEntry() == 3296 && pPlayer->getFactionStandingRank(76) >= Standing::FRIENDLY))
     {
         uint32_t EmoteChance = Util::getRandomUInt(100);
         if (EmoteChance < 33) // 1/3 chance to get Salute from Guard
@@ -25,7 +31,7 @@ void GaurdsOnKiss(Player* pPlayer, Unit* pUnit)
         return;
 
     // Check if we are friendly with our Guards (they will bow only when You are)
-    if (((pUnit->getEntry() == 68 || pUnit->getEntry() == 1976) && pPlayer->getFactionStandingRank(72) >= STANDING_FRIENDLY) || (pUnit->getEntry() == 3296 && pPlayer->getFactionStandingRank(76) >= STANDING_FRIENDLY))
+    if (((pUnit->getEntry() == 68 || pUnit->getEntry() == 1976) && pPlayer->getFactionStandingRank(72) >= Standing::FRIENDLY) || (pUnit->getEntry() == 3296 && pPlayer->getFactionStandingRank(76) >= Standing::FRIENDLY))
     {
         uint32_t EmoteChance = Util::getRandomUInt(100);
         if (EmoteChance < 33) // 1/3 chance to get Bow from Guard
@@ -39,7 +45,7 @@ void GuardsOnWave(Player* pPlayer, Unit* pUnit)
         return;
 
     // Check if we are friendly with our Guards (they will wave only when You are)
-    if (((pUnit->getEntry() == 68 || pUnit->getEntry() == 1976) && pPlayer->getFactionStandingRank(72) >= STANDING_FRIENDLY) || (pUnit->getEntry() == 3296 && pPlayer->getFactionStandingRank(76) >= STANDING_FRIENDLY))
+    if (((pUnit->getEntry() == 68 || pUnit->getEntry() == 1976) && pPlayer->getFactionStandingRank(72) >= Standing::FRIENDLY) || (pUnit->getEntry() == 3296 && pPlayer->getFactionStandingRank(76) >= Standing::FRIENDLY))
     {
         uint32_t EmoteChance = Util::getRandomUInt(100);
         if (EmoteChance < 33) // 1/3 chance to get Bow from Guard

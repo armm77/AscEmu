@@ -1,11 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Raid_Naxxramas.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Utilities/Random.hpp"
 
 //const uint32_t CN_THADDIUS = 15928;
 
@@ -51,7 +56,7 @@ public:
 // The Arachnid Quarter
 CarrionSpinnerAI::CarrionSpinnerAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(CARRION_SPINNER_POISON_BOLT_HEROIC, 15.0f, TARGET_SELF, 0, 15);
     else
         addAISpell(CARRION_SPINNER_POISON_BOLT_NORMAL, 15.0f, TARGET_SELF, 0, 15);
@@ -64,7 +69,7 @@ CarrionSpinnerAI::CarrionSpinnerAI(Creature* pCreature) : CreatureAIScript(pCrea
 
 DreadCreeperAI::DreadCreeperAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(DREAD_CREEPER_VEIL_OF_SHADOW_HEROIC, 15.0f, TARGET_SELF, 0, 10);
     else
         addAISpell(DREAD_CREEPER_VEIL_OF_SHADOW_NORMAL, 15.0f, TARGET_SELF, 0, 10);
@@ -72,7 +77,7 @@ DreadCreeperAI::DreadCreeperAI(Creature* pCreature) : CreatureAIScript(pCreature
 
 NaxxramasCultistAI::NaxxramasCultistAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto knockback = addAISpell(NAXXRAMAS_CULTIST_KNOCKBACK_HEROIC, 10.0f, TARGET_RANDOM_DESTINATION, 0, 10);
         knockback->setMinMaxDistance(0.0f, 8.0f);
@@ -87,7 +92,7 @@ NaxxramasCultistAI::NaxxramasCultistAI(Creature* pCreature) : CreatureAIScript(p
 VenomStalkerAI::VenomStalkerAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
     // Do those really work ?
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto charge = addAISpell(VENOM_STALKER_POISON_CHARGE_HEROIC, 10.0f, TARGET_RANDOM_SINGLE, 0, 10);
         charge->setMinMaxDistance(0.0f, 40.0f);
@@ -101,7 +106,7 @@ VenomStalkerAI::VenomStalkerAI(Creature* pCreature) : CreatureAIScript(pCreature
 
 TombHorrorAI::TombHorrorAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         addAISpell(TOMB_HORROR_CRYPT_SCARAB_SWARM_HEROIC, 7.0f, TARGET_SELF, 3, 20);
 
@@ -121,7 +126,7 @@ TombHorrorAI::TombHorrorAI(Creature* pCreature) : CreatureAIScript(pCreature)
 
 NaxxramasAcolyteAI::NaxxramasAcolyteAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto volley = addAISpell(NAXXRAMAS_ACOLYTE_SHADOW_BOLT_VOLLEY_HEROIC, 10.0f, TARGET_RANDOM_DESTINATION, 3, 5);
         volley->setMinMaxDistance(0.0f, 30.0f);
@@ -140,7 +145,7 @@ NaxxramasAcolyteAI::NaxxramasAcolyteAI(Creature* pCreature) : CreatureAIScript(p
 VigilantShadeAI::VigilantShadeAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
     // Does it really work ?
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto volley = addAISpell(NAXXRAMAS_ACOLYTE_SHADOW_BOLT_VOLLEY_HEROIC, 10.0f, TARGET_RANDOM_DESTINATION, 0, 15);
         volley->setMinMaxDistance(0.0f, 30.0f);
@@ -193,7 +198,7 @@ void WebWrapAI::OnDied(Unit* /*pKiller*/)
     // Slower, but safer
     if (mPlayerGuid != 0)
     {
-        Player* PlayerPtr = sObjectMgr.GetPlayer(static_cast<uint32_t>(mPlayerGuid));
+        Player* PlayerPtr = sObjectMgr.getPlayer(static_cast<uint32_t>(mPlayerGuid));
         if (PlayerPtr != NULL && PlayerPtr->hasAurasWithId(MAEXXNA_WEB_WRAP))
         {
             PlayerPtr->removeAllAurasById(MAEXXNA_WEB_WRAP);
@@ -208,7 +213,7 @@ void WebWrapAI::AIUpdate()
 {
     if (mPlayerGuid != 0)
     {
-        Player* PlayerPtr = sObjectMgr.GetPlayer(static_cast<uint32_t>(mPlayerGuid));
+        Player* PlayerPtr = sObjectMgr.getPlayer(static_cast<uint32_t>(mPlayerGuid));
         if (PlayerPtr == NULL || !PlayerPtr->isAlive() || !PlayerPtr->hasAurasWithId(MAEXXNA_WEB_WRAP))
         {
             mPlayerGuid = 0;
@@ -222,7 +227,7 @@ void WebWrapAI::Destroy()
 {
     if (mPlayerGuid != 0)
     {
-        Player* PlayerPtr = sObjectMgr.GetPlayer(static_cast<uint32_t>(mPlayerGuid));
+        Player* PlayerPtr = sObjectMgr.getPlayer(static_cast<uint32_t>(mPlayerGuid));
         if (PlayerPtr != NULL && PlayerPtr->hasAurasWithId(MAEXXNA_WEB_WRAP))
         {
             PlayerPtr->removeAllAurasById(MAEXXNA_WEB_WRAP);
@@ -237,7 +242,7 @@ void WebWrapAI::Destroy()
 
 MaexxnaSpiderlingAI::MaexxnaSpiderlingAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto poison = addAISpell(MAEXXNA_SPIDERLING_NECROTIC_POISON_HEROIC, 10.0f, TARGET_ATTACKING, 0, 20);
         poison->setMinMaxDistance(0.0f, 8.0f);
@@ -251,7 +256,7 @@ MaexxnaSpiderlingAI::MaexxnaSpiderlingAI(Creature* pCreature) : CreatureAIScript
 
 MaexxnaAI::MaexxnaAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         addAISpell(MAEXXNA_POISON_SHOCK_HEROIC, 100.0f, TARGET_SELF, 0, 10);        // TARGET_ATTACKING with range ?
 
@@ -307,7 +312,7 @@ void MaexxnaAI::AIUpdate()
     {
         if (!mHasEnraged && _getHealthPercent() <= 30)
         {
-            if (_isHeroic())
+            if (isHeroic())
                 _applyAura(MAEXXNA_FRENZY_HEROIC);
             else
                 _applyAura(MAEXXNA_FRENZY_NORMAL);
@@ -316,7 +321,7 @@ void MaexxnaAI::AIUpdate()
         }
         else if (_isTimerFinished(mWebSprayTimer))
         {
-            if (_isHeroic())
+            if (isHeroic())
                 _applyAura(MAEXXNA_WEB_SPRAY_HEROIC);
             else
                 _applyAura(MAEXXNA_WEB_SPRAY_NORMAL);
@@ -367,7 +372,7 @@ void MaexxnaAI::AIUpdate()
 
 NaxxramasWorshipperAI::NaxxramasWorshipperAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto fireball = addAISpell(NAXXRAMAS_WORSHIPPER_FIREBALL_HEROIC, 10.0f, TARGET_ATTACKING, 3, 0);
         fireball->setMinMaxDistance(0.0f, 45.0f);
@@ -404,8 +409,8 @@ void NaxxramasWorshipperAI::OnDied(Unit* /*pKiller*/)
             // Should be applied on Grand Widow, but is on the enemies - to script ?
             //ApplyAura(NAXXRAMAS_WORSHIPPER_WIDOW_EMBRACE);
             // I don't like the way we apply it
-            Aura* WidowEmbrace = sSpellMgr.newAura(sSpellMgr.getSpellInfo(NAXXRAMAS_WORSHIPPER_WIDOW_EMBRACE), 30000, getCreature(), mGrandWidow->getCreature());
-            getCreature()->addAura(WidowEmbrace);
+            auto WidowEmbrace = sSpellMgr.newAura(sSpellMgr.getSpellInfo(NAXXRAMAS_WORSHIPPER_WIDOW_EMBRACE), 30000, getCreature(), mGrandWidow->getCreature());
+            getCreature()->addAura(std::move(WidowEmbrace));
 
             // Not sure about new Frenzy Timer
             mGrandWidow->_resetTimer(mGrandWidow->mFrenzyTimer, 60000 + Util::getRandomUInt(20) * 1000);
@@ -496,7 +501,7 @@ GrandWidowFaerlinaAI::GrandWidowFaerlinaAI(Creature* pCreature) : CreatureAIScri
         }
     }
 
-    if (_isHeroic())
+    if (isHeroic())
     {
         for (uint8_t i = 0; i < 2; ++i)
         {
@@ -581,7 +586,7 @@ void GrandWidowFaerlinaAI::OnCombatStop(Unit* /*pTarget*/)
             }
         }
 
-        if (_isHeroic())
+        if (isHeroic())
         {
             for (uint8_t i = 0; i < 2; ++i)
             {
@@ -637,7 +642,7 @@ void GrandWidowFaerlinaAI::Destroy()
 
 CryptGuardAI::CryptGuardAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto split = addAISpell(CRYPT_GUARD_ACID_SPLIT_HEROIC, 8.0f, TARGET_RANDOM_SINGLE, 0, 15);
         split->setMinMaxDistance(0.0f, 40.0f);
@@ -704,7 +709,7 @@ void CorpseScarabAI::Destroy()
 
 AnubRekhanAI::AnubRekhanAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         for (uint8_t i = 0; i < 2; ++i)
         {
@@ -750,7 +755,7 @@ void AnubRekhanAI::OnCombatStart(Unit* /*pTarget*/)
     mLocaleEnrageTimerId = _addTimer(600000);
     mLocustSwarmTimer = _addTimer(70000 + Util::getRandomUInt(50) * 1000);
 
-    if (!_isHeroic())
+    if (!isHeroic())
         mCryptSpawnTimer = _addTimer(20000);
 }
 
@@ -777,7 +782,7 @@ void AnubRekhanAI::OnCombatStop(Unit* /*pTarget*/)
 
     mScarabs.clear();
 
-    if (_isHeroic() && isAlive())
+    if (isHeroic() && isAlive())
     {
         for (uint8_t i = 0; i < 2; ++i)
         {
@@ -979,7 +984,7 @@ void AnubRekhanAI::Destroy()
 InfectiousGhoulAI::InfectiousGhoulAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
     addAISpell(INFECTIOUS_GHOUL_FLESH_ROT, 10.0f, TARGET_ATTACKING, 0, 15);
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(INFECTIOUS_GHOUL_REND_HEROIC, 7.0f, TARGET_ATTACKING, 0, 15);
     else
         addAISpell(INFECTIOUS_GHOUL_REND_NORMAL, 7.0f, TARGET_ATTACKING, 0, 15);
@@ -996,7 +1001,7 @@ void InfectiousGhoulAI::AIUpdate()
 {
     if (!mEnraged && !_isCasting() && _getHealthPercent() <= 50)
     {
-        if (_isHeroic())
+        if (isHeroic())
             _applyAura(INFECTIOUS_GHOUL_FRENZY_HEROIC);
         else
             _applyAura(INFECTIOUS_GHOUL_FRENZY_NORMAL);
@@ -1007,7 +1012,7 @@ void InfectiousGhoulAI::AIUpdate()
 
 StoneskinGargoyleAI::StoneskinGargoyleAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         addAISpell(STONESKIN_GARGOYLE_ACID_VOLLEY_HEROIC, 10.0f, TARGET_SELF, 0, 5);
         mStoneskin = addAISpell(STONESKIN_GARGOYLE_STONESKIN_HEROIC, 0.0f, TARGET_SELF, 7, 0);
@@ -1052,7 +1057,7 @@ FrenziedBatAI::FrenziedBatAI(Creature* pCreature) : CreatureAIScript(pCreature)
 
 PlagueBeastAI::PlagueBeastAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto splash = addAISpell(PLAGUE_BEAST_PLAGUE_SPLASH_HEROIC, 8.0f, TARGET_RANDOM_DESTINATION, 0, 15);
         splash->setMinMaxDistance(0.0f, 50.0f);
@@ -1082,7 +1087,7 @@ void PlagueBeastAI::OnCombatStop(Unit* /*pTarget*/)
 
 EyeStalkerAI::EyeStalkerAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto trample = addAISpell(EYE_STALKER_MIND_FLAY_HEROIC, 100.0f, TARGET_ATTACKING, 6, 8);
         trample->setMinMaxDistance(0.0f, 35.0f);
@@ -1107,7 +1112,7 @@ void EyeStalkerAI::AIUpdate()
     if (!_isCasting() && CurrentTarget != NULL)
     {
         float MaxRange = 45.0f;
-        if (_isHeroic())
+        if (isHeroic())
             MaxRange = 35.0f;
 
         if (getRangeToObject(CurrentTarget) > MaxRange)
@@ -1133,7 +1138,7 @@ void EyeStalkerAI::AIUpdate()
 
 NothThePlaguebringerAI::NothThePlaguebringerAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         /*AddPhaseSpell(1, AddSpell(NOTH_THE_PLAGUEBRINGER_CURSE_OF_THE_PLAGUE_HEROIC, TARGET_SELF, 10, 0, 20));
         mCriple = AddSpellFunc(&SpellFunc_NothCriple, TARGET_SELF, 0, 0, 0);
@@ -1159,7 +1164,7 @@ NothThePlaguebringerAI::NothThePlaguebringerAI(Creature* pCreature) : CreatureAI
 
 void NothThePlaguebringerAI::OnCombatStart(Unit* /*pTarget*/)
 {
-    if (_isHeroic())
+    if (isHeroic())
         mBlinkTimer = _addTimer(28000 + Util::getRandomUInt(12) * 1000);
 
     mPhaseSwitchTimer = _addTimer(110000);
@@ -1247,7 +1252,7 @@ void NothThePlaguebringerAI::AIUpdate()
         if (_isTimerFinished(mSkeletonTimer))
         {
             uint32_t SkelLimit = 2;
-            if (_isHeroic())
+            if (isHeroic())
                 SkelLimit = 3;
 
             bool PosTaken[3];
@@ -1295,7 +1300,7 @@ void NothThePlaguebringerAI::AIUpdate()
             setScriptPhase(1);
             _resetTimer(mPhaseSwitchTimer, 70000);
             _resetTimer(mSkeletonTimer, 8000);
-            if (_isHeroic())
+            if (isHeroic())
                 _resetTimer(mBlinkTimer, 28000 + (Util::getRandomUInt(12)) * 1000);
 
             return;
@@ -1304,7 +1309,7 @@ void NothThePlaguebringerAI::AIUpdate()
         if (_isTimerFinished(mSkeletonTimer))
         {
             uint32_t SpawnLimit = 2;
-            if (_isHeroic())
+            if (isHeroic())
                 ++SpawnLimit;
 
             uint32_t Id = 0;
@@ -1509,7 +1514,7 @@ void PlaguedWarriorAI::Destroy()
 
 PlaguedChampionAI::PlaguedChampionAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         addAISpell(PLAGUED_CHAMPION_MORTAL_STRIKE_HEROIC, 8.0f, TARGET_ATTACKING, 0, 10);
         addAISpell(PLAGUED_CHAMPION_SHADOW_SHOCK_HEROIC, 10.0f, TARGET_SELF, 0, 10);
@@ -1538,7 +1543,7 @@ void PlaguedChampionAI::Destroy()
 
 PlaguedGuardianAI::PlaguedGuardianAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(PLAGUED_GUARDIAN_ARCANE_EXPLOSION_HEROIC, 10.0f, TARGET_SELF, 2, 10);
     else
         addAISpell(PLAGUED_GUARDIAN_ARCANE_EXPLOSION_NORMAL, 10.0f, TARGET_SELF, 2, 10);
@@ -1798,7 +1803,7 @@ LoathebAI::LoathebAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
     addAISpell(LOATHEB_NECROTIC_AURA, 100.0f, TARGET_SELF, 0, 20);
 
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(LOATHEB_DEATHBLOOM_HEROIC, 100.0f, TARGET_SELF, 0, 30);
     else
         addAISpell(LOATHEB_DEATHBLOOM_NORMAL, 100.0f, TARGET_SELF, 0, 30);
@@ -1871,7 +1876,7 @@ void LoathebAI::AIUpdate()
     {
         if (_isTimerFinished(mDoomTimer))
         {
-            if (_isHeroic())
+            if (isHeroic())
                 _applyAura(LOATHEB_INEVITABLE_DOOM_HEROIC);
             else
                 _applyAura(LOATHEB_INEVITABLE_DOOM_NORMAL);
@@ -1902,7 +1907,7 @@ void LoathebAI::AIUpdate()
                     if (!PlayerPtr->hasAurasWithId(LOATHEB_DEATHBLOOM_NORMAL) && !PlayerPtr->hasAurasWithId(LOATHEB_DEATHBLOOM_HEROIC))
                         continue;
 
-                    if (_isHeroic())
+                    if (isHeroic())
                         PlayerPtr->castSpell(PlayerPtr, LOATHEB_DEATHBLOOM_DAMAGE_HEROIC, true);
                     else
                         PlayerPtr->castSpell(PlayerPtr, LOATHEB_DEATHBLOOM_DAMAGE_NORMAL, true);
@@ -1912,7 +1917,7 @@ void LoathebAI::AIUpdate()
             }
             else
             {
-                if (_isHeroic())
+                if (isHeroic())
                     _applyAura(LOATHEB_DEATHBLOOM_HEROIC);
                 else
                     _applyAura(LOATHEB_DEATHBLOOM_NORMAL);
@@ -1969,7 +1974,7 @@ void SporeAI::Destroy()
 
 DeathKnightAI::DeathKnightAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto deathCoil = addAISpell(DEATH_KNIGHT_DEATH_COIL_HEROIC, 9.0f, TARGET_RANDOM_SINGLE, 0, 15);
         deathCoil->setMinMaxDistance(0.0f, 45.0f);
@@ -1994,7 +1999,7 @@ void DeathKnightAI::OnCombatStart(Unit* /*pTarget*/)
 
 DeathKnightCaptainAI::DeathKnightCaptainAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(DEATH_KNIGHT_CAPTAIN_PLAGUE_STRIKE_HEROIC, 8.0f, TARGET_ATTACKING, 0, 20);
     else
         addAISpell(DEATH_KNIGHT_CAPTAIN_PLAGUE_STRIKE_NORMAL, 8.0f, TARGET_ATTACKING, 0, 20);
@@ -2015,7 +2020,7 @@ GhostOfNaxxramasAI::GhostOfNaxxramasAI(Creature* pCreature) : CreatureAIScript(p
 
 ShadeOfNaxxramasAI::ShadeOfNaxxramasAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(SHADE_OF_NAXXRAMAS_SHADOW_BOLT_VOLLEY_HEROIC, 10.0f, TARGET_SELF, 0, 10);
     else
         addAISpell(SHADE_OF_NAXXRAMAS_SHADOW_BOLT_VOLLEY_NORMAL, 10.0f, TARGET_SELF, 0, 10);
@@ -2167,7 +2172,7 @@ SkeletalSmithAI::SkeletalSmithAI(Creature* pCreature) : CreatureAIScript(pCreatu
 
 DeathKnightCavalierAI::DeathKnightCavalierAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         addAISpell(DEATH_KNIGHT_CAVALIER_BONE_ARMOR_HEROIC, 7.0f, TARGET_SELF, 0, 30);
 
@@ -2312,7 +2317,7 @@ RisenSquireAI::RisenSquireAI(Creature* pCreature) : CreatureAIScript(pCreature)
 
 UnholyAxeAI::UnholyAxeAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto mortalStrike = addAISpell(UNHOLY_AXE_MORTAL_STRIKE_HEROIC, 10.0f, TARGET_ATTACKING, 0, 10);
         mortalStrike->setMinMaxDistance(0.0f, 8.0f);
@@ -2330,7 +2335,7 @@ UnholyAxeAI::UnholyAxeAI(Creature* pCreature) : CreatureAIScript(pCreature)
 
 UnholySwordAI::UnholySwordAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto cleave = addAISpell(UNHOLY_SWORD_CLEAVE_HEROIC, 10.0f, TARGET_ATTACKING, 0, 15);
         cleave->setMinMaxDistance(0.0f, 8.0f);
@@ -2344,7 +2349,7 @@ UnholySwordAI::UnholySwordAI(Creature* pCreature) : CreatureAIScript(pCreature)
 
 UnholyStaffAI::UnholyStaffAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(UNHOLY_STAFF_ARCANE_EXPLOSION_HEROIC, 8.0f, TARGET_SELF, 1, 15);
     else
         addAISpell(UNHOLY_STAFF_ARCANE_EXPLOSION_NORMAL, 8.0f, TARGET_SELF, 1, 15);
@@ -2363,7 +2368,7 @@ PatchworkGolemAI::PatchworkGolemAI(Creature* pCreature) : CreatureAIScript(pCrea
     auto cleave = addAISpell(PATCHWORK_GOLEM_CLEAVE, 10.0f, TARGET_ATTACKING, 0, 10);
     cleave->setMinMaxDistance(0.0f, 8.0f);
 
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto execute = addAISpell(PATCHWORK_GOLEM_EXECUTE_HEROIC, 8.0f, TARGET_ATTACKING, 0, 10);
         execute->setMinMaxDistance(0.0f, 8.0f);
@@ -2383,7 +2388,7 @@ PatchworkGolemAI::PatchworkGolemAI(Creature* pCreature) : CreatureAIScript(pCrea
 
 void PatchworkGolemAI::OnCombatStart(Unit* /*pTarget*/)
 {
-    if (_isHeroic())
+    if (isHeroic())
         _applyAura(PATCHWORK_GOLEM_DISEASE_CLOUD_HEROIC);
     else
         _applyAura(PATCHWORK_GOLEM_DISEASE_CLOUD_NORMAL);
@@ -2393,7 +2398,7 @@ void PatchworkGolemAI::OnCombatStop(Unit* /*pTarget*/)
 {
     if (isAlive())
     {
-        if (_isHeroic())
+        if (isHeroic())
             _applyAura(PATCHWORK_GOLEM_DISEASE_CLOUD_HEROIC);
         else
             _applyAura(PATCHWORK_GOLEM_DISEASE_CLOUD_NORMAL);
@@ -2402,7 +2407,7 @@ void PatchworkGolemAI::OnCombatStop(Unit* /*pTarget*/)
 
 BileRetcherAI::BileRetcherAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto vomit = addAISpell(BILE_RETCHER_BILE_VOMIT_NORMAL, 10.0f, TARGET_RANDOM_DESTINATION, 0, 10);
         vomit->setMinMaxDistance(0.0f, 20.0f);
@@ -2449,7 +2454,7 @@ void EmbalmingSlimeAI::OnCombatStop(Unit* /*pTarget*/)
 
 MadScientistAI::MadScientistAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto greateHeal = addAISpell(MAD_SCIENTIST_GREAT_HEAL_HEROIC, 8.0f, TARGET_RANDOM_FRIEND, 2, 15);
         greateHeal->setMinMaxDistance(0.0f, 40.0f);
@@ -2471,7 +2476,7 @@ LivingMonstrosityAI::LivingMonstrosityAI(Creature* pCreature) : CreatureAIScript
 {
     addAISpell(LIVING_MONSTROSITY_FEAR, 8.0f, TARGET_SELF, 1, 20);
     addAISpell(LIVING_MONSTROSITY_LIGHTNING_TOTEM, 8.0f, TARGET_SELF, 1, 25);
-    if (_isHeroic())
+    if (isHeroic())
     {
         auto chainLightning = addAISpell(LIVING_MONSTROSITY_CHAIN_LIGHTNING_HEROIC, 10.0f, TARGET_RANDOM_SINGLE, 2, 10);
         chainLightning->setMinMaxDistance(0.0f, 45.0f);
@@ -2486,7 +2491,7 @@ LivingMonstrosityAI::LivingMonstrosityAI(Creature* pCreature) : CreatureAIScript
 
 LightningTotemAI::LightningTotemAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(LIGHTNING_TOTEM_SHOCK_HEROIC, 100.0f, TARGET_SELF, 1, 2);
     else
         addAISpell(LIGHTNING_TOTEM_SHOCK_NORMAL, 100.0f, TARGET_SELF, 1, 2);
@@ -2513,7 +2518,7 @@ void LightningTotemAI::AIUpdate()
 
 StitchedColossusAI::StitchedColossusAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
-    if (_isHeroic())
+    if (isHeroic())
         addAISpell(STITCHED_COLOSSUS_MASSIVE_STOMP_HEROIC, 8.0f, TARGET_SELF, 0, 15);
     else
         addAISpell(STITCHED_COLOSSUS_MASSIVE_STOMP_NORMAL, 8.0f, TARGET_SELF, 0, 15);

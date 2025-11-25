@@ -1,14 +1,34 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Setup.h"
 #include "AlteracValley.h"
+
+#include "Management/Loot/LootItem.hpp"
+#include "Management/Loot/LootRoll.hpp"
 #include "Management/HonorHandler.h"
-#include "Storage/MySQLDataStore.hpp"
-#include "Management/WorldStates.h"
-#include "Map/Management/MapMgr.hpp"
+#include "Management/WorldStates.hpp"
+#include "Map/Maps/BattleGroundMap.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObjectProperties.hpp"
+#include "Server/Master.h"
+#include "Server/World.h"
 #include "Server/Packets/SmsgMessageChat.h"
+#include "Storage/MySQLDataStore.hpp"
+#include "Management/Battleground/BattlegroundDefines.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Creatures/Corpse.hpp"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "CommonTime.hpp"
+#include <cstdarg>
+
+#include "Utilities/Narrow.hpp"
+#include "Utilities/Random.hpp"
+#include "Utilities/Util.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Fire Locations
@@ -1299,7 +1319,7 @@ void AlteracValley::HookGenerateLoot(Player* plr, Object* pCorpse)
                     li.roll = nullptr;
 
                     // push to vector
-                    static_cast<Corpse*>(pCorpse)->loot.items.push_back(li);
+                    static_cast<Corpse*>(pCorpse)->loot.items.push_back(std::move(li));
                 }
             }
         }
@@ -1312,7 +1332,7 @@ void AlteracValley::HookGenerateLoot(Player* plr, Object* pCorpse)
     gold *= worldConfig.getFloatRate(RATE_MONEY);
 
     // set it
-    static_cast<Corpse*>(pCorpse)->loot.gold = float2int32(gold);
+    static_cast<Corpse*>(pCorpse)->loot.gold = Util::float2int32(gold);
 }
 
 void AlteracValley::EventUpdateResources()

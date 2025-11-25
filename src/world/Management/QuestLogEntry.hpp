@@ -1,15 +1,19 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include <Database/Field.hpp>
-#include "Server/EventableObject.h"
-#include "Management/Quest.h"
-#include "Objects/Units/Players/Player.hpp"
-#include "Server/Script/ScriptMgr.h"
+#include "CommonTypes.hpp"
+#include <set>
+
+class QueryBuffer;
+class Field;
+class QuestScript;
+class Unit;
+class Player;
+struct QuestProperties;
 
 enum QuestLogState : uint32_t
 {
@@ -19,7 +23,7 @@ enum QuestLogState : uint32_t
     QLS_ObjectiveCompleted = 0x01000000
 };
 
-class SERVER_DECL QuestLogEntry : public EventableObject
+class SERVER_DECL QuestLogEntry
 {
     friend class QuestMgr;
 
@@ -65,7 +69,6 @@ public:
     QuestScript* getQuestScript() const;
 
 private:
-
     uint8_t m_slot = 0;
     uint32_t m_state = 0;
     uint32_t m_mobcount[4] = {0};

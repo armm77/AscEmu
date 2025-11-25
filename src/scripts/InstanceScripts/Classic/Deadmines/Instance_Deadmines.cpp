@@ -1,12 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Instance_Deadmines.h"
-#include <Objects/Units/Creatures/Pet.h>
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Creatures/Pet.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Objects/Units/Players/Player.hpp"
 
 class DeadminesInstanceScript : public InstanceScript
 {
@@ -267,7 +271,7 @@ public:
         if (pTarget->isPlayer())
             sprintf(msg, "And stay down, %s.", dynamic_cast<Player*>(pTarget)->getName().c_str());
         else if (pTarget->GetTypeFromGUID() == HIGHGUID_TYPE_PET)
-            sprintf(msg, "And stay down, %s.", dynamic_cast<Pet*>(pTarget)->GetName().c_str());
+            sprintf(msg, "And stay down, %s.", dynamic_cast<Pet*>(pTarget)->getName().c_str());
 
         sendChatMessage(CHAT_MSG_MONSTER_YELL, 5781, msg);
     }

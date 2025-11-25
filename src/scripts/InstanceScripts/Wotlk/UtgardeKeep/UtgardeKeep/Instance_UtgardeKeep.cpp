@@ -1,12 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 // \todo Ingvar the Plunderer - Ressurection Event, Fix despawn(i think all bosses), Add sound ID's
-#include "Setup.h"
 #include "Instance_UtgardeKeep.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
 
 class UtgardeKeepScript : public InstanceScript
 {
@@ -441,7 +445,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new DalronnTheControllerAI(c); }
     explicit DalronnTheControllerAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
         {
             addAISpell(SHADOW_BOLT_HC, 85.0f, TARGET_RANDOM_SINGLE, 2, 3);
             addAISpell(DEBILITATE, 25.0f, TARGET_RANDOM_SINGLE, 0, 12);
@@ -548,7 +552,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new DalronnTheControllerGhostAI(c); }
     explicit DalronnTheControllerGhostAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
         {
             addAISpell(SHADOW_BOLT_HC, 85.0f, TARGET_RANDOM_SINGLE, 2, 3);
             addAISpell(DEBILITATE, 25.0f, TARGET_RANDOM_SINGLE, 0, 12);
@@ -579,7 +583,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new PrinceKelesethAI(c); }
     explicit PrinceKelesethAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
             addAISpell(KELESETH_SHADOW_BOLT_HC, 100.0f, TARGET_ATTACKING, 2, 2);
         else
             addAISpell(KELESETH_SHADOW_BOLT, 100.0f, TARGET_ATTACKING, 2, 2);
@@ -631,7 +635,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new SkeletonAddAI(c); }
     explicit SkeletonAddAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
             addAISpell(DECREPIFY_HC, 8.0f, TARGET_ATTACKING, 0, 40);
         else
             addAISpell(DECREPIFY, 8.0f, TARGET_ATTACKING, 0, 40);
@@ -666,7 +670,7 @@ public:
     {
         addAISpell(INGVAR_CLEAVE, 24.0f, TARGET_ATTACKING, 0, 6);
 
-        if (_isHeroic())
+        if (isHeroic())
         {
             addAISpell(INGVAR_ENRAGE_HC, 45.0f, TARGET_SELF, 0, 4);
             addAISpell(INGVAR_SMASH_HC, 25.0f, TARGET_SELF, 3, 18);
@@ -702,7 +706,7 @@ public:
     {
         addAISpell(INGVAR_DARK_SMASH, 12.0f, TARGET_SELF, 3, 16);
 
-        if (_isHeroic())
+        if (isHeroic())
         {
             addAISpell(INGVAR_DREADFUL_ROAR, 25.0f, TARGET_SELF, 2, 10);
             addAISpell(INGVAR_WOE_STRIKE, 18.0f, TARGET_ATTACKING, 0, 16);

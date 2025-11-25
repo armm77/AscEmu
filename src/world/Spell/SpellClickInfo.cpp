@@ -1,11 +1,9 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "SpellClickInfo.hpp"
-
-#include "Management/Faction.h"
 #include "Management/Group.h"
 #include "Objects/Units/Players/Player.hpp"
 #include "Objects/Units/Unit.hpp"
@@ -28,7 +26,7 @@ bool SpellClickInfo::isFitToRequirements(Unit* clicker, Unit* clickee) const
     switch (userType)
     {
         case SPELL_CLICK_USER_FRIEND:
-            if (!isFriendly(playerClicker, summoner))
+            if (!playerClicker->isFriendlyTo(summoner))
                 return false;
             break;
         case SPELL_CLICK_USER_RAID:

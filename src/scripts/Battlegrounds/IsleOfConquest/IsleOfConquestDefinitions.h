@@ -1,9 +1,17 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
+#include "AEVersion.hpp"
+
+#ifdef FT_VEHICLES
+#include "Objects/Units/Creatures/Vehicle.hpp"
+#endif
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/PlayerDefines.hpp"
 
 enum
 {

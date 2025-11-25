@@ -1,14 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Logging/Logger.hpp"
+#include <algorithm>
 #include <iostream>
-#include <chrono>
-#include <map>
 #include <vector>
 #include <queue>
 
@@ -25,10 +23,8 @@ public:
             std::make_heap(this->c.begin(), this->c.end(), this->comp);
             return true;
         }
-        else 
-        {
-            return false;
-        }
+
+        return false;
     }
 };
 
@@ -45,13 +41,10 @@ public:
             std::make_heap(this->c.begin(), this->c.end(), this->comp);
             return true;
         }
-        else
-        {
-            return false;
-        }
+
+        return false;
     }
 };
-
 
 class UniqueNumberPool
 {
@@ -76,30 +69,28 @@ public:
 
     int32_t generateId()
     {
-        if (freeIds.size())
+        if (!freeIds.empty())
         {
-            int32_t id = freeIds.top();
+            const int32_t id = freeIds.top();
             freeIds.pop();
             usedIds.push_back(id);
             return id;
         }
-        else
-        {
-            auto error = abs(min) + abs(max);
-            sLogger.failure("We run out of Available Unique Ids will return %i \n", error);
-            return error;
-        }
+
+        const auto error = abs(min) + abs(max);
+        std::cout << "We run out of Available Unique Ids will return " << error << " \n";
+        return error;
     }
 
     void freeUsedId(int32_t id)
     {
         if (id < min || id > max)
         {
-            sLogger.failure("Tried to free Id %i but is not in range of min %i and max %i \n", id, min, max);
+            std::cout << "Tried to free Id " << id << " but is not in range of min " << min << " and max " << max << " \n";
             return;
         }
 
-        usedIds.erase(std::remove(usedIds.begin(), usedIds.end(), id), usedIds.end());
+        usedIds.erase(std::ranges::remove(usedIds, id).begin(), usedIds.end());
         freeIds.emplace(id);
     }
 

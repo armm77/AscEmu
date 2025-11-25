@@ -1,14 +1,26 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
-#include "Chat/ChatHandler.hpp"
+#include "Chat/ChatCommandHandler.hpp"
+#include "Management/AchievementMgr.h"
+#include "Management/QuestProperties.hpp"
+#include "Objects/GameObjectProperties.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Spell/SpellInfo.hpp"
+#include "Spell/SpellMgr.hpp"
 #include "Storage/MySQLDataStore.hpp"
 #include "Storage/MySQLStructures.h"
-#include "Spell/SpellMgr.hpp"
-#include "Util/Strings.hpp"
+#include "Storage/WDB/WDBStores.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Strings.hpp"
+#include "Management/ItemInterface.h"
+
+#if VERSION_STRING < Cata
+#include "Server/World.h"
+#endif
 
 //.lookup achievement
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -20,7 +32,7 @@ This file is released under the MIT license. See README-MIT for more information
 //.lookup achievement criteria string : searches for "string" in achievement criteria name
 //.lookup achievement all string : searches for "string" in achievement name, description, reward, and critiera
 //////////////////////////////////////////////////////////////////////////////////////////
-bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* args, [[maybe_unused]]WorldSession* m_session)
+bool ChatCommandHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* args, [[maybe_unused]]WorldSession* m_session)
 {
 #if VERSION_STRING > TBC
     if (!*args)
@@ -28,29 +40,34 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 
     std::string x;
     bool lookupname = true, lookupdesc = false, lookupcriteria = false, lookupreward = false;
-    if (strnicmp(args, "name ", 5) == 0)
+    std::string name(args, 5);
+    std::string desc(args, 5);
+    std::string criteria(args, 9);
+    std::string reward(args, 7);
+    std::string all(args, 4);
+    if (AscEmu::Util::Strings::isEqual(name, "name "))
     {
         x = std::string(args + 5);
     }
-    else if (strnicmp(args, "desc ", 5) == 0)
+    else if (AscEmu::Util::Strings::isEqual(desc, "desc "))
     {
         lookupname = false;
         lookupdesc = true;
         x = std::string(args + 5);
     }
-    else if (strnicmp(args, "criteria ", 9) == 0)
+    else if (AscEmu::Util::Strings::isEqual(criteria, "criteria "))
     {
         lookupname = false;
         lookupcriteria = true;
         x = std::string(args + 9);
     }
-    else if (strnicmp(args, "reward ", 7) == 0)
+    else if (AscEmu::Util::Strings::isEqual(reward, "reward "))
     {
         lookupname = false;
         lookupreward = true;
         x = std::string(args + 7);
     }
-    else if (strnicmp(args, "all ", 4) == 0)
+    else if (AscEmu::Util::Strings::isEqual(all, "all "))
     {
         lookupdesc = true;
         lookupcriteria = true;
@@ -64,25 +81,25 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 
     if (x.length() < 4)
     {
-        RedSystemMessage(m_session, "Your search string must be at least 4 characters long.");
+        redSystemMessage(m_session, "Your search string must be at least 4 characters long.");
         return true;
     }
 
     AscEmu::Util::Strings::toLowerCase(x);
-    GreenSystemMessage(m_session, "Starting search of achievement `%s`...", x.c_str());
+    greenSystemMessage(m_session, "Starting search of achievement `{}`...", x);
     auto startTime = Util::TimeNow();
-    uint32 i, j, numFound = 0;
+    uint32_t i, j, numFound = 0;
     std::string y, recout;
     char playerGUID[17];
     snprintf(playerGUID, 17, "%llu", m_session->GetPlayer()->getGuid());
     if (lookupname || lookupdesc || lookupreward)
     {
-        std::set<uint32> foundList;
-        j = sAchievementStore.GetNumRows();
+        std::set<uint32_t> foundList;
+        j = sAchievementStore.getNumRows();
         bool foundmatch;
         for (i = 0; i < j && numFound < 25; ++i)
         {
-            auto achievement = sAchievementStore.LookupEntry(i);
+            auto achievement = sAchievementStore.lookupEntry(i);
             if (achievement)
             {
                 if (foundList.find(achievement->ID) != foundList.end())
@@ -96,7 +113,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 #if VERSION_STRING < Cata
                     y = std::string(achievement->name[sWorld.getDbcLocaleLanguageId()]);
 #else
-                    y = std::string(achievement->name);
+                    y = std::string(achievement->name[0]);
 #endif
                     AscEmu::Util::Strings::toLowerCase(y);
                     foundmatch = AscEmu::Util::Strings::contains(x, y);
@@ -106,7 +123,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 #if VERSION_STRING < Cata
                     y = std::string(achievement->description[sWorld.getDbcLocaleLanguageId()]);
 #else
-                    y = std::string(achievement->description);
+                    y = std::string(achievement->description[0]);
 #endif
                     AscEmu::Util::Strings::toLowerCase(y);
                     foundmatch = AscEmu::Util::Strings::contains(x, y);
@@ -116,7 +133,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 #if VERSION_STRING < Cata
                     y = std::string(achievement->rewardName[sWorld.getDbcLocaleLanguageId()]);
 #else
-                    y = std::string(achievement->rewardName);
+                    y = std::string(achievement->rewardName[0]);
 #endif
                     AscEmu::Util::Strings::toLowerCase(y);
                     foundmatch = AscEmu::Util::Strings::contains(x, y);
@@ -135,7 +152,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
                 recout += strm.str();
                 recout += ":";
                 recout += playerGUID;
-                time_t completetime = m_session->GetPlayer()->getAchievementMgr().GetCompletedTime(achievement);
+                time_t completetime = m_session->GetPlayer()->getAchievementMgr()->getCompletedTime(achievement);
                 if (completetime)
                 {
                     // achievement is completed
@@ -153,7 +170,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 #if VERSION_STRING < Cata
                 recout += achievement->name[sWorld.getDbcLocaleLanguageId()];
 #else
-                recout += achievement->name;
+                recout += achievement->name[0];
 #endif
                 if (!lookupreward)
                 {
@@ -165,7 +182,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 #if VERSION_STRING < Cata
                     recout += achievement->rewardName[sWorld.getDbcLocaleLanguageId()];
 #else
-                    recout += achievement->rewardName;
+                    recout += achievement->rewardName[0];
 #endif
                     recout += "|r";
                 }
@@ -173,7 +190,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
                 SendMultilineMessage(m_session, recout.c_str());
                 if (++numFound >= 25)
                 {
-                    RedSystemMessage(m_session, "More than 25 results found.");
+                    redSystemMessage(m_session, "More than 25 results found.");
                     break;
                 }
             }
@@ -181,11 +198,11 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
     } // lookup name or description
     if (lookupcriteria && numFound < 25)
     {
-        std::set<uint32> foundList;
-        j = sAchievementCriteriaStore.GetNumRows();
+        std::set<uint32_t> foundList;
+        j = sAchievementCriteriaStore.getNumRows();
         for (i = 0; i < j && numFound < 25; ++i)
         {
-            auto criteria = sAchievementCriteriaStore.LookupEntry(i);
+            auto criteria = sAchievementCriteriaStore.lookupEntry(i);
             if (criteria)
             {
                 if (foundList.find(criteria->ID) != foundList.end())
@@ -196,7 +213,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 #if VERSION_STRING < Cata
                 y = std::string(criteria->name[sWorld.getDbcLocaleLanguageId()]);
 #else
-                y = std::string(criteria->name);
+                y = std::string(criteria->name[0]);
 #endif
                 AscEmu::Util::Strings::toLowerCase(y);
                 if (AscEmu::Util::Strings::contains(x, y) == false)
@@ -213,10 +230,10 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 #if VERSION_STRING < Cata
                 recout += criteria->name[sWorld.getDbcLocaleLanguageId()];
 #else
-                recout += criteria->name;
+                recout += criteria->name[0];
 #endif
                 strm.str("");
-                auto achievement = sAchievementStore.LookupEntry(criteria->referredAchievement);
+                auto achievement = sAchievementStore.lookupEntry(criteria->referredAchievement);
                 if (achievement)
                 {
                     // create achievement link
@@ -227,7 +244,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
                     recout += strm.str();
                     recout += ":";
                     recout += playerGUID;
-                    time_t completetime = m_session->GetPlayer()->getAchievementMgr().GetCompletedTime(achievement);
+                    time_t completetime = m_session->GetPlayer()->getAchievementMgr()->getCompletedTime(achievement);
                     if (completetime)
                     {
                         // achievement is completed
@@ -245,7 +262,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 #if VERSION_STRING < Cata
                     recout += achievement->name[sWorld.getDbcLocaleLanguageId()];
 #else
-                    recout += achievement->name;
+                    recout += achievement->name[0];
 #endif
                     if (!lookupreward)
                     {
@@ -257,7 +274,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
 #if VERSION_STRING < Cata
                         recout += achievement->rewardName[sWorld.getDbcLocaleLanguageId()];
 #else
-                        recout += achievement->rewardName;
+                        recout += achievement->rewardName[0];
 #endif
                         recout += "|r";
                     }
@@ -266,7 +283,7 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
                 SendMultilineMessage(m_session, recout.c_str());
                 if (++numFound >= 25)
                 {
-                    RedSystemMessage(m_session, "More than 25 results found.");
+                    redSystemMessage(m_session, "More than 25 results found.");
                     break;
                 }
             }
@@ -277,13 +294,13 @@ bool ChatHandler::HandleLookupAchievementCommand([[maybe_unused]]const char* arg
         recout = "|cff00ccffNo matches found.";
         SendMultilineMessage(m_session, recout.c_str());
     }
-    BlueSystemMessage(m_session, "Search completed in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    blueSystemMessage(m_session, "Search completed in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
 #endif
     return true;
 }
 
 //.lookup creature
-bool ChatHandler::HandleLookupCreatureCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleLookupCreatureCommand(const char* args, WorldSession* m_session)
 {
     if (!*args)
         return false;
@@ -292,14 +309,14 @@ bool ChatHandler::HandleLookupCreatureCommand(const char* args, WorldSession* m_
     AscEmu::Util::Strings::toLowerCase(x);
     if (x.length() < 4)
     {
-        RedSystemMessage(m_session, "Your search string must be at least 4 characters long.");
+        redSystemMessage(m_session, "Your search string must be at least 4 characters long.");
         return true;
     }
 
-    BlueSystemMessage(m_session, "Starting search of creature `%s`...", x.c_str());
+    blueSystemMessage(m_session, "Starting search of creature `{}`...", x);
     auto startTime = Util::TimeNow();
 
-    uint32 count = 0;
+    uint32_t count = 0;
 
     MySQLDataStore::CreaturePropertiesContainer const* its = sMySQLStore.getCreaturePropertiesStore();
     for (MySQLDataStore::CreaturePropertiesContainer::const_iterator itr = its->begin(); itr != its->end(); ++itr)
@@ -320,12 +337,12 @@ bool ChatHandler::HandleLookupCreatureCommand(const char* args, WorldSession* m_
             std::string names_lower = it->lowercase_name;
             if (AscEmu::Util::Strings::contains(x, names_lower) || localizedFound)
             {
-                SystemMessage(m_session, "ID: %u |cfffff000%s", it->Id, it->Name.c_str());
+                systemMessage(m_session, "ID: {} {}{}", it->Id, MSG_COLOR_YELLOW, it->Name);
                 ++count;
 
                 if (count == 25)
                 {
-                    RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+                    redSystemMessage(m_session, "More than 25 results returned. aborting.");
                     break;
                 }
             }
@@ -333,14 +350,14 @@ bool ChatHandler::HandleLookupCreatureCommand(const char* args, WorldSession* m_
     }
 
     if (count == 0)
-        RedSystemMessage(m_session, "No results returned. aborting.");
+        redSystemMessage(m_session, "No results returned. aborting.");
 
-    BlueSystemMessage(m_session, "Search completed in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    blueSystemMessage(m_session, "Search completed in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
     return true;
 }
 
 //.lookup faction
-bool ChatHandler::HandleLookupFactionCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleLookupFactionCommand(const char* args, WorldSession* m_session)
 {
     if (!*args)
         return false;
@@ -349,22 +366,22 @@ bool ChatHandler::HandleLookupFactionCommand(const char* args, WorldSession* m_s
     AscEmu::Util::Strings::toLowerCase(x);
     if (x.length() < 4)
     {
-        RedSystemMessage(m_session, "Your search string must be at least 4 characters long.");
+        redSystemMessage(m_session, "Your search string must be at least 4 characters long.");
         return true;
     }
 
-    GreenSystemMessage(m_session, "Starting search of faction `%s`...", x.c_str());
+    greenSystemMessage(m_session, "Starting search of faction `{}`...", x);
     auto startTime = Util::TimeNow();
-    uint32 count = 0;
-    for (uint32 index = 0; index < sFactionStore.GetNumRows(); ++index)
+    uint32_t count = 0;
+    for (uint32_t index = 0; index < sFactionStore.getNumRows(); ++index)
     {
-        DBC::Structures::FactionEntry const* faction = sFactionStore.LookupEntry(index);
+        WDB::Structures::FactionEntry const* faction = sFactionStore.lookupEntry(index);
         if (faction != nullptr)
         {
 #if VERSION_STRING < Cata
             std::string y = std::string(faction->Name[sWorld.getDbcLocaleLanguageId()]);
 #else
-            std::string y = std::string(faction->Name);
+            std::string y = std::string(faction->Name[0]);
 #endif
             AscEmu::Util::Strings::toLowerCase(y);
             if (AscEmu::Util::Strings::contains(x, y))
@@ -372,24 +389,50 @@ bool ChatHandler::HandleLookupFactionCommand(const char* args, WorldSession* m_s
 #if VERSION_STRING < Cata
                 SendHighlightedName(m_session, "Faction", faction->Name[sWorld.getDbcLocaleLanguageId()], y, x, faction->ID);
 #else
-                SendHighlightedName(m_session, "Faction", faction->Name, y, x, faction->ID);
+                SendHighlightedName(m_session, "Faction", faction->Name[0], y, x, faction->ID);
 #endif
                 ++count;
                 if (count == 25)
                 {
-                    RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+                    redSystemMessage(m_session, "More than 25 results returned. aborting.");
                     break;
                 }
             }
         }
     }
 
-    GreenSystemMessage(m_session, "Search completed in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    greenSystemMessage(m_session, "Search completed in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
     return true;
 }
 
+void ChatCommandHandler::sendItemLinkToPlayer(ItemProperties const* iProto, WorldSession* pSession, bool ItemCount, Player* owner, uint32_t language)
+{
+    if (!iProto || !pSession)
+        return;
+
+    if (ItemCount && owner == NULL)
+        return;
+
+    if (ItemCount)
+    {
+        int8_t count = static_cast<int8_t>(owner->getItemInterface()->GetItemCount(iProto->ItemId, true));
+        //int8_t slot = owner->getItemInterface()->GetInventorySlotById(iProto->ItemId); //DISABLED due to being a retarded concept
+        if (iProto->ContainerSlots > 0)
+            systemMessage(pSession, "Item {} {} Count {} ContainerSlots {}", iProto->ItemId, sMySQLStore.getItemLinkByProto(iProto, language), count, iProto->ContainerSlots);
+        else
+            systemMessage(pSession, "Item {} {} Count {}", iProto->ItemId, sMySQLStore.getItemLinkByProto(iProto, language), count);
+    }
+    else
+    {
+        if (iProto->ContainerSlots > 0)
+            systemMessage(pSession, "Item {} {} ContainerSlots {}", iProto->ItemId, sMySQLStore.getItemLinkByProto(iProto, language), iProto->ContainerSlots);
+        else
+            systemMessage(pSession, "Item {} {}", iProto->ItemId, sMySQLStore.getItemLinkByProto(iProto, language));
+    }
+}
+
 //.lookup item
-bool ChatHandler::HandleLookupItemCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleLookupItemCommand(const char* args, WorldSession* m_session)
 {
     if (!*args)
         return false;
@@ -398,14 +441,14 @@ bool ChatHandler::HandleLookupItemCommand(const char* args, WorldSession* m_sess
     AscEmu::Util::Strings::toLowerCase(x);
     if (x.length() < 4)
     {
-        RedSystemMessage(m_session, "Your search string must be at least 4 characters long.");
+        redSystemMessage(m_session, "Your search string must be at least 4 characters long.");
         return true;
     }
 
-    BlueSystemMessage(m_session, "Starting search of item `%s`...", x.c_str());
+    blueSystemMessage(m_session, "Starting search of item `{}`...", x);
     auto startTime = Util::TimeNow();
 
-    uint32 count = 0;
+    uint32_t count = 0;
 
     MySQLDataStore::ItemPropertiesContainer const* its = sMySQLStore.getItemPropertiesStore();
     for (MySQLDataStore::ItemPropertiesContainer::const_iterator itr = its->begin(); itr != its->end(); ++itr)
@@ -427,25 +470,25 @@ bool ChatHandler::HandleLookupItemCommand(const char* args, WorldSession* m_sess
         std::string proto_lower = it->lowercase_name;
         if (AscEmu::Util::Strings::contains(x, proto_lower) || localizedFound)
         {
-            SendItemLinkToPlayer(it, m_session, false, 0, localizedFound ? m_session->language : 0);
+            sendItemLinkToPlayer(it, m_session, false, 0, localizedFound ? m_session->language : 0);
             ++count;
             if (count == 25)
             {
-                RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+                redSystemMessage(m_session, "More than 25 results returned. aborting.");
                 break;
             }
         }
     }
 
     if (count == 0)
-        RedSystemMessage(m_session, "No results returned. aborting.");
+        redSystemMessage(m_session, "No results returned. aborting.");
 
-    BlueSystemMessage(m_session, "Search completed in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    blueSystemMessage(m_session, "Search completed in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
     return true;
 }
 
 //.lookup object
-bool ChatHandler::HandleLookupObjectCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleLookupObjectCommand(const char* args, WorldSession* m_session)
 {
     if (!*args)
         return false;
@@ -453,10 +496,10 @@ bool ChatHandler::HandleLookupObjectCommand(const char* args, WorldSession* m_se
     std::string x = std::string(args);
     AscEmu::Util::Strings::toLowerCase(x);
 
-    GreenSystemMessage(m_session, "Starting search of object `%s`...", x.c_str());
+    greenSystemMessage(m_session, "Starting search of object `{}`...", x);
     auto startTime = Util::TimeNow();
     GameObjectProperties const* gameobject_info;
-    uint32 count = 0;
+    uint32_t count = 0;
     std::string y;
     std::string recout;
 
@@ -484,7 +527,7 @@ bool ChatHandler::HandleLookupObjectCommand(const char* args, WorldSession* m_se
             ++count;
             if (count == 25 || count > 25)
             {
-                RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+                redSystemMessage(m_session, "More than 25 results returned. aborting.");
                 break;
             }
         }
@@ -496,12 +539,12 @@ bool ChatHandler::HandleLookupObjectCommand(const char* args, WorldSession* m_se
         SendMultilineMessage(m_session, recout.c_str());
     }
 
-    BlueSystemMessage(m_session, "Search completed in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    blueSystemMessage(m_session, "Search completed in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
     return true;
 }
 
 //.lookup quest
-bool ChatHandler::HandleLookupQuestCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleLookupQuestCommand(const char* args, WorldSession* m_session)
 {
     if (!*args)
         return false;
@@ -510,14 +553,14 @@ bool ChatHandler::HandleLookupQuestCommand(const char* args, WorldSession* m_ses
     AscEmu::Util::Strings::toLowerCase(search_string);
     if (search_string.length() < 4)
     {
-        RedSystemMessage(m_session, "Your search string must be at least 4 characters long.");
+        redSystemMessage(m_session, "Your search string must be at least 4 characters long.");
         return true;
     }
 
-    BlueSystemMessage(m_session, "Starting search of quests `%s`...", search_string.c_str());
+    blueSystemMessage(m_session, "Starting search of quests `{}`...", search_string.c_str());
     auto startTime = Util::TimeNow();
     std::string recout;
-    uint32 count = 0;
+    uint32_t count = 0;
 
     MySQLDataStore::QuestPropertiesContainer const* its = sMySQLStore.getQuestPropertiesStore();
     for (MySQLDataStore::QuestPropertiesContainer::const_iterator itr = its->begin(); itr != its->end(); ++itr)
@@ -541,14 +584,14 @@ bool ChatHandler::HandleLookupQuestCommand(const char* args, WorldSession* m_ses
 
         if (AscEmu::Util::Strings::contains(search_string, lower_quest_title) || localizedFound)
         {
-            std::string questid = MyConvertIntToString(quest->id);
+            std::string questid = std::to_string(quest->id);
             std::string questtitle = localizedFound ? (li ? li->title : "") : quest->title;
             // send quest link
             recout = questid;
             recout += ": |cff00ccff|Hquest:";
             recout += questid;
             recout += ":";
-            recout += MyConvertIntToString(quest->min_level);
+            recout += std::to_string(quest->min_level);
             recout += "|h[";
             recout += questtitle;
             recout += "]|h|r";
@@ -557,7 +600,7 @@ bool ChatHandler::HandleLookupQuestCommand(const char* args, WorldSession* m_ses
             ++count;
             if (count == 25)
             {
-                RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+                redSystemMessage(m_session, "More than 25 results returned. aborting.");
                 break;
             }
         }
@@ -569,13 +612,13 @@ bool ChatHandler::HandleLookupQuestCommand(const char* args, WorldSession* m_ses
         SendMultilineMessage(m_session, recout.c_str());
     }
 
-    BlueSystemMessage(m_session, "Search completed in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    blueSystemMessage(m_session, "Search completed in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
 
     return true;
 }
 
 //.lookup spell
-bool ChatHandler::HandleLookupSpellCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleLookupSpellCommand(const char* args, WorldSession* m_session)
 {
     if (!*args)
         return false;
@@ -584,13 +627,13 @@ bool ChatHandler::HandleLookupSpellCommand(const char* args, WorldSession* m_ses
     AscEmu::Util::Strings::toLowerCase(x);
     if (x.length() < 4)
     {
-        RedSystemMessage(m_session, "Your search string must be at least 4 characters long.");
+        redSystemMessage(m_session, "Your search string must be at least 4 characters long.");
         return true;
     }
 
-    GreenSystemMessage(m_session, "Starting search of spell `%s`...", x.c_str());
+    greenSystemMessage(m_session, "Starting search of spell `{}`...", x);
     auto startTime = Util::TimeNow();
-    uint32 count = 0;
+    uint32_t count = 0;
     std::string recout;
     char itoabuf[12];
     for (auto it = sSpellMgr.getSpellInfoMap()->begin(); it != sSpellMgr.getSpellInfoMap()->end(); ++it)
@@ -619,18 +662,18 @@ bool ChatHandler::HandleLookupSpellCommand(const char* args, WorldSession* m_ses
             ++count;
             if (count == 25)
             {
-                RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+                redSystemMessage(m_session, "More than 25 results returned. aborting.");
                 break;
             }
         }
     }
 
-    GreenSystemMessage(m_session, "Search completed in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    greenSystemMessage(m_session, "Search completed in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
     return true;
 }
 
 //.lookup skill
-bool ChatHandler::HandleLookupSkillCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleLookupSkillCommand(const char* args, WorldSession* m_session)
 {
     if (!*args)
         return false;
@@ -639,23 +682,23 @@ bool ChatHandler::HandleLookupSkillCommand(const char* args, WorldSession* m_ses
     AscEmu::Util::Strings::toLowerCase(x);
     if (x.length() < 4)
     {
-        RedSystemMessage(m_session, "Your search string must be at least 4 characters long.");
+        redSystemMessage(m_session, "Your search string must be at least 4 characters long.");
         return true;
     }
 
-    GreenSystemMessage(m_session, "Starting search of skill `%s`...", x.c_str());
+    greenSystemMessage(m_session, "Starting search of skill `{}`...", x);
     auto startTime = Util::TimeNow();
-    uint32 count = 0;
-    for (uint32 index = 0; index < sSkillLineStore.GetNumRows(); ++index)
+    uint32_t count = 0;
+    for (uint32_t index = 0; index < sSkillLineStore.getNumRows(); ++index)
     {
-        auto skill_line = sSkillLineStore.LookupEntry(index);
+        auto skill_line = sSkillLineStore.lookupEntry(index);
         if (skill_line == nullptr)
             continue;
 
 #if VERSION_STRING < Cata
         std::string y = std::string(skill_line->Name[sWorld.getDbcLocaleLanguageId()]);
 #else
-        std::string y = std::string(skill_line->Name);
+        std::string y = std::string(skill_line->Name[0]);
 #endif
         AscEmu::Util::Strings::toLowerCase(y);
         if (AscEmu::Util::Strings::contains(x, y))
@@ -663,17 +706,17 @@ bool ChatHandler::HandleLookupSkillCommand(const char* args, WorldSession* m_ses
 #if VERSION_STRING < Cata
             SendHighlightedName(m_session, "Skill", skill_line->Name[sWorld.getDbcLocaleLanguageId()], y, x, skill_line->id);
 #else
-            SendHighlightedName(m_session, "Skill", skill_line->Name, y, x, skill_line->id);
+            SendHighlightedName(m_session, "Skill", skill_line->Name[0], y, x, skill_line->id);
 #endif
             ++count;
             if (count == 25)
             {
-                RedSystemMessage(m_session, "More than 25 results returned. aborting.");
+                redSystemMessage(m_session, "More than 25 results returned. aborting.");
                 break;
             }
         }
     }
 
-    GreenSystemMessage(m_session, "Search completed in %u ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+    greenSystemMessage(m_session, "Search completed in {} ms.", static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
     return true;
 }

@@ -1,15 +1,19 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include <cstdint>
-#include <string>
+#include "CommonTypes.hpp"
 #include "GossipDefines.hpp"
-#include "Management/Quest.h"
-#include "Objects/Units/Players/Player.hpp"
+
+#include <cstdint>
+#include <map>
+#include <string>
+
+struct QuestProperties;
+class Player;
 
 class SERVER_DECL GossipMenu
 {

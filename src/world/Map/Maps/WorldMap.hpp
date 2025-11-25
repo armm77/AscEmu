@@ -1,20 +1,37 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Objects/Units/Creatures/Summons/SummonDefines.hpp"
-#include "Storage/MySQLStructures.h"
-#include "Storage/MySQLDataStore.hpp"
 #include "Map/Cells/CellHandler.hpp"
-#include "Management/WorldStatesHandler.h"
+#include "Management/WorldStatesHandler.hpp"
 #include "DynamicTree.h"
-#include "Map/Cells/TerrainMgr.hpp"
-#include "Threading/AEThread.h"
-#include "Storage/DBC/DBCStructures.hpp"
+#include "Server/EventableObject.h"
 
+#include <queue>
+#include <algorithm>
+
+#include "InstanceDefines.hpp"
+#include "Debugging/Errors.h"
+#include "Map/SpawnGroups.hpp"
+
+namespace AscEmu::Threading
+{
+    class AEThread;
+}
+
+namespace WDB::Structures
+{
+    struct SummonPropertiesEntry;
+    struct MapDifficulty;
+}
+
+class WorldSession;
+class ByteBuffer;
+class WorldPacket;
+class DynamicObject;
 template <typename T>
 class CellHandler;
 class InstanceScript;
@@ -33,6 +50,8 @@ class Summon;
 class InstanceMap;
 class CreatureGroup;
 enum LineOfSightChecks : uint8_t;
+enum SpawnObjectType;
+enum EnterState;
 
 struct CorpseInfo
 {
@@ -58,7 +77,7 @@ struct RespawnInfo
 
 struct CompareRespawnInfo
 {
-    bool operator()(RespawnInfo* a, RespawnInfo* b)
+    bool operator()(std::unique_ptr<RespawnInfo> const& a, std::unique_ptr<RespawnInfo> const& b)
     {
         if (a == b)
             return false;
@@ -85,22 +104,19 @@ inline bool operator==(const RespawnInfo& a, const RespawnInfo& b)
     return true;
 }
 
-class respawnQueue : public std::priority_queue<RespawnInfo*, std::vector<RespawnInfo*>, CompareRespawnInfo>
+class respawnQueue : public std::priority_queue<std::unique_ptr<RespawnInfo>, std::vector<std::unique_ptr<RespawnInfo>>, CompareRespawnInfo>
 {
 public:
-    bool remove(RespawnInfo* value)
+    bool remove(RespawnInfo const* value)
     {
-        auto it = std::find(this->c.begin(), this->c.end(), value);
+        auto it = std::find_if(this->c.begin(), this->c.end(), [value](std::unique_ptr<RespawnInfo> const& respawn) { return respawn.get() == value; });
         if (it != this->c.end())
         {
             this->c.erase(it);
             std::make_heap(this->c.begin(), this->c.end(), this->comp);
             return true;
         }
-        else
-        {
-            return false;
-        }
+
         return false;
     }
 
@@ -119,11 +135,11 @@ struct CompareTimeAndGuid
     }
 };
 
-typedef std::unordered_map<uint32_t, Player*> PlayerStorageMap;
+typedef std::unordered_map<uint32_t /*lowGUID*/, Player*> PlayerStorageMap;
 typedef std::vector<Creature*> CreaturesStorageMap;
-typedef std::unordered_map<uint32_t, Pet*> PetStorageMap;
+typedef std::unordered_map<uint32_t /*lowGUID*/, Pet*> PetStorageMap;
 typedef std::vector<GameObject*> GameObjectStorageMap;
-typedef std::unordered_map<uint32_t, DynamicObject*> DynamicObjectStorageMap;
+typedef std::unordered_map<uint32_t /*lowGUID*/, DynamicObject*> DynamicObjectStorageMap;
 typedef std::set<Transporter*> TransportsContainer;
 
 typedef std::set<Creature*> CreatureSet;
@@ -135,8 +151,8 @@ typedef std::set<Object*> UpdateQueue;
 typedef std::set<Player*> PUpdateQueue;
 
 typedef std::set<uint64_t> CombatProgressMap;
-typedef std::unordered_map<uint32_t, Creature*> CreatureSqlIdMap;
-typedef std::unordered_map<uint32_t, GameObject*> GameObjectSqlIdMap;
+typedef std::unordered_map<uint32_t /*lowGUID*/, Creature*> CreatureSqlIdMap;
+typedef std::unordered_map<uint32_t /*lowGUID*/, GameObject*> GameObjectSqlIdMap;
 
 class SERVER_DECL WorldMap : public CellHandler <MapCell>, public EventableObject, public WorldStatesHandler::WorldStatesObserver
 {
@@ -153,7 +169,7 @@ public:
 
     void startMapThread();
     void runThread();
-    void shutdownMapThread(bool killThreadOnly = false);
+    void shutdownMapThread();
     void unsafeKillMapThread();
     bool isMapReadyForDelete() const;
 
@@ -199,13 +215,15 @@ public:
     // Difficulty
     InstanceDifficulty::Difficulties getDifficulty() const { return InstanceDifficulty::Difficulties(getSpawnMode()); }
     bool isRegularDifficulty();
-    DBC::Structures::MapDifficulty const* getMapDifficulty();
+    WDB::Structures::MapDifficulty const* getMapDifficulty();
 
     // Area and Zone Management
     bool getAreaInfo(uint32_t phaseMask, LocationVector pos, uint32_t& mogpflags, int32_t& adtId, int32_t& rootId, int32_t& groupId);
     uint32_t getAreaId(uint32_t phaseMask, LocationVector const& pos);
     uint32_t getZoneId(uint32_t phaseMask, LocationVector const& pos);
     void getZoneAndAreaId(uint32_t phaseMask, uint32_t& zoneid, uint32_t& areaid, LocationVector const& pos);
+
+    void getFullTerrainStatusForPosition(uint32_t phaseId, float x, float y, float z, PositionFullTerrainStatus& data, uint8_t reqLiquidType, float collisionHeight) const;
 
     // Water
     ZLiquidStatus getLiquidStatus(uint32_t phaseMask, LocationVector pos, uint8_t ReqLiquidType, LiquidData* data = nullptr, float collisionHeight = 2.03128f);
@@ -218,23 +236,20 @@ public:
     bool getObjectHitPos(uint32_t phasemask, LocationVector pos1, LocationVector pos2, float& rx, float& ry, float& rz, float modifyDist);
 
     // Dynamic Map
-    DynamicMapTree getDynamicTree() const { return _dynamicTree; }
+    DynamicMapTree const& getDynamicTree() const { return _dynamicTree; }
     void balance() { _dynamicTree.balance(); }
     void removeGameObjectModel(GameObjectModel const& model) { _dynamicTree.remove(model); }
     void insertGameObjectModel(GameObjectModel const& model) { _dynamicTree.insert(model); }
     bool containsGameObjectModel(GameObjectModel const& model) const { return _dynamicTree.contains(model); }
-    float getGameObjectFloor(uint32_t phasemask, LocationVector pos, float maxSearchDist = 50.0f) const
-    {
-        return _dynamicTree.getHeight(pos.x, pos.y, pos.z, maxSearchDist, phasemask);
-    }
+    float getGameObjectFloor(uint32_t phasemask, LocationVector pos, float maxSearchDist = 50.0f) const;
 
     // Terrain
-    TerrainHolder* getTerrain() const { return _terrain; }
+    TerrainHolder* getTerrain() const { return _terrain.get(); }
     float getWaterOrGroundLevel(uint32_t phasemask, LocationVector const& pos, float* ground = nullptr, bool swim = false, float collisionHeight = 2.03128f);
     float getGridHeight(float x, float y) const;
     float getHeight(LocationVector const& pos, bool vmap = true, float maxSearchDist = 50.0f) const;
     // phasemask seems to be invalid when loading into a map                                                                                                                                                // phase
-    float getHeight(uint32_t phasemask, LocationVector const& pos, bool vmap = true, float maxSearchDist = 50.0f) const { return std::max<float>(getHeight(pos, vmap, maxSearchDist), getGameObjectFloor(phasemask, pos, maxSearchDist)); }
+    float getHeight(uint32_t phasemask, LocationVector const& pos, bool vmap = true, float maxSearchDist = 50.0f) const;
 
     // Instance
     uint32_t getInstanceId() const { return _instanceId; }
@@ -253,6 +268,7 @@ public:
     virtual void removeAllPlayers();
 
     // Creatures
+    CreatureSet::iterator creature_iterator;
     uint32_t m_CreatureHighGuid = 0;
     Creature* createCreature(uint32_t entry);
     Creature* createAndSpawnCreature(uint32_t pEntry, LocationVector pos);
@@ -262,12 +278,13 @@ public:
     Creature* getCreature(uint32_t guid);
     Creature* getSqlIdCreature(uint32_t sqlid);
 
-    std::unordered_map<uint32_t /*leaderSpawnId*/, CreatureGroup*> CreatureGroupHolder;
+    std::unordered_map<uint32_t /*leaderSpawnId*/, std::unique_ptr<CreatureGroup>> CreatureGroupHolder;
 
     // Pets
     Pet* getPet(uint32_t guid);
 
     // GameObject
+    ActiveGameObjectSet::iterator gameObject_iterator;
     uint32_t m_GOHighGuid = 0;
     GameObject* createGameObject(uint32_t entry);
     GameObject* createAndSpawnGameObject(uint32_t entryID, LocationVector pos, float scale = 1.0f, uint32_t spawnTime = 0);
@@ -283,7 +300,7 @@ public:
     DynamicObject* getDynamicObject(uint32_t guid);
 
     // Summons
-    Summon* summonCreature(uint32_t entry, LocationVector pos, DBC::Structures::SummonPropertiesEntry const* = nullptr, uint32_t duration = 0, Object* summoner = nullptr, uint32_t spellId = 0);
+    Summon* summonCreature(uint32_t entry, LocationVector pos, WDB::Structures::SummonPropertiesEntry const* = nullptr, uint32_t duration = 0, Object* summoner = nullptr, uint32_t spellId = 0);
 
     // Transports
     bool addToMapMgr(Transporter* obj);
@@ -317,7 +334,7 @@ public:
     void unloadCell(uint32_t x, uint32_t y);
     bool isCellActive(uint32_t x, uint32_t y);
 
-    void updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, ByteBuffer** buf);
+    void updateInRangeSet(Object* obj, Player* plObj, MapCell* cell, std::unique_ptr<ByteBuffer>& buf);
 
     void changeObjectLocation(Object* obj);
     void changeFarsightLocation(Player* plr, DynamicObject* farsight);
@@ -348,14 +365,12 @@ public:
 
     void unloadAllRespawnInfos();
 
-    void deleteRespawn(RespawnInfo* info);
+    void deleteRespawn(RespawnInfo const* info);
     void deleteRespawnFromDB(SpawnObjectType type, uint32_t spawnId);
 
     void processRespawns();
     bool checkRespawn(RespawnInfo* info);
     void doRespawn(SpawnObjectType type, Object* obj,uint32_t spawnId, float cellX, float cellY);
-
-    void getRespawnInfo(std::vector<RespawnInfo*>& respawnData, SpawnObjectTypeMask types) const;
     RespawnInfo* getRespawnInfo(SpawnObjectType type, uint32_t spawnId) const;
 
     respawnQueue _respawnTimes;
@@ -378,6 +393,9 @@ public:
     // Update Timers
     uint32_t m_lastTransportUpdateTimer = 0;
     uint32_t m_lastDynamicUpdateTimer = 0;
+    uint32_t m_lastPlayerUpdateTimer = 0;
+    uint32_t m_lastPetUpdateTimer = 0;
+    uint32_t m_lastCreatureUpdateTimer = 0;
     uint32_t m_lastGameObjectUpdateTimer = 0;
     uint32_t m_lastSessionUpdateTimer = 0;
     uint32_t m_lastRespawnUpdateTimer = 0;
@@ -417,10 +435,10 @@ private:
     bool m_terminateThread = false;
 
     WorldStatesHandler worldstateshandler;
-    MapScriptInterface* ScriptInterface;
+    std::unique_ptr<MapScriptInterface> ScriptInterface;
     bool m_unloadPending = false;
 
-    TerrainHolder* _terrain = nullptr;
+    std::unique_ptr<TerrainHolder> _terrain;
     uint32_t _instanceId;
     uint8_t _instanceSpawnMode = InstanceDifficulty::Difficulties::DUNGEON_NORMAL;
 

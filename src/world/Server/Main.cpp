@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -18,14 +18,14 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "Server/MainServerDefines.h"
 #include "Server/Master.h"
+#include "Debugging/CrashHandler.h"
+#include "ServerState.h"
+#include "Threading/LegacyThreadPool.h"
 
 #ifndef WIN32
 #include <sys/resource.h>
 #endif
-#include "CrashHandler.h"
-#include "ServerState.h"
 
 #ifndef WIN32
 int unix_main(int argc, char** argv)
@@ -45,7 +45,7 @@ int unix_main(int argc, char** argv)
     else
         exit(0);
 
-    return 0;// shouldn't be reached
+    return 0; // shouldn't be reached
 }
 
 #else

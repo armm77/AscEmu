@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2011 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,17 +18,21 @@
  */
 
 #include "Setup.h"
-#include "Map/Management/MapMgr.hpp"
-#include "Management/Faction.h"
-#include "Spell/SpellAuras.h"
-#include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.hpp"
-#include <Spell/Definitions/PowerType.hpp>
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Master.h"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Spell/Definitions/PowerType.hpp"
 
 bool HolyShock(uint8_t /*effectIndex*/, Spell* pSpell)
 {
     ///\todo This function returns true on failures (invalid target, invalid spell). Verify this is the correct return value
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
     if (target == nullptr)
     {
         return true;
@@ -42,7 +46,7 @@ bool HolyShock(uint8_t /*effectIndex*/, Spell* pSpell)
 
     uint32_t spell_id = 0;
 
-    if (isAttackable(caster, target))
+    if (caster->isValidAttackableTarget(target))
     {
         // Cast offensive Holy Shock
         switch (pSpell->getSpellInfo()->getId())
@@ -116,7 +120,7 @@ bool HolyShock(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool JudgementLightWisdomJustice(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
     if (target == nullptr)
     {
         return true;
@@ -248,7 +252,7 @@ bool RighteousDefense(uint8_t /*effectIndex*/, Spell* s)
 {
     //we will try to lure 3 enemies from our target
 
-    Unit* unitTarget = s->GetUnitTarget();
+    Unit* unitTarget = s->getUnitTarget();
 
     if (!unitTarget || !s->getUnitCaster())
         return false;

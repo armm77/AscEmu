@@ -1,13 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "CommonTypes.hpp"
+#include "AEVersion.hpp"
 #include "LocationVector.h"
-#include "WorldConf.h"
 
 // Do NOT extend the list, simply replace an unused value
 enum SpellImmunityMask : uint32_t
@@ -85,21 +84,22 @@ enum HealthAndPowerIntervals : uint16_t
 
 #if VERSION_STRING < WotLK
     REGENERATION_INTERVAL_MANA_ENERGY           = 2000,
-    REGENERATION_INTERVAL_RAGE_RUNIC_POWER      = 3000,
+    REGENERATION_INTERVAL_RAGE                  = 3000,
     REGENERATION_INTERVAL_FOCUS                 = 4000,
 #else
-    REGENERATION_INTERVAL_MANA_ENERGY           = 100,
-    REGENERATION_INTERVAL_RAGE_RUNIC_POWER      = 800,
-    REGENERATION_INTERVAL_FOCUS                 = 200,
-
+    REGENERATION_INTERVAL_POWER                 = 100,
     REGENERATION_PACKET_UPDATE_INTERVAL         = 2000,
 #endif
 
+#if VERSION_STRING >= Cata
     REGENERATION_INTERVAL_HOLY_POWER            = 10000,
+#endif
 
     // Creature timers
+#if VERSION_STRING < WotLK
     //\ todo: this actually is 4000 in retail classic, maybe same for tbc, but needs more research
     CREATURE_REGENERATION_INTERVAL_MANA_ENERGY  = 2000
+#endif
 };
 
 enum UnitBatchTimers : uint16_t
@@ -202,11 +202,11 @@ enum EnviromentalDamage : uint8_t
 
 enum DeathState
 {
-    ALIVE           = 0,    // Unit is alive and well
-    JUST_DIED       = 1,    // Unit has JUST died
-    CORPSE          = 2,    // Unit has died but remains in the world as a corpse
-    DEAD            = 3,    // Unit is dead and his corpse is gone from the world
-    JUST_RESPAWNED  = 4     // Unit has just Respawned
+    ALIVE               = 0,    // Unit is alive and well
+    JUST_DIED           = 1,    // Unit has JUST died
+    CORPSE              = 2,    // Unit has died but remains in the world as a corpse
+    DEAD                = 3,    // Unit is dead and his corpse is gone from the world
+    JUST_RESPAWNED      = 4     // Unit has just Respawned
 };
 
 enum Factions
@@ -543,195 +543,234 @@ enum TextEmoteType
     TEXTEMOTE_SWEAT             = 451,
 };
 
-enum EmoteType
+enum EmoteType : uint32_t
 {
-    EMOTE_ONESHOT_NONE                  = 0,
-    EMOTE_ONESHOT_TALK                  = 1, // DNR
-    EMOTE_ONESHOT_BOW                   = 2,
-    EMOTE_ONESHOT_WAVE                  = 3, // DNR
-    EMOTE_ONESHOT_CHEER                 = 4, // DNR
-    EMOTE_ONESHOT_EXCLAMATION           = 5, // DNR
-    EMOTE_ONESHOT_QUESTION              = 6,
-    EMOTE_ONESHOT_EAT                   = 7,
-    EMOTE_STATE_DANCE                   = 10,
-    EMOTE_ONESHOT_LAUGH                 = 11,
-    EMOTE_STATE_SLEEP                   = 12,
-    EMOTE_STATE_SIT                     = 13,
-    EMOTE_ONESHOT_RUDE                  = 14, // DNR
-    EMOTE_ONESHOT_ROAR                  = 15, // DNR
-    EMOTE_ONESHOT_KNEEL                 = 16,
-    EMOTE_ONESHOT_KISS                  = 17,
-    EMOTE_ONESHOT_CRY                   = 18,
-    EMOTE_ONESHOT_CHICKEN               = 19,
-    EMOTE_ONESHOT_BEG                   = 20,
-    EMOTE_ONESHOT_APPLAUD               = 21,
-    EMOTE_ONESHOT_SHOUT                 = 22, // DNR
-    EMOTE_ONESHOT_FLEX                  = 23,
-    EMOTE_ONESHOT_SHY                   = 24, // DNR
-    EMOTE_ONESHOT_POINT                 = 25, // DNR
-    EMOTE_STATE_STAND                   = 26,
-    EMOTE_STATE_READYUNARMED            = 27,
-    EMOTE_STATE_WORK_SHEATHED           = 28,
-    EMOTE_STATE_POINT                   = 29, // DNR
-    EMOTE_STATE_NONE                    = 30,
-    EMOTE_ONESHOT_WOUND                 = 33,
-    EMOTE_ONESHOT_WOUNDCRITICAL         = 34,
-    EMOTE_ONESHOT_ATTACKUNARMED         = 35,
-    EMOTE_ONESHOT_ATTACK1H              = 36,
-    EMOTE_ONESHOT_ATTACK2HTIGHT         = 37,
-    EMOTE_ONESHOT_ATTACK2HLOOSE         = 38,
-    EMOTE_ONESHOT_PARRYUNARMED          = 39,
-    EMOTE_ONESHOT_PARRYSHIELD           = 43,
-    EMOTE_ONESHOT_READYUNARMED          = 44,
-    EMOTE_ONESHOT_READY1H               = 45,
-    EMOTE_ONESHOT_READYBOW              = 48,
-    EMOTE_ONESHOT_SPELLPRECAST          = 50,
-    EMOTE_ONESHOT_SPELLCAST             = 51,
-    EMOTE_ONESHOT_BATTLEROAR            = 53,
-    EMOTE_ONESHOT_SPECIALATTACK1H       = 54,
-    EMOTE_ONESHOT_KICK                  = 60,
-    EMOTE_ONESHOT_ATTACKTHROWN          = 61,
-    EMOTE_STATE_STUN                    = 64,
-    EMOTE_STATE_DEAD                    = 65,
-    EMOTE_ONESHOT_SALUTE                = 66,
-    EMOTE_STATE_KNEEL                   = 68,
-    EMOTE_STATE_USESTANDING             = 69,
-    EMOTE_ONESHOT_WAVE_NOSHEATHE        = 70,
-    EMOTE_ONESHOT_CHEER_NOSHEATHE       = 71,
-    EMOTE_ONESHOT_EAT_NOSHEATHE         = 92,
-    EMOTE_STATE_STUN_NOSHEATHE          = 93,
-    EMOTE_ONESHOT_DANCE                 = 94,
-    EMOTE_ONESHOT_SALUTE_NOSHEATH       = 113,
-    EMOTE_STATE_USESTANDING_NOSHEATHE   = 133,
-    EMOTE_ONESHOT_LAUGH_NOSHEATHE       = 153,
-    EMOTE_STATE_WORK                    = 173,
-    EMOTE_STATE_SPELLPRECAST            = 193,
-    EMOTE_ONESHOT_READYRIFLE            = 213,
-    EMOTE_STATE_READYRIFLE              = 214,
-    EMOTE_STATE_WORK_MINING             = 233,
-    EMOTE_STATE_WORK_CHOPWOOD           = 234,
-    EMOTE_STATE_APPLAUD                 = 253,
-    EMOTE_ONESHOT_LIFTOFF               = 254,
-    EMOTE_ONESHOT_YES                   = 273, // DNR
-    EMOTE_ONESHOT_NO                    = 274, // DNR
-    EMOTE_ONESHOT_TRAIN                 = 275, // DNR
-    EMOTE_ONESHOT_LAND                  = 293,
-    EMOTE_STATE_AT_EASE                 = 313,
-    EMOTE_STATE_READY1H                 = 333,
-    EMOTE_STATE_SPELLKNEELSTART         = 353,
-    EMOTE_STATE_SUBMERGED               = 373,
-    EMOTE_ONESHOT_SUBMERGE              = 374,
-    EMOTE_STATE_READY2H                 = 375,
-    EMOTE_STATE_READYBOW                = 376,
-    EMOTE_ONESHOT_MOUNTSPECIAL          = 377,
-    EMOTE_STATE_TALK                    = 378,
-    EMOTE_STATE_FISHING                 = 379,
-    EMOTE_ONESHOT_FISHING               = 380,
-    EMOTE_ONESHOT_LOOT                  = 381,
-    EMOTE_STATE_WHIRLWIND               = 382,
-    EMOTE_STATE_DROWNED                 = 383,
-    EMOTE_STATE_HOLD_BOW                = 384,
-    EMOTE_STATE_HOLD_RIFLE              = 385,
-    EMOTE_STATE_HOLD_THROWN             = 386,
-    EMOTE_ONESHOT_DROWN                 = 387,
-    EMOTE_ONESHOT_STOMP                 = 388,
-    EMOTE_ONESHOT_ATTACKOFF             = 389,
-    EMOTE_ONESHOT_ATTACKOFFPIERCE       = 390,
-    EMOTE_STATE_ROAR                    = 391,
-    EMOTE_STATE_LAUGH                   = 392,
-    EMOTE_ONESHOT_CREATURE_SPECIAL      = 393,
-    EMOTE_ONESHOT_JUMPLANDRUN           = 394,
-    EMOTE_ONESHOT_JUMPEND               = 395,
-    EMOTE_ONESHOT_TALK_NOSHEATHE        = 396,
-    EMOTE_ONESHOT_POINT_NOSHEATHE       = 397,
-    EMOTE_STATE_CANNIBALIZE             = 398,
-    EMOTE_ONESHOT_JUMPSTART             = 399,
-    EMOTE_STATE_DANCESPECIAL            = 400,
-    EMOTE_ONESHOT_DANCESPECIAL          = 401,
-    EMOTE_ONESHOT_CUSTOMSPELL01         = 402,
-    EMOTE_ONESHOT_CUSTOMSPELL02         = 403,
-    EMOTE_ONESHOT_CUSTOMSPELL03         = 404,
-    EMOTE_ONESHOT_CUSTOMSPELL04         = 405,
-    EMOTE_ONESHOT_CUSTOMSPELL05         = 406,
-    EMOTE_ONESHOT_CUSTOMSPELL06         = 407,
-    EMOTE_ONESHOT_CUSTOMSPELL07         = 408,
-    EMOTE_ONESHOT_CUSTOMSPELL08         = 409,
-    EMOTE_ONESHOT_CUSTOMSPELL09         = 410,
-    EMOTE_ONESHOT_CUSTOMSPELL10         = 411,
-    EMOTE_STATE_EXCLAIM                 = 412,
-    EMOTE_STATE_DANCE_CUSTOM            = 413,
-    EMOTE_STATE_SIT_CHAIR_MED           = 415,
-    EMOTE_STATE_CUSTOM_SPELL_01         = 416,
-    EMOTE_STATE_CUSTOM_SPELL_02         = 417,
-    EMOTE_STATE_EAT                     = 418,
-    EMOTE_STATE_CUSTOM_SPELL_04         = 419,
-    EMOTE_STATE_CUSTOM_SPELL_03         = 420,
-    EMOTE_STATE_CUSTOM_SPELL_05         = 421,
-    EMOTE_STATE_SPELLEFFECT_HOLD        = 422,
-    EMOTE_STATE_EAT_NO_SHEATHE          = 423,
-    EMOTE_STATE_MOUNT                   = 424,
-    EMOTE_STATE_READY2HL                = 425,
-    EMOTE_STATE_SIT_CHAIR_HIGH          = 426,
-    EMOTE_STATE_FALL                    = 427,
-    EMOTE_STATE_LOOT                    = 428,
-    EMOTE_STATE_SUBMERGED_NEW           = 429, // NEW
-    EMOTE_ONESHOT_COWER                 = 430, // DNR
-    EMOTE_STATE_COWER                   = 431,
-    EMOTE_ONESHOT_USESTANDING           = 432,
-    EMOTE_STATE_STEALTH_STAND           = 433,
-    EMOTE_ONESHOT_OMNICAST_GHOUL        = 434, // W/SOUND
-    EMOTE_ONESHOT_ATTACKBOW             = 435,
-    EMOTE_ONESHOT_ATTACKRIFLE           = 436,
-    EMOTE_STATE_SWIM_IDLE               = 437,
-    EMOTE_STATE_ATTACK_UNARMED          = 438,
-    EMOTE_ONESHOT_SPELLCAST_W_SOUND     = 439,
-    EMOTE_ONESHOT_DODGE                 = 440,
-    EMOTE_ONESHOT_PARRY1H               = 441,
-    EMOTE_ONESHOT_PARRY2H               = 442,
-    EMOTE_ONESHOT_PARRY2HL              = 443,
-    EMOTE_STATE_FLYFALL                 = 444,
-    EMOTE_ONESHOT_FLYDEATH              = 445,
-    EMOTE_STATE_FLY_FALL                = 446,
-    EMOTE_ONESHOT_FLY_SIT_GROUND_DOWN   = 447,
-    EMOTE_ONESHOT_FLY_SIT_GROUND_UP     = 448,
-    EMOTE_ONESHOT_EMERGE                = 449,
-    EMOTE_ONESHOT_DRAGONSPIT            = 450,
-    EMOTE_STATE_SPECIALUNARMED          = 451,
-    EMOTE_ONESHOT_FLYGRAB               = 452,
-    EMOTE_STATE_FLYGRABCLOSED           = 453,
-    EMOTE_ONESHOT_FLYGRABTHROWN         = 454,
-    EMOTE_STATE_FLY_SIT_GROUND          = 455,
-    EMOTE_STATE_WALKBACKWARDS           = 456,
-    EMOTE_ONESHOT_FLYTALK               = 457,
-    EMOTE_ONESHOT_FLYATTACK1H           = 458,
-    EMOTE_STATE_CUSTOMSPELL08           = 459,
-    EMOTE_ONESHOT_FLY_DRAGONSPIT        = 460,
-    EMOTE_STATE_SIT_CHAIR_LOW           = 461,
-    EMOTE_ONE_SHOT_STUN                 = 462,
-    EMOTE_ONESHOT_SPELLCAST_OMNI        = 463,
-    EMOTE_STATE_READYTHROWN             = 465,
-    EMOTE_ONESHOT_WORK_CHOPWOOD         = 466,
-    EMOTE_ONESHOT_WORK_MINING           = 467,
-    EMOTE_STATE_SPELL_CHANNEL_OMNI      = 468,
-    EMOTE_STATE_SPELL_CHANNEL_DIRECTED  = 469,
-    EMOTE_STAND_STATE_NONE              = 470,
-    EMOTE_STATE_READYJOUST              = 471,
-    EMOTE_STATE_STRANGULATE             = 473,
-    EMOTE_STATE_READY_SPELL_OMNI        = 474,
-    EMOTE_STATE_HOLD_JOUST              = 475,
-    EMOTE_ONESHOT_CRY_JAINA             = 476,
-    EMOTE_ONESHOT_SPECIAL_UNARMED       = 477,
-    EMOTE_STATE_DANCE_NOSHEATHE         = 478,
-    EMOTE_ONESHOT_SNIFF                 = 479,
-    EMOTE_ONESHOT_DRAGONSTOMP           = 480,
-    EMOTE_ONESHOT_KNOCKDOWN             = 482,
-    EMOTE_STATE_READ                    = 483,
-    EMOTE_ONESHOT_FLYEMOTETALK          = 485,
-    EMOTE_STATE_READ_ALLOWMOVEMENT      = 492,
-    EMOTE_STATE_READY1H_ALLOW_MOVEMENT  = 505,
-    EMOTE_STATE_READY2H_ALLOW_MOVEMENT  = 506,
-    EMOTE_ONESHOT_OPEN                  = 517,
-    EMOTE_STATE_READ_CHRISTMAS          = 518
+    EMOTE_ONESHOT_NONE                                  = 0,
+    EMOTE_ONESHOT_TALK                                  = 1, // DNR
+    EMOTE_ONESHOT_BOW                                   = 2,
+    EMOTE_ONESHOT_WAVE                                  = 3, // DNR
+    EMOTE_ONESHOT_CHEER                                 = 4, // DNR
+    EMOTE_ONESHOT_EXCLAMATION                           = 5, // DNR
+    EMOTE_ONESHOT_QUESTION                              = 6,
+    EMOTE_ONESHOT_EAT                                   = 7,
+    EMOTE_STATE_DANCE                                   = 10,
+    EMOTE_ONESHOT_LAUGH                                 = 11,
+    EMOTE_STATE_SLEEP                                   = 12,
+    EMOTE_STATE_SIT                                     = 13,
+    EMOTE_ONESHOT_RUDE                                  = 14, // DNR
+    EMOTE_ONESHOT_ROAR                                  = 15, // DNR
+    EMOTE_ONESHOT_KNEEL                                 = 16,
+    EMOTE_ONESHOT_KISS                                  = 17,
+    EMOTE_ONESHOT_CRY                                   = 18,
+    EMOTE_ONESHOT_CHICKEN                               = 19,
+    EMOTE_ONESHOT_BEG                                   = 20,
+    EMOTE_ONESHOT_APPLAUD                               = 21,
+    EMOTE_ONESHOT_SHOUT                                 = 22, // DNR
+    EMOTE_ONESHOT_FLEX                                  = 23,
+    EMOTE_ONESHOT_SHY                                   = 24, // DNR
+    EMOTE_ONESHOT_POINT                                 = 25, // DNR
+    EMOTE_STATE_STAND                                   = 26,
+    EMOTE_STATE_READYUNARMED                            = 27,
+    EMOTE_STATE_WORK_SHEATHED                           = 28,
+    EMOTE_STATE_POINT                                   = 29, // DNR
+    EMOTE_STATE_NONE                                    = 30,
+    EMOTE_ONESHOT_WOUND                                 = 33,
+    EMOTE_ONESHOT_WOUNDCRITICAL                         = 34,
+    EMOTE_ONESHOT_ATTACKUNARMED                         = 35,
+    EMOTE_ONESHOT_ATTACK1H                              = 36,
+    EMOTE_ONESHOT_ATTACK2HTIGHT                         = 37,
+    EMOTE_ONESHOT_ATTACK2HLOOSE                         = 38,
+    EMOTE_ONESHOT_PARRYUNARMED                          = 39,
+    EMOTE_ONESHOT_PARRYSHIELD                           = 43,
+    EMOTE_ONESHOT_READYUNARMED                          = 44,
+    EMOTE_ONESHOT_READY1H                               = 45,
+    EMOTE_ONESHOT_READYBOW                              = 48,
+    EMOTE_ONESHOT_SPELLPRECAST                          = 50,
+    EMOTE_ONESHOT_SPELLCAST                             = 51,
+    EMOTE_ONESHOT_BATTLEROAR                            = 53,
+    EMOTE_ONESHOT_SPECIALATTACK1H                       = 54,
+    EMOTE_ONESHOT_KICK                                  = 60,
+    EMOTE_ONESHOT_ATTACKTHROWN                          = 61,
+    EMOTE_STATE_STUN                                    = 64,
+    EMOTE_STATE_DEAD                                    = 65,
+    EMOTE_ONESHOT_SALUTE                                = 66,
+    EMOTE_STATE_KNEEL_DOESNT_WORK                       = 68,
+    EMOTE_STATE_USESTANDING                             = 69,
+    EMOTE_ONESHOT_WAVE_NOSHEATHE                        = 70,
+    EMOTE_ONESHOT_CHEER_NOSHEATHE                       = 71,
+    EMOTE_ONESHOT_EAT_NOSHEATHE                         = 92,
+    EMOTE_STATE_STUN_NOSHEATHE                          = 93,
+    EMOTE_ONESHOT_DANCE                                 = 94,
+    EMOTE_ONESHOT_SALUTE_NOSHEATH                       = 113,
+    EMOTE_STATE_USESTANDING_NOSHEATHE                   = 133,
+    EMOTE_ONESHOT_LAUGH_NOSHEATHE                       = 153,
+    EMOTE_STATE_WORK                                    = 173,
+    EMOTE_STATE_SPELLPRECAST                            = 193,
+    EMOTE_ONESHOT_READYRIFLE                            = 213,
+    EMOTE_STATE_READYRIFLE                              = 214,
+    EMOTE_STATE_WORK_MINING                             = 233,
+    EMOTE_STATE_WORK_CHOPWOOD                           = 234,
+    EMOTE_STATE_APPLAUD                                 = 253,
+    EMOTE_ONESHOT_LIFTOFF                               = 254,
+    EMOTE_ONESHOT_YES                                   = 273, // DNR
+    EMOTE_ONESHOT_NO                                    = 274, // DNR
+    EMOTE_ONESHOT_TRAIN                                 = 275, // DNR
+    EMOTE_ONESHOT_LAND                                  = 293,
+    EMOTE_STATE_AT_EASE                                 = 313,
+    EMOTE_STATE_READY1H                                 = 333,
+    EMOTE_STATE_SPELLKNEELSTART                         = 353,
+    EMOTE_STATE_SUBMERGED                               = 373,
+    EMOTE_ONESHOT_SUBMERGE                              = 374,
+    EMOTE_STATE_READY2H                                 = 375,
+    EMOTE_STATE_READYBOW                                = 376,
+    EMOTE_ONESHOT_MOUNTSPECIAL                          = 377,
+    EMOTE_STATE_TALK                                    = 378,
+    EMOTE_STATE_FISHING                                 = 379,
+    EMOTE_ONESHOT_FISHING                               = 380,
+    EMOTE_ONESHOT_LOOT                                  = 381,
+    EMOTE_STATE_WHIRLWIND                               = 382,
+    EMOTE_STATE_DROWNED                                 = 383,
+    EMOTE_STATE_HOLD_BOW                                = 384,
+    EMOTE_STATE_HOLD_RIFLE                              = 385,
+    EMOTE_STATE_HOLD_THROWN                             = 386,
+    EMOTE_ONESHOT_DROWN                                 = 387,
+    EMOTE_ONESHOT_STOMP                                 = 388,
+    EMOTE_ONESHOT_ATTACKOFF                             = 389,
+    EMOTE_ONESHOT_ATTACKOFFPIERCE                       = 390,
+    EMOTE_STATE_ROAR                                    = 391,
+    EMOTE_STATE_LAUGH                                   = 392,
+    EMOTE_ONESHOT_CREATURE_SPECIAL                      = 393,
+    EMOTE_ONESHOT_JUMPLANDRUN                           = 394,
+    EMOTE_ONESHOT_JUMPEND                               = 395,
+    EMOTE_ONESHOT_TALK_NOSHEATHE                        = 396,
+    EMOTE_ONESHOT_POINT_NOSHEATHE                       = 397,
+    EMOTE_STATE_CANNIBALIZE                             = 398,
+    EMOTE_ONESHOT_JUMPSTART                             = 399,
+    EMOTE_STATE_DANCESPECIAL                            = 400,
+    EMOTE_ONESHOT_DANCESPECIAL                          = 401,
+    EMOTE_ONESHOT_CUSTOMSPELL01                         = 402,
+    EMOTE_ONESHOT_CUSTOMSPELL02                         = 403,
+    EMOTE_ONESHOT_CUSTOMSPELL03                         = 404,
+    EMOTE_ONESHOT_CUSTOMSPELL04                         = 405,
+    EMOTE_ONESHOT_CUSTOMSPELL05                         = 406,
+    EMOTE_ONESHOT_CUSTOMSPELL06                         = 407,
+    EMOTE_ONESHOT_CUSTOMSPELL07                         = 408,
+    EMOTE_ONESHOT_CUSTOMSPELL08                         = 409,
+    EMOTE_ONESHOT_CUSTOMSPELL09                         = 410,
+    EMOTE_ONESHOT_CUSTOMSPELL10                         = 411,
+    EMOTE_STATE_EXCLAIM                                 = 412,
+    EMOTE_STATE_DANCE_CUSTOM                            = 413,
+    EMOTE_STATE_SIT_CHAIR_MED                           = 415,
+    EMOTE_STATE_CUSTOM_SPELL_01                         = 416,
+    EMOTE_STATE_CUSTOM_SPELL_02                         = 417,
+    EMOTE_STATE_EAT                                     = 418,
+    EMOTE_STATE_CUSTOM_SPELL_04                         = 419,
+    EMOTE_STATE_CUSTOM_SPELL_03                         = 420,
+    EMOTE_STATE_CUSTOM_SPELL_05                         = 421,
+    EMOTE_STATE_SPELLEFFECT_HOLD                        = 422,
+    EMOTE_STATE_EAT_NO_SHEATHE                          = 423,
+    EMOTE_STATE_MOUNT                                   = 424,
+    EMOTE_STATE_READY2HL                                = 425,
+    EMOTE_STATE_SIT_CHAIR_HIGH                          = 426,
+    EMOTE_STATE_FALL                                    = 427,
+    EMOTE_STATE_LOOT                                    = 428,
+    EMOTE_STATE_SUBMERGED_NEW                           = 429, // NEW
+    EMOTE_ONESHOT_COWER                                 = 430, // DNR
+    EMOTE_STATE_COWER                                   = 431,
+    EMOTE_ONESHOT_USESTANDING                           = 432,
+    EMOTE_STATE_STEALTH_STAND                           = 433,
+    EMOTE_ONESHOT_OMNICAST_GHOUL                        = 434, // W/SOUND
+    EMOTE_ONESHOT_ATTACKBOW                             = 435,
+    EMOTE_ONESHOT_ATTACKRIFLE                           = 436,
+    EMOTE_STATE_SWIM_IDLE                               = 437,
+    EMOTE_STATE_ATTACK_UNARMED                          = 438,
+    EMOTE_ONESHOT_SPELLCAST_W_SOUND                     = 439,
+    EMOTE_ONESHOT_DODGE                                 = 440,
+    EMOTE_ONESHOT_PARRY1H                               = 441,
+    EMOTE_ONESHOT_PARRY2H                               = 442,
+    EMOTE_ONESHOT_PARRY2HL                              = 443,
+    EMOTE_STATE_FLYFALL                                 = 444,
+    EMOTE_ONESHOT_FLYDEATH                              = 445,
+    EMOTE_STATE_FLY_FALL                                = 446,
+    EMOTE_ONESHOT_FLY_SIT_GROUND_DOWN                   = 447,
+    EMOTE_ONESHOT_FLY_SIT_GROUND_UP                     = 448,
+    EMOTE_ONESHOT_EMERGE                                = 449,
+    EMOTE_ONESHOT_DRAGONSPIT                            = 450,
+    EMOTE_STATE_SPECIALUNARMED                          = 451,
+    EMOTE_ONESHOT_FLYGRAB                               = 452,
+    EMOTE_STATE_FLYGRABCLOSED                           = 453,
+    EMOTE_ONESHOT_FLYGRABTHROWN                         = 454,
+    EMOTE_STATE_FLY_SIT_GROUND                          = 455,
+    EMOTE_STATE_WALKBACKWARDS                           = 456,
+    EMOTE_ONESHOT_FLYTALK                               = 457,
+    EMOTE_ONESHOT_FLYATTACK1H                           = 458,
+    EMOTE_STATE_CUSTOMSPELL08                           = 459,
+    EMOTE_ONESHOT_FLY_DRAGONSPIT                        = 460,
+    EMOTE_STATE_SIT_CHAIR_LOW                           = 461,
+    EMOTE_ONE_SHOT_STUN                                 = 462,
+    EMOTE_ONESHOT_SPELLCAST_OMNI                        = 463,
+    EMOTE_STATE_READYTHROWN                             = 465,
+    EMOTE_ONESHOT_WORK_CHOPWOOD                         = 466,
+    EMOTE_ONESHOT_WORK_MINING                           = 467,
+    EMOTE_STATE_SPELL_CHANNEL_OMNI                      = 468,
+    EMOTE_STATE_SPELL_CHANNEL_DIRECTED                  = 469,
+    EMOTE_STAND_STATE_NONE                              = 470,
+    EMOTE_STATE_READYJOUST                              = 471,
+    EMOTE_STATE_STRANGULATE                             = 473,
+    EMOTE_STATE_READY_SPELL_OMNI                        = 474,
+    EMOTE_STATE_HOLD_JOUST                              = 475,
+    EMOTE_ONESHOT_CRY_JAINA                             = 476,
+    // 4.3.4.15595
+    EMOTE_ONESHOT_SPECIALUNARMED                        = 477,
+    EMOTE_STATE_DANCE_NOSHEATHE                         = 478,
+    EMOTE_ONESHOT_SNIFF                                 = 479,
+    EMOTE_ONESHOT_DRAGONSTOMP                           = 480,
+    EMOTE_ONESHOT_KNOCKDOWN                             = 482,
+    EMOTE_STATE_READ                                    = 483,
+    EMOTE_ONESHOT_FLYEMOTETALK                          = 485,
+    EMOTE_STATE_READ_ALLOWMOVEMENT                      = 492,
+    EMOTE_STATE_READY1H_ALLOW_MOVEMENT                  = 505,
+    EMOTE_STATE_READY2H_ALLOW_MOVEMENT                  = 506,
+    EMOTE_ONESHOT_MONKOFFENSE_ATTACKUNARMED             = 507,
+    EMOTE_ONESHOT_MONKOFFENSE_SPECIALUNARMED            = 508,
+    EMOTE_ONESHOT_MONKOFFENSE_PARRYUNARMED              = 509,
+    EMOTE_STATE_MONKOFFENSE_READYUNARMED                = 510,
+    EMOTE_ONESHOT_PALMSTRIKE                            = 511,
+    EMOTE_STATE_CRANE                                   = 512,
+    EMOTE_ONESHOT_OPEN                                  = 517,
+    EMOTE_STATE_READ_CHRISTMAS                          = 518,
+    // 5.4.8.18414
+    EMOTE_ONESHOT_FLYATTACK2HL                          = 526,
+    EMOTE_ONESHOT_FLYATTACKTHROWN                       = 527,
+    EMOTE_STATE_FLYREADYSPELLDIRECTED                   = 528,
+    EMOTE_STATE_FLY_READY_1H                            = 531,
+    EMOTE_STATE_MEDITATE                                = 533,
+    EMOTE_STATE_FLY_READY_2HL                           = 534,
+    EMOTE_ONESHOT_TOGROUND                              = 535,
+    EMOTE_ONESHOT_TOFLY                                 = 536,
+    EMOTE_STATE_ATTACKTHROWN                            = 537,
+    EMOTE_STATE_SPELL_CHANNEL_DIRECTED_NOSOUND          = 538,
+    EMOTE_ONESHOT_WORK                                  = 539,
+    EMOTE_STATE_READYUNARMED_NOSOUND                    = 540,
+    EMOTE_ONESHOT_MONKOFFENSE_ATTACKUNARMEDOFF          = 543,
+    EMOTE_RECLINED_MOUNT_PASSENGER                      = 546,
+    EMOTE_ONESHOT_QUESTION_NEW                          = 547, // NEW
+    EMOTE_ONESHOT_SPELL_CHANNEL_DIRECTED_NOSOUND        = 549,
+    EMOTE_STATE_KNEEL                                   = 550,
+    EMOTE_ONESHOT_FLYATTACKUNARMED                      = 551,
+    EMOTE_ONESHOT_FLYCOMBATWOUND                        = 552,
+    EMOTE_ONESHOT_MOUNTSELFSPECIAL                      = 553,
+    EMOTE_ONESHOT_ATTACKUNARMED_NOSOUND                 = 554,
+    EMOTE_STATE_WOUNDCRITICAL                           = 555,
+    EMOTE_ONESHOT_ATTACK1H_NO_SOUND                     = 556,
+    EMOTE_STATE_MOUNT_SELF_IDLE                         = 557,
+    EMOTE_ONESHOT_WALK                                  = 558,
+    EMOTE_STATE_OPENED                                  = 559,
+    EMOTE_ONESHOT_YELL                                  = 560,
+    EMOTE_ONESHOT_BREATHOFFIRE                          = 565,
+    EMOTE_STATE_ATTACK1H                                = 567,
+    EMOTE_STATE_USESTANDING_NEW                         = 572, // NEW
+    EMOTE_ONESHOT_LAUGH_NO_SOUND                        = 574
 };
 
 enum UnitStates
@@ -785,112 +824,131 @@ enum UnitStates
     UNIT_STATE_NOT_MOVE                 = UNIT_STATE_ROOTED | UNIT_STATE_STUNNED | UNIT_STATE_DIED | UNIT_STATE_DISTRACTED,
 
     UNIT_STATE_ALL_ERASABLE             = UNIT_STATE_ALL_STATE_SUPPORTED & ~(UNIT_STATE_IGNORE_PATHFINDING),
-    UNIT_STATE_ALL_STATE                = 0xffffffff
+    UNIT_STATE_ALL_STATE                = 0xFFFFFFFF
 };
 
-// byte flags value (UNIT_FIELD_BYTES_1,0)
-enum StandState : uint16_t
+// byte flags value (UNIT_FIELD_BYTES_1, 0)
+enum UnitBytes1_StandState : uint8_t
 {
-    STANDSTATE_STAND             = 0,
-    STANDSTATE_SIT               = 1,
-    STANDSTATE_SIT_CHAIR         = 2,
-    STANDSTATE_SLEEP             = 3,
-    STANDSTATE_SIT_LOW_CHAIR     = 4,
-    STANDSTATE_SIT_MEDIUM_CHAIR  = 5,
-    STANDSTATE_SIT_HIGH_CHAIR    = 6,
-    STANDSTATE_DEAD              = 7,
-    STANDSTATE_KNEEL             = 8,
-    STANDSTATE_SUBMERGED         = 9
-    //STANDSTATE_FORM_ALL          = 0x00FF0000,
-    //STANDSTATE_FLAG_CREEP        = 0x02000000,
-    //STANDSTATE_FLAG_UNTRACKABLE  = 0x04000000,
-    //STANDSTATE_FLAG_ALL          = 0xFF000000
+    STANDSTATE_STAND             = 0x00,
+    STANDSTATE_SIT               = 0x01,
+    STANDSTATE_SIT_CHAIR         = 0x02,
+    STANDSTATE_SLEEP             = 0x03,
+    STANDSTATE_SIT_LOW_CHAIR     = 0x04,
+    STANDSTATE_SIT_MEDIUM_CHAIR  = 0x05,
+    STANDSTATE_SIT_HIGH_CHAIR    = 0x06,
+    STANDSTATE_DEAD              = 0x07,
+    STANDSTATE_KNEEL             = 0x08,
+    STANDSTATE_SUBMERGED         = 0x09
 };
 
-// byte flags value (UNIT_FIELD_BYTES_1,2)
-enum UnitStandFlags
+// byte flags value
+// classic (UNIT_FIELD_BYTES_1, 3)
+// tbc - mop (UNIT_FIELD_BYTES_1, 2)
+enum UnitBytes1_UnitStandFlags : uint8_t
 {
     UNIT_STAND_FLAGS_UNK1         = 0x01,
     UNIT_STAND_FLAGS_CREEP        = 0x02,
     UNIT_STAND_FLAGS_UNTRACKABLE  = 0x04,
     UNIT_STAND_FLAGS_UNK4         = 0x08,
     UNIT_STAND_FLAGS_UNK5         = 0x10,
+    UNIT_STAND_FLAGS_UNK6         = 0x20,
+    UNIT_STAND_FLAGS_UNK7         = 0x40,
+    UNIT_STAND_FLAGS_UNK8         = 0x80,
     UNIT_STAND_FLAGS_ALL          = 0xFF
 };
 
-// byte flags value (UNIT_FIELD_BYTES_1,3)
-enum AnimationTier : uint8_t
+#if VERSION_STRING >= TBC
+// byte flags value (UNIT_FIELD_BYTES_1, 3)
+enum UnitBytes1_AnimationFlag : uint8_t
 {
-    Ground                  = 0, // plays ground tier animations
-    Swim                    = 1, // falls back to ground tier animations, not handled by the client, should never appear in sniffs, will prevent tier change animations from playing correctly if used
-    Hover                   = 2, // plays flying tier animations or falls back to ground tier animations, automatically enables hover clientside when entering visibility with this value
-    Fly                     = 3, // plays flying tier animations
-    Submerged               = 4
+    ANIMATION_FLAG_GROUND         = 0x00,
+    ANIMATION_FLAG_ALWAYS_STAND   = 0x01,
+    ANIMATION_FLAG_HOVER          = 0x02, // Creature that can fly and are not on the ground appear to have this flag. If they are on the ground, flag is not present.
+    ANIMATION_FLAG_FLY            = 0x03,
+    ANIMATION_FLAG_SUBMERGED      = 0x04
+};
+#endif
+
+// byte value (UNIT_FIELD_BYTES_2, 0)
+enum UnitBytes2_SheathState : uint8_t
+{
+    SHEATH_STATE_UNARMED          = 0x00, // non prepared weapon
+    SHEATH_STATE_MELEE            = 0x01, // prepared melee weapon
+    SHEATH_STATE_RANGED           = 0x02  // prepared ranged weapon
 };
 
-// byte value (UNIT_FIELD_BYTES_2,0)
-enum UnitBytes2_SheathState
-{
-    SHEATH_STATE_UNARMED  = 0,              // non prepared weapon
-    SHEATH_STATE_MELEE    = 1,              // prepared melee weapon
-    SHEATH_STATE_RANGED   = 2               // prepared ranged weapon
-};
-
+#if VERSION_STRING == TBC
 // UNIT_FIELD_BYTES_2, 1
-enum UnitBytes2_PvPFlags : uint8_t
+enum UnitBytes2_PositiveAuraLimit : uint8_t
 {
-    U_FIELD_BYTES_FLAG_PVP          = 0x01,
-    U_FIELD_BYTES_FLAG_UNK1         = 0x02,
-    U_FIELD_BYTES_FLAG_FFA_PVP      = 0x04,
-    U_FIELD_BYTES_FLAG_SANCTUARY    = 0x08,
-    U_FIELD_BYTES_FLAG_AURAS        = 0x10,
-    U_FIELD_BYTES_FLAG_UNK2         = 0x20,
-    U_FIELD_BYTES_FLAG_UNK3         = 0x40,
-    U_FIELD_BYTES_FLAG_UNK4         = 0x80
+    POS_AURA_LIMIT_CREATURE       = 0x10, // 16 buff slots for npcs (40 debuffs)
+    POS_AURA_LIMIT_PVP_ATTACKABLE = 0x28, // 40 buff slots for players and pets (16 debuffs)
 };
-
-// byte flags value (UNIT_FIELD_BYTES_2,2)
-enum UnitBytes2_PetFlags
+#elif VERSION_STRING >= WotLK
+// UNIT_FIELD_BYTES_2, 1
+enum UnitBytes2_PvPStateFlags : uint8_t
 {
-    UNIT_CAN_BE_RENAMED     = 0x01,
-    UNIT_CAN_BE_ABANDONED   = 0x02,
+    PVP_STATE_FLAG_NONE           = 0x00,
+    PVP_STATE_FLAG_PVP            = 0x01,
+    PVP_STATE_FLAG_UNK2           = 0x02,
+    PVP_STATE_FLAG_FFA_PVP        = 0x04,
+    PVP_STATE_FLAG_SANCTUARY      = 0x08,
+    PVP_STATE_FLAG_UNK5           = 0x10,
+    PVP_STATE_FLAG_UNK6           = 0x20,
+    PVP_STATE_FLAG_UNK7           = 0x40,
+    PVP_STATE_FLAG_UNK8           = 0x80,
+    PVP_STATE_FLAG_ALL            = 0xFF
 };
+#endif
 
-// byte value (UNIT_FIELD_BYTES_2,3)
-enum ShapeshiftForm : uint8_t
+#if VERSION_STRING >= TBC
+// byte flags value (UNIT_FIELD_BYTES_2, 2)
+enum UnitBytes2_PetFlags : uint8_t
 {
-    FORM_NORMAL             = 0x00,
-    FORM_CAT                = 0x01,
-    FORM_TREE               = 0x02,
-    FORM_TRAVEL             = 0x03,
-    FORM_AQUA               = 0x04,
-    FORM_BEAR               = 0x05,
-    FORM_AMBIENT            = 0x06,
-    FORM_GHOUL              = 0x07,
-    FORM_DIREBEAR           = 0x08,
-    FORM_SKELETON           = 0x0A,
-    FORM_TEST_OF_STRENGTH   = 0x0B,
-    FORM_BLB_PLAYER         = 0x0C,
-    FORM_SHADOWDANCE        = 0x0D,
-    FORM_CREATUREBEAR       = 0x0E,
-    FORM_CREATURECAT        = 0x0F,
-    FORM_GHOSTWOLF          = 0x10,
-    FORM_BATTLESTANCE       = 0x11,
-    FORM_DEFENSIVESTANCE    = 0x12,
-    FORM_BERSERKERSTANCE    = 0x13,
-    FORM_TEST               = 0x14,
-    FORM_ZOMBIE             = 0x15,
-    FORM_METAMORPHOSIS      = 0x16,
-    FORM_DEMON              = 0x17,
-    FORM_UNK2               = 0x18,
-    FORM_UNDEAD             = 0x19,
-    FORM_MASTER_ANGLER      = 0x1A,
-    FORM_SWIFT              = 0x1B,
-    FORM_SHADOW             = 0x1C,
-    FORM_FLIGHT             = 0x1D,
-    FORM_STEALTH            = 0x1E,
-    FORM_MOONKIN            = 0x1F,
-    FORM_SPIRITOFREDEMPTION = 0x20
+    PET_FLAG_NONE                 = 0x00,
+    PET_FLAG_CAN_BE_RENAMED       = 0x01,
+    PET_FLAG_CAN_BE_ABANDONED     = 0x02
+};
+#endif
+
+// byte value
+// classic (UNIT_FIELD_BYTES_1, 2)
+// tbc - mop (UNIT_FIELD_BYTES_2, 3)
+enum UnitBytes_ShapeshiftForm : uint8_t
+{
+    FORM_NORMAL                   = 0x00,
+    FORM_CAT                      = 0x01,
+    FORM_TREE                     = 0x02,
+    FORM_TRAVEL                   = 0x03,
+    FORM_AQUA                     = 0x04,
+    FORM_BEAR                     = 0x05,
+    FORM_AMBIENT                  = 0x06,
+    FORM_GHOUL                    = 0x07,
+    FORM_DIREBEAR                 = 0x08,
+    FORM_SKELETON                 = 0x0A,
+    FORM_TEST_OF_STRENGTH         = 0x0B,
+    FORM_BLB_PLAYER               = 0x0C,
+    FORM_SHADOWDANCE              = 0x0D,
+    FORM_CREATUREBEAR             = 0x0E,
+    FORM_CREATURECAT              = 0x0F,
+    FORM_GHOSTWOLF                = 0x10,
+    FORM_BATTLESTANCE             = 0x11,
+    FORM_DEFENSIVESTANCE          = 0x12,
+    FORM_BERSERKERSTANCE          = 0x13,
+    FORM_TEST                     = 0x14,
+    FORM_ZOMBIE                   = 0x15,
+    FORM_METAMORPHOSIS            = 0x16,
+    FORM_DEMON                    = 0x17,
+    FORM_UNK2                     = 0x18,
+    FORM_UNDEAD                   = 0x19,
+    FORM_MASTER_ANGLER            = 0x1A,
+    FORM_SWIFT                    = 0x1B,
+    FORM_SHADOW                   = 0x1C,
+    FORM_FLIGHT                   = 0x1D,
+    FORM_STEALTH                  = 0x1E,
+    FORM_MOONKIN                  = 0x1F,
+    FORM_SPIRITOFREDEMPTION       = 0x20
 };
 
 enum UnitFieldFlags : uint32_t // UNIT_FIELD_FLAGS #46 - these are client flags
@@ -901,15 +959,24 @@ enum UnitFieldFlags : uint32_t // UNIT_FIELD_FLAGS #46 - these are client flags
     UNIT_FLAG_NON_ATTACKABLE                    = 0x00000002, // 2            2  client won't let you attack them
     UNIT_FLAG_LOCK_PLAYER                       = 0x00000004, // 3            4  ? does nothing to client (probably wrong) - only taxi code checks this
     UNIT_FLAG_PVP_ATTACKABLE                    = 0x00000008, // 4            8  makes players and NPCs attackable / not attackable
+#if VERSION_STRING == Classic
+    UNIT_FLAG_PET_CAN_BE_RENAMED                = 0x00000010, // 5           16  UnitBytes2 in tbc+
+    UNIT_FLAG_PET_CAN_BE_ABANDONED              = 0x00000020, // 6           32  UnitBytes2 in tbc+
+#else
     UNIT_FLAG_UNKNOWN_5                         = 0x00000010, // 5           16  ? some NPCs have this
     UNIT_FLAG_NO_REAGANT_COST                   = 0x00000020, // 6           32  no reagant cost
+#endif
     UNIT_FLAG_PLUS_MOB                          = 0x00000040, // 7           64  ? some NPCs have this (Rare/Elite/Boss?)
-    UNIT_FLAG_IGNORE_CREATURE_COMBAT            = 0x00000080, // 8          128  unit will not enter combat with creatures
+    UNIT_FLAG_UNKNOWN_8                         = 0x00000080, // 8          128  ? can change attackable status
     UNIT_FLAG_IGNORE_PLAYER_COMBAT              = 0x00000100, // 9          256  unit will not enter combat with players
-    UNIT_FLAG_IGNORE_PLAYER_NPC                 = 0x00000200, // 10         512  ? some NPCs have this
+    UNIT_FLAG_IGNORE_CREATURE_COMBAT            = 0x00000200, // 10         512  unit will not enter combat with creatures
     UNIT_FLAG_LOOTING                           = 0x00000400, // 11        1024
     UNIT_FLAG_PET_IN_COMBAT                     = 0x00000800, // 12        2048  on player pets: whether the pet is chasing a target to attack || on other units: whether any of the unit's minions is in combat
+#if VERSION_STRING <= TBC
     UNIT_FLAG_PVP                               = 0x00001000, // 13        4096  sets PvP flag
+#else
+    UNIT_FLAG_UNKNOWN_13                        = 0x00001000, // 13        4096
+#endif
     UNIT_FLAG_SILENCED                          = 0x00002000, // 14        8192
     UNIT_FLAG_DEAD                              = 0x00004000, // 15       16384  used for special "dead" NPCs like Withered Corpses
     UNIT_FLAG_SWIMMING                          = 0x00008000, // 16       32768  shows swim animation in water
@@ -924,35 +991,43 @@ enum UnitFieldFlags : uint32_t // UNIT_FIELD_FLAGS #46 - these are client flags
     UNIT_FLAG_PLAYER_CONTROLLED_CREATURE        = 0x01000000, // 25    16777216
     UNIT_FLAG_NOT_SELECTABLE                    = 0x02000000, // 26    33554432  cannot select the unit
     UNIT_FLAG_SKINNABLE                         = 0x04000000, // 27    67108864
+#if VERSION_STRING == Classic
+    UNIT_FLAG_DETECT_AURAS                      = 0x08000000, // 28   134217728  Auras on unit are detectable
+#else
     UNIT_FLAG_MOUNT                             = 0x08000000, // 28   134217728  ? was MAKE_CHAR_UNTOUCHABLE (probably wrong), nothing ever set it
+#endif
     UNIT_FLAG_UNKNOWN_29                        = 0x10000000, // 29   268435456
     UNIT_FLAG_FEIGN_DEATH                       = 0x20000000, // 30   536870912
     UNIT_FLAG_UNKNOWN_31                        = 0x40000000, // 31  1073741824  ? was WEAPON_OFF and being used for disarm
     UNIT_FLAG_IMMUNE                            = 0x80000000  // 32  2147483648
 };
 
-enum UnitFieldFlags2
+#if VERSION_STRING >= TBC
+enum UnitFieldFlags2 : uint32_t
 {
     UNIT_FLAG2_FEIGN_DEATH                      = 0x0000001,
-    UNIT_FLAG2_UNK1                             = 0x0000002,    // Hides body and body armor. Weapons, shoulder and head armors still visible
+    UNIT_FLAG2_HIDE_BODY                        = 0x0000002,    // Hides body and body armor. Weapons, shoulder and head armors still visible
     UNIT_FLAG2_UNK2                             = 0x0000004,
     UNIT_FLAG2_COMPREHEND_LANG                  = 0x0000008,    // Allows target to understand itself while talking in different language
     UNIT_FLAG2_MIRROR_IMAGE                     = 0x0000010,
     UNIT_FLAG2_UNK5                             = 0x0000020,
     UNIT_FLAG2_FORCE_MOVE                       = 0x0000040,    // Makes target to run forward
+#if VERSION_STRING >= WotLK
     UNIT_FLAG2_DISARM_OFFHAND                   = 0x0000080,
     UNIT_FLAG2_UNK8                             = 0x0000100,
     UNIT_FLAG2_UNK9                             = 0x0000200,
     UNIT_FLAG2_DISARM_RANGED                    = 0x0000400,
     UNIT_FLAG2_ENABLE_POWER_REGEN               = 0x0000800,
-    UNIT_FLAG2_RESTRICT_PARTY_INTERACTION       = 0x0001000,   // Restrict interaction to party or raid
+    UNIT_FLAG2_SPELL_CLICK_PARTY_RAID_ONLY      = 0x0001000,   // Restrict interaction to party or raid
     UNIT_FLAG2_PREVENT_SPELL_CLICK              = 0x0002000,   // Prevent spellclick
     UNIT_FLAG2_ALLOW_ENEMY_INTERACT             = 0x0004000,
     UNIT_FLAG2_DISABLE_TURN                     = 0x0008000,
     UNIT_FLAG2_UNK10                            = 0x0010000,
     UNIT_FLAG2_PLAY_DEATH_ANIM                  = 0x0020000,   // Plays special death animation upon death
     UNIT_FLAG2_ALLOW_CHEAT_SPELLS               = 0x0040000    // Allows casting spells with AttributesExG & SP_ATTR_EX_G_IS_CHEAT_SPELL
+#endif
 };
+#endif
 
 enum UnitDynamicFlags
 {
@@ -1002,16 +1077,16 @@ struct TransportData
 struct UnitFlagNames
 {
     uint32_t Flag;
-    const char* Name;
+    std::string_view Name;
 };
 
 struct UnitDynFlagNames
 {
     uint32_t Flag;
-    const char* Name;
+    std::string_view Name;
 };
 
-static const char* POWERTYPE[] =
+static inline constexpr std::string_view POWERTYPE[] =
 {
     "Mana",
     "Rage",
@@ -1022,21 +1097,30 @@ static const char* POWERTYPE[] =
     "Runic Power"
 };
 
-static const UnitFlagNames UnitFlagToName[] =
+static inline constexpr UnitFlagNames UnitFlagToName[] =
 {
     { UNIT_FLAG_SERVER_CONTROLLED, "UNIT_FLAG_SERVER_CONTROLLED" },
     { UNIT_FLAG_NON_ATTACKABLE, "UNIT_FLAG_NON_ATTACKABLE" },
     { UNIT_FLAG_LOCK_PLAYER, "UNIT_FLAG_LOCK_PLAYER" },
     { UNIT_FLAG_PVP_ATTACKABLE, "UNIT_FLAG_PVP_ATTACKABLE" },
+#if VERSION_STRING == Classic
+    { UNIT_FLAG_PET_CAN_BE_RENAMED, "UNIT_FLAG_PET_CAN_BE_RENAMED" },
+    { UNIT_FLAG_PET_CAN_BE_ABANDONED, "UNIT_FLAG_PET_CAN_BE_ABANDONED" },
+#else
     { UNIT_FLAG_UNKNOWN_5, "UNIT_FLAG_UNKNOWN_5" },
     { UNIT_FLAG_NO_REAGANT_COST, "UNIT_FLAG_NO_REAGANT_COST" },
+#endif
     { UNIT_FLAG_PLUS_MOB, "UNIT_FLAG_PLUS_MOB" },
-    { UNIT_FLAG_IGNORE_CREATURE_COMBAT, "UNIT_FLAG_IGNORE_CREATURE_COMBAT" },
+    { UNIT_FLAG_UNKNOWN_8, "UNIT_FLAG_UNKNOWN_8" },
     { UNIT_FLAG_IGNORE_PLAYER_COMBAT, "UNIT_FLAG_IGNORE_PLAYER_COMBAT" },
-    { UNIT_FLAG_IGNORE_PLAYER_NPC, "UNIT_FLAG_IGNORE_PLAYER_NPC" },
+    { UNIT_FLAG_IGNORE_CREATURE_COMBAT, "UNIT_FLAG_IGNORE_CREATURE_COMBAT" },
     { UNIT_FLAG_LOOTING, "UNIT_FLAG_LOOTING" },
     { UNIT_FLAG_PET_IN_COMBAT, "UNIT_FLAG_PET_IN_COMBAT" },
+#if VERSION_STRING <= TBC
     { UNIT_FLAG_PVP, "UNIT_FLAG_PVP" },
+#else
+    { UNIT_FLAG_UNKNOWN_13, "UNIT_FLAG_UNKNOWN_13" },
+#endif
     { UNIT_FLAG_SILENCED, "UNIT_FLAG_SILENCED" },
     { UNIT_FLAG_DEAD, "UNIT_FLAG_DEAD" },
     { UNIT_FLAG_SWIMMING, "UNIT_FLAG_SWIMMING" },
@@ -1051,41 +1135,49 @@ static const UnitFlagNames UnitFlagToName[] =
     { UNIT_FLAG_PLAYER_CONTROLLED_CREATURE, "UNIT_FLAG_PLAYER_CONTROLLED_CREATURE" },
     { UNIT_FLAG_NOT_SELECTABLE, "UNIT_FLAG_NOT_SELECTABLE" },
     { UNIT_FLAG_SKINNABLE, "UNIT_FLAG_SKINNABLE" },
+#if VERSION_STRING == Classic
+    { UNIT_FLAG_DETECT_AURAS, "UNIT_FLAG_DETECT_AURAS" },
+#else
     { UNIT_FLAG_MOUNT, "UNIT_FLAG_MOUNT" },
+#endif
     { UNIT_FLAG_UNKNOWN_29, "UNIT_FLAG_UNKNOWN_29" },
     { UNIT_FLAG_FEIGN_DEATH, "UNIT_FLAG_FEIGN_DEATH" },
     { UNIT_FLAG_UNKNOWN_31, "UNIT_FLAG_UNKNOWN_31" },
     { UNIT_FLAG_IMMUNE, "UNIT_FLAG_IMMUNE" }
 };
 
-static uint32_t numflags = sizeof(UnitFlagToName) / sizeof(UnitFlagNames);
+static inline constexpr uint32_t numflags = sizeof(UnitFlagToName) / sizeof(UnitFlagNames);
 
-static const UnitFlagNames UnitFlagToName2[] =
+#if VERSION_STRING >= TBC
+static inline constexpr UnitFlagNames UnitFlagToName2[] =
 {
     { UNIT_FLAG2_FEIGN_DEATH, "UNIT_FLAG2_FEIGN_DEATH" },
-    { UNIT_FLAG2_UNK1, "UNIT_FLAG2_UNK1" },
+    { UNIT_FLAG2_HIDE_BODY, "UNIT_FLAG2_HIDE_BODY" },
     { UNIT_FLAG2_UNK2, "UNIT_FLAG2_UNK2" },
     { UNIT_FLAG2_COMPREHEND_LANG, "UNIT_FLAG2_COMPREHEND_LANG" },
     { UNIT_FLAG2_MIRROR_IMAGE, "UNIT_FLAG2_MIRROR_IMAGE" },
     { UNIT_FLAG2_UNK5, "UNIT_FLAG2_UNK5" },
     { UNIT_FLAG2_FORCE_MOVE, "UNIT_FLAG2_FORCE_MOVE" },
+#if VERSION_STRING >= WotLK
     { UNIT_FLAG2_DISARM_OFFHAND, "UNIT_FLAG2_DISARM_OFFHAND" },
     { UNIT_FLAG2_UNK8, "UNIT_FLAG2_UNK8" },
     { UNIT_FLAG2_UNK9, "UNIT_FLAG2_UNK9" },
     { UNIT_FLAG2_DISARM_RANGED, "UNIT_FLAG2_DISARM_RANGED" },
     { UNIT_FLAG2_ENABLE_POWER_REGEN, "UNIT_FLAG2_ENABLE_POWER_REGEN" },
-    { UNIT_FLAG2_RESTRICT_PARTY_INTERACTION, "UNIT_FLAG2_RESTRICT_PARTY_INTERACTION" },
+    { UNIT_FLAG2_SPELL_CLICK_PARTY_RAID_ONLY, "UNIT_FLAG2_SPELL_CLICK_PARTY_RAID_ONLY" },
     { UNIT_FLAG2_PREVENT_SPELL_CLICK, "UNIT_FLAG2_PREVENT_SPELL_CLICK" },
     { UNIT_FLAG2_ALLOW_ENEMY_INTERACT, "UNIT_FLAG2_ALLOW_ENEMY_INTERACT" },
     { UNIT_FLAG2_DISABLE_TURN, "UNIT_FLAG2_DISABLE_TURN" },
     { UNIT_FLAG2_UNK10, "UNIT_FLAG2_UNK10" },
     { UNIT_FLAG2_PLAY_DEATH_ANIM, "UNIT_FLAG2_PLAY_DEATH_ANIM" },
     { UNIT_FLAG2_ALLOW_CHEAT_SPELLS, "UNIT_FLAG2_ALLOW_CHEAT_SPELLS" }
+#endif
 };
 
-static uint32_t numflags2 = sizeof(UnitFlagToName2) / sizeof(UnitFlagNames);
+static inline constexpr uint32_t numflags2 = sizeof(UnitFlagToName2) / sizeof(UnitFlagNames);
+#endif
 
-static const UnitDynFlagNames UnitDynFlagToName[] =
+static inline constexpr UnitDynFlagNames UnitDynFlagToName[] =
 {
     { U_DYN_FLAG_LOOTABLE, "U_DYN_FLAG_LOOTABLE" },
     { U_DYN_FLAG_UNIT_TRACKABLE, "U_DYN_FLAG_UNIT_TRACKABLE" },
@@ -1095,16 +1187,16 @@ static const UnitDynFlagNames UnitDynFlagToName[] =
     { U_DYN_FLAG_DEAD, "U_DYN_FLAG_DEAD" }
 };
 
-static uint32_t numdynflags = sizeof(UnitDynFlagToName) / sizeof(UnitDynFlagNames);
+static inline constexpr uint32_t numdynflags = sizeof(UnitDynFlagToName) / sizeof(UnitDynFlagNames);
 
-static const char* GENDER[] =
+static inline constexpr std::string_view GENDER[] =
 {
     "male",
     "female",
     "neutral"
 };
 
-static const char* CLASS[] =
+static inline constexpr std::string_view CLASS[] =
 {
     "invalid 0",
     "warrior",
@@ -1120,41 +1212,45 @@ static const char* CLASS[] =
     "druid"
 };
 
-static const char* SHEATSTATE[] =
+static inline constexpr std::string_view SHEATSTATE[] =
 {
     "none",
     "melee",
     "ranged"
 };
 
+#if VERSION_STRING >= WotLK
 struct UnitPvPFlagNames
 {
     uint32_t Flag;
-    const char* Name;
+    std::string_view Name;
 };
 
-static const UnitPvPFlagNames UnitPvPFlagToName[] =
+static inline constexpr UnitPvPFlagNames UnitPvPFlagToName[] =
 {
-    { U_FIELD_BYTES_FLAG_PVP, "U_FIELD_BYTES_FLAG_PVP" },
-    { U_FIELD_BYTES_FLAG_FFA_PVP, "U_FIELD_BYTES_FLAG_FFA_PVP" },
-    { U_FIELD_BYTES_FLAG_SANCTUARY, "U_FIELD_BYTES_FLAG_SANCTUARY" }
+    { PVP_STATE_FLAG_PVP, "PVP_STATE_FLAG_PVP" },
+    { PVP_STATE_FLAG_FFA_PVP, "PVP_STATE_FLAG_FFA_PVP" },
+    { PVP_STATE_FLAG_SANCTUARY, "PVP_STATE_FLAG_SANCTUARY" }
 };
 
-static const uint32_t numpvpflags = sizeof(UnitPvPFlagToName) / sizeof(UnitPvPFlagNames);
+static inline constexpr uint32_t numpvpflags = sizeof(UnitPvPFlagToName) / sizeof(UnitPvPFlagNames);
+#endif
 
+#if VERSION_STRING >= TBC
 struct PetFlagNames
 {
     uint32_t Flag;
-    const char* Name;
+    std::string_view Name;
 };
 
-static const PetFlagNames PetFlagToName[] =
+static inline constexpr PetFlagNames PetFlagToName[] =
 {
-    { UNIT_CAN_BE_RENAMED, "UNIT_CAN_BE_RENAMED" },
-    { UNIT_CAN_BE_ABANDONED, "UNIT_CAN_BE_ABANDONED" }
+    { PET_FLAG_CAN_BE_RENAMED, "PET_FLAG_CAN_BE_RENAMED" },
+    { PET_FLAG_CAN_BE_ABANDONED, "PET_FLAG_CAN_BE_ABANDONED" }
 };
 
-static const uint32_t numpetflags = sizeof(PetFlagToName) / sizeof(PetFlagNames);
+static inline constexpr uint32_t numpetflags = sizeof(PetFlagToName) / sizeof(PetFlagNames);
+#endif
 
 enum UnitSpeedType : uint8_t
 {

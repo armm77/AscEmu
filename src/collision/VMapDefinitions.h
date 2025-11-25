@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@
 #ifndef _VMAPDEFINITIONS_H
 #define _VMAPDEFINITIONS_H
 
-#include <cstring>
 #include <cstdio>
 
 #define LIQUID_TILE_SIZE (533.333f / 128.f)
@@ -32,7 +31,7 @@ namespace VMAP
     const char GAMEOBJECT_MODELS[] = "GameObjectModels.dtree";
 
     // defined in TileAssembler.cpp currently...
-    bool readChunk(FILE* rf, char *dest, const char *compare, uint32 len);
+    bool readChunk(FILE* rf, char *dest, const char *compare, uint32_t len);
 }
 
 #endif

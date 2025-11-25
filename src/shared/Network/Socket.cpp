@@ -11,7 +11,7 @@
 //ignore warning for deprecated function gethostbyname
 #pragma warning ( disable: 4996 )
 
-Socket::Socket(SOCKET fd, uint32 sendbuffersize, uint32 recvbuffersize) : m_fd(fd), m_connected(false),    m_deleted(false), m_writeLock(0)
+Socket::Socket(SOCKET fd, uint32_t sendbuffersize, uint32_t recvbuffersize) : m_fd(fd), m_connected(false),    m_deleted(false), m_writeLock(0)
 {
     // Allocate Buffers
     readBuffer.Allocate(recvbuffersize);
@@ -29,14 +29,14 @@ Socket::Socket(SOCKET fd, uint32 sendbuffersize, uint32 recvbuffersize) : m_fd(f
     if(m_fd == 0)
         m_fd = SocketOps::CreateTCPFileDescriptor();
 
-    sLogger.debug("Created Socket %u", m_fd);
+    sLogger.debug("Created Socket {}", m_fd);
 }
 
 Socket::~Socket()
 {
 }
 
-bool Socket::Connect(const char* Address, uint32 Port)
+bool Socket::Connect(const char* Address, uint32_t Port)
 {
     struct hostent* ci = gethostbyname(Address);
     if(ci == 0)
@@ -85,7 +85,7 @@ void Socket::_OnConnect()
     OnConnect();
 }
 
-bool Socket::Send(const uint8* Bytes, uint32 Size)
+bool Socket::Send(const uint8_t* Bytes, uint32_t Size)
 {
     bool rv;
 
@@ -99,7 +99,7 @@ bool Socket::Send(const uint8* Bytes, uint32 Size)
     return rv;
 }
 
-bool Socket::BurstSend(const uint8* Bytes, uint32 Size)
+bool Socket::BurstSend(const uint8_t* Bytes, uint32_t Size)
 {
     return writeBuffer.Write(Bytes, Size);
 }
@@ -121,7 +121,7 @@ void Socket::Disconnect()
 
     m_connected = false;
 
-    sLogger.info("Socket::Disconnect on socket %u", m_fd);
+    sLogger.info("Socket::Disconnect on socket {}", m_fd);
 
     // remove from mgr
     sSocketMgr.RemoveSocket(this);
@@ -141,7 +141,7 @@ void Socket::Delete()
 
     m_deleted = true;
 
-    sLogger.debug("Socket::Delete() on socket %u", m_fd);
+    sLogger.debug("Socket::Delete() on socket {}", m_fd);
 
     if (IsConnected())
         Disconnect();

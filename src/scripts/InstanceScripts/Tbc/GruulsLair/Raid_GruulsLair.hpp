@@ -1,9 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
 
 enum EncounterData
 {
@@ -136,22 +139,4 @@ public:
     explicit LairBruteAI(Creature* pCreature);
 
     void OnCastSpell(uint32_t spellId) override;
-};
-
-//////////////////////////////////////////////////////////////////////////////////////////
-/// Creature: Gronn Priest
-class GronnPriestAI : public CreatureAIScript
-{
-public:
-    static CreatureAIScript* Create(Creature* pCreature);
-    explicit GronnPriestAI(Creature* pCreature);
-};
-
-//////////////////////////////////////////////////////////////////////////////////////////
-/// Creature: Wild Fell Stalker
-class WildFelStalkerAI : public CreatureAIScript
-{
-public:
-    static CreatureAIScript* Create(Creature* c);
-    explicit WildFelStalkerAI(Creature* pCreature);
 };

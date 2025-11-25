@@ -1,12 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Raid_ZulAman.h"
 
-#include "Server/Script/CreatureAIScript.h"
+#include "Setup.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Utilities/Random.hpp"
 
 class ZulAmanInstanceScript : public InstanceScript
 {
@@ -25,8 +27,9 @@ public:
         auto brutalSwipe = addAISpell(NALORAKK_BRUTAL_SWIPE, 2.0f, TARGET_ATTACKING, 0, 35);
         brutalSwipe->setAvailableForScriptPhase({ 1 });
 
+        /* Invalid Spell in script, commented for now, prevent server crashes
         auto mangle = addAISpell(NALORAKK_MANGLE, 12.0f, TARGET_ATTACKING, 0, 20);
-        mangle->setAvailableForScriptPhase({ 1 });
+        mangle->setAvailableForScriptPhase({ 1 });*/
 
         auto surge = addAISpell(NALORAKK_SURGE, 8.0f, TARGET_RANDOM_SINGLE, 0, 20, false, true);
         surge->setAvailableForScriptPhase({ 1 });

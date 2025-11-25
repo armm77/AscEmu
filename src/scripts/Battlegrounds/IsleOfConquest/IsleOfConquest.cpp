@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,10 +16,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Setup.h"
 #include "IsleOfConquest.h"
+
+#include "Chat/ChatDefines.hpp"
+#include "Management/WorldStates.hpp"
+#include "Map/Maps/BattleGroundMap.hpp"
+#include "Objects/GameObjectProperties.hpp"
+#include "Server/Master.h"
+#include "Management/Battleground/BattlegroundDefines.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
 #include "Storage/MySQLDataStore.hpp"
-#include "Management/WorldStates.h"
-#include "Map/Management/MapMgr.hpp"
 
 // gameobject faction
 static uint32_t g_gameObjectFactions[IOC_NUM_CONTROL_POINTS] =
@@ -287,7 +296,6 @@ static uint32_t cptogy[IOC_NUM_CONTROL_POINTS] =
     IOC_GY_ALLIANCE_KEEP,
     IOC_GY_HORDE_KEEP
 };
-
 
 IsleOfConquest::IsleOfConquest(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t) : Battleground(mgr, id, lgroup, t)
 {

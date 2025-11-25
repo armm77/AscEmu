@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,12 +18,18 @@
  */
 
 #include "Setup.h"
-#include "Objects/Item.hpp"
 #include "Management/ItemInterface.h"
-#include "Spell/SpellAuras.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Objects/Item.hpp"
+#include "Objects/Units/Creatures/Summons/SummonDefines.hpp"
+#include "Objects/Units/Creatures/Summons/SummonHandler.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Spell/Definitions/PowerType.hpp"
 #include "Spell/Definitions/ProcFlags.hpp"
-#include <Spell/Definitions/PowerType.hpp>
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Spell Defs
@@ -54,12 +60,12 @@ bool SkyShatterRegalia(uint8_t /*effectIndex*/, Spell* s)
         s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(SUMMON_SLOT_TOTEM_WATER) &&
         s->getPlayerCaster()->getSummonInterface()->hasTotemInSlot(SUMMON_SLOT_TOTEM_AIR))
     {
-        Aura* aur = sSpellMgr.newAura(sSpellMgr.getSpellInfo(38437), 5000, s->getPlayerCaster(), s->getPlayerCaster(), true);
+        auto aur = sSpellMgr.newAura(sSpellMgr.getSpellInfo(38437), 5000, s->getPlayerCaster(), s->getPlayerCaster(), true);
 
         for (uint8_t j = 0; j < 3; j++)
             aur->addAuraEffect(static_cast<AuraEffect>(aur->getSpellInfo()->getEffectRadiusIndex(j)), aur->getSpellInfo()->getEffectBasePoints(j) + 1, aur->getSpellInfo()->getEffectMiscValue(j), 1.0f, false, j);
 
-        s->getPlayerCaster()->addAura(aur);
+        s->getPlayerCaster()->addAura(std::move(aur));
     }
 
     return true;
@@ -67,7 +73,7 @@ bool SkyShatterRegalia(uint8_t /*effectIndex*/, Spell* s)
 
 bool ManaTide(uint8_t /*effectIndex*/, Spell* s)
 {
-    Unit* unitTarget = s->GetUnitTarget();
+    Unit* unitTarget = s->getUnitTarget();
 
     if (unitTarget == NULL || unitTarget->isDead() || unitTarget->getClass() == WARRIOR || unitTarget->getClass() == ROGUE)
         return false;

@@ -1,31 +1,37 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Map/Cells/MapCell.hpp"
-#include "Map/Cells/CellHandler.hpp"
-#include "Management/WorldStatesHandler.h"
-#include "MapDefines.h"
-#include "Objects/Units/Creatures/Summons/SummonDefines.hpp"
-#include "Server/EventableObject.h"
-#include "Storage/DBC/DBCStructures.hpp"
-
-#include "Map/Maps/BaseMap.hpp"
-#include "Map/Maps/WorldMap.hpp"
-#include "Map/Maps/InstanceMap.hpp"
-#include "Map/Maps/BattleGroundMap.hpp"
+#include "CommonTypes.hpp"
 #include "InstanceNumberGen.hpp"
+#include "Utilities/Util.hpp"
+#include "Map/Maps/InstanceDefines.hpp"
+#include <mutex>
+#include <unordered_map>
+#include <list>
 
+enum PlayerTeam : uint8_t;
+
+namespace InstanceDifficulty
+{
+    enum Difficulties : uint8_t;
+}
+
+class InstanceSaved;
+class BattlegroundMap;
+class InstanceMap;
+class BaseMap;
+class WorldMap;
 class Player;
 
 class SERVER_DECL MapMgr
 {
 private:
-    MapMgr() = default;
-    ~MapMgr() = default;
+    MapMgr();
+    ~MapMgr();
 
 public:
     MapMgr(MapMgr&&) = delete;
@@ -41,7 +47,7 @@ public:
     EnterState canPlayerEnter(uint32_t mapid, uint32_t minLevel, Player* player, bool loginCheck = false);
     void shutdown();
     void removeInstance(uint32_t instanceId);
-    void addMapToRemovePool(WorldMap* map, bool killThreadOnly);
+    void addMapToRemovePool(WorldMap const* map);
     void update();
 
     // BaseMaps
@@ -49,7 +55,7 @@ public:
     BaseMap* findBaseMap(uint32_t mapId) const;
 
     // WorldMap
-    WorldMap* createWorldMap(uint32_t mapId, uint32_t unloadTime);
+    std::unique_ptr<WorldMap> createWorldMap(uint32_t mapId, uint32_t unloadTime) const;
     WorldMap* findWorldMap(uint32_t mapId) const;
 
     // InstanceMap
@@ -67,10 +73,10 @@ public:
     UniqueNumberPool instanceIdPool;
 
 private:
-    typedef std::unordered_map<uint32_t, BaseMap*> BaseMapContainer;
-    typedef std::unordered_map<uint32_t, WorldMap*> WorldMapContainer;
-    typedef std::unordered_map<uint32_t, WorldMap*> InstancedMapContainer;
-    typedef std::unordered_map<WorldMap*, bool /*killThreadOnly*/> MapRemovePool;
+    typedef std::unordered_map<uint32_t, std::unique_ptr<BaseMap>> BaseMapContainer;
+    typedef std::unordered_map<uint32_t, std::unique_ptr<WorldMap>> WorldMapContainer;
+    typedef std::unordered_map<uint32_t, std::unique_ptr<WorldMap>> InstancedMapContainer;
+    typedef std::list<std::unique_ptr<WorldMap>> MapRemovePool;
 
     uint32_t lastMapMgrUpdate = Util::getMSTime();
 

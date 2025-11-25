@@ -1,21 +1,23 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
-
 #include "Management/ArenaTeam.hpp"
-#include "Server/MainServerDefines.h"
-#include "Management/ObjectMgr.h"
+#include "Management/ObjectMgr.hpp"
 #include "DayWatcherThread.h"
-
-#include "Chat/ChatHandler.hpp"
+#include "Logging/Log.hpp"
+#include "Logging/Logger.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/DatabaseDefinition.hpp"
+#include "Server/EventMgr.h"
+#include "Server/World.h"
+#include "Utilities/Narrow.hpp"
+#include "Server/WorldSession.h"
 
 using AscEmu::Threading::AEThread;
 using std::chrono::milliseconds;
 using std::make_unique;
-
 
 DayWatcherThread::DayWatcherThread()
 {
@@ -113,11 +115,10 @@ void DayWatcherThread::update_settings()
 void DayWatcherThread::load_settings()
 {
     m_arenaPeriod = get_timeout_from_string(worldConfig.period.arenaUpdate, WEEKLY);
-    QueryResult* result = CharacterDatabase.Query("SELECT setting_value FROM server_settings WHERE setting_id = \'last_arena_update_time\'");
+    auto result = CharacterDatabase.Query("SELECT setting_value FROM server_settings WHERE setting_id = \'last_arena_update_time\'");
     if (result)
     {
-        m_lastArenaTime = result->Fetch()[0].GetUInt32();
-        delete result;
+        m_lastArenaTime = result->Fetch()[0].asUint32();
     }
     else
     {
@@ -126,11 +127,10 @@ void DayWatcherThread::load_settings()
     }
 
     m_dailyPeriod = get_timeout_from_string(worldConfig.period.dailyUpdate, DAILY);
-    QueryResult* result2 = CharacterDatabase.Query("SELECT setting_value FROM server_settings WHERE setting_id = \'last_daily_update_time\'");
+    auto result2 = CharacterDatabase.Query("SELECT setting_value FROM server_settings WHERE setting_id = \'last_daily_update_time\'");
     if (result2)
     {
-        m_lastDailyTime = result2->Fetch()[0].GetUInt32();
-        delete result2;
+        m_lastDailyTime = result2->Fetch()[0].asUint32();
     }
     else
     {
@@ -183,7 +183,7 @@ void DayWatcherThread::update_daily()
     CharacterDatabase.WaitExecute("UPDATE characters SET finisheddailies = ''");
     CharacterDatabase.WaitExecute("UPDATE characters SET rbg_daily = '0'");     // Reset RBG
 
-    sObjectMgr.ResetDailies();
+    sObjectMgr.resetDailies();
     m_lastDailyTime = UNIXTIME;
     dupe_tm_pointer(localtime(&m_lastDailyTime), &m_localLastDailyTime);
     m_updateDBSettings = true;
@@ -193,15 +193,15 @@ void DayWatcherThread::update_arena()
 {
     sLogger.info("DayWatcherThread : Running Weekly Arena Point Maintenance...");
 
-    QueryResult* result = CharacterDatabase.Query("SELECT guid, arenaPoints FROM characters");
+    auto result = CharacterDatabase.Query("SELECT guid, arenaPoints FROM characters");
     uint32_t arenapointsPerTeam[3] = { 0 };
     if (result)
     {
         do
         {
             Field* field = result->Fetch();
-            uint32_t guid = field[0].GetUInt32();
-            uint32_t arenapoints = field[1].GetUInt32();
+            uint32_t guid = field[0].asUint32();
+            uint32_t arenapoints = field[1].asUint32();
             uint32_t orig_arenapoints = arenapoints;
 
             for (uint8_t i = 0; i < 3; ++i)
@@ -210,22 +210,21 @@ void DayWatcherThread::update_arena()
             // are we in any arena teams?
             for (uint8_t i = 0; i < 3; ++i)
             {
-                ArenaTeam* team = sObjectMgr.GetArenaTeamByGuid(guid, i);
-                if (team != nullptr)
+                if (const auto arenaTeam = sObjectMgr.getArenaTeamByGuid(guid, i))
                 {
-                    const auto arenaTeamMember = team->getMemberByGuid(guid);
-                    if (arenaTeamMember == nullptr || team->m_stats.played_week < 10 || arenaTeamMember->Played_ThisWeek * 100 / team->m_stats.played_week < 30)
+                    const auto arenaTeamMember = arenaTeam->getMemberByGuid(guid);
+                    if (arenaTeamMember == nullptr || arenaTeam->m_stats.played_week < 10 || arenaTeamMember->Played_ThisWeek * 100 / arenaTeam->m_stats.played_week < 30)
                         continue;
 
-                    const double arenaStatsRating = team->m_stats.rating;
-                    double anrenaPoints;
+                    const double arenaStatsRating = arenaTeam->m_stats.rating;
+                    double arenaPoints;
 
                     if (arenaStatsRating <= 510.0)
                         continue;
 
                     if (arenaStatsRating > 510.0 && arenaStatsRating <= 1500.0)        // 510 < X <= 1500"
                     {
-                        anrenaPoints = 0.22 * arenaStatsRating + 14.0;
+                        arenaPoints = 0.22 * arenaStatsRating + 14.0;
                     }
                     else
                     {
@@ -234,26 +233,26 @@ void DayWatcherThread::update_arena()
                         divisor *= 1639.28;
                         divisor += 1.0;
 
-                        anrenaPoints = 1511.26 / divisor;
+                        arenaPoints = 1511.26 / divisor;
                     }
 
-                    if (team->m_type == ARENA_TEAM_TYPE_2V2)
+                    if (arenaTeam->m_type == ARENA_TEAM_TYPE_2V2)
                     {
-                        anrenaPoints *= 0.76;
-                        anrenaPoints *= worldConfig.getFloatRate(RATE_ARENAPOINTMULTIPLIER2X);
+                        arenaPoints *= 0.76;
+                        arenaPoints *= worldConfig.getFloatRate(RATE_ARENAPOINTMULTIPLIER2X);
                     }
-                    else if (team->m_type == ARENA_TEAM_TYPE_3V3)
+                    else if (arenaTeam->m_type == ARENA_TEAM_TYPE_3V3)
                     {
-                        anrenaPoints *= 0.88;
-                        anrenaPoints *= worldConfig.getFloatRate(RATE_ARENAPOINTMULTIPLIER3X);
+                        arenaPoints *= 0.88;
+                        arenaPoints *= worldConfig.getFloatRate(RATE_ARENAPOINTMULTIPLIER3X);
                     }
                     else
                     {
-                        anrenaPoints *= worldConfig.getFloatRate(RATE_ARENAPOINTMULTIPLIER5X);
+                        arenaPoints *= worldConfig.getFloatRate(RATE_ARENAPOINTMULTIPLIER5X);
                     }
 
-                    if (anrenaPoints > 1.0)
-                        arenapointsPerTeam[i] += long2int32(double(ceil(anrenaPoints)));
+                    if (arenaPoints > 1.0)
+                        arenapointsPerTeam[i] += Util::long2int32(double(ceil(arenaPoints)));
                 }
             }
 
@@ -264,23 +263,22 @@ void DayWatcherThread::update_arena()
 
             if (orig_arenapoints != arenapoints)
             {
-                auto player = sObjectMgr.GetPlayer(guid);
+                auto player = sObjectMgr.getPlayer(guid);
                 if (player != nullptr)
                 {
                     player->addArenaPoints(arenapoints, false);
 
                     // update fields (no uint lock)
                     sEventMgr.AddEvent(player, &Player::updateArenaPoints, EVENT_PLAYER_UPDATE, 100, 1, 0);
-                    sChatHandler.SystemMessage(player->getSession(), "Your arena points have been updated! Check your PvP tab!");
+                    player->getSession()->systemMessage("Your arena points have been updated! Check your PvP tab!");
                 }
 
                 CharacterDatabase.Execute("UPDATE characters SET arenaPoints = %u WHERE guid = %u", arenapoints, guid);
             }
         } while (result->NextRow());
-        delete result;
     }
 
-    sObjectMgr.UpdateArenaTeamWeekly();
+    sObjectMgr.updateArenaTeamWeekly();
 
     m_lastArenaTime = UNIXTIME;
     dupe_tm_pointer(localtime(&m_lastArenaTime), &m_localLastArenaTime);

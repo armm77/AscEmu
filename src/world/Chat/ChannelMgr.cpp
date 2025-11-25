@@ -1,20 +1,27 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Channel.hpp"
 #include "ChannelMgr.hpp"
-
+#include "Channel.hpp"
 #include "Map/Area/AreaManagementGlobals.hpp"
 #include "Map/Area/AreaStorage.hpp"
 #include "Objects/Units/Players/Player.hpp"
 #include "Server/World.h"
-#include "Server/WorldSession.h"
 #include "Server/Packets/SmsgChannelNotify.h"
-#include "Util/Strings.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Strings.hpp"
+#include "Utilities/Util.hpp"
+
+#if VERSION_STRING < Cata
+#include "Server/World.h"
+#endif
 
 using namespace AscEmu::Packets;
+
+ChannelMgr::ChannelMgr() = default;
+ChannelMgr::~ChannelMgr() = default;
 
 ChannelMgr& ChannelMgr::getInstance()
 {
@@ -29,19 +36,14 @@ void ChannelMgr::initialize()
 
 void ChannelMgr::finalize()
 {
-    for (uint8 i = 0; i < 2; ++i)
-    {
-        for (auto& channelList : this->m_channelList[i])
-            delete channelList.second;
-
+    for (uint8_t i = 0; i < 2; ++i)
         m_channelList[i].clear();
-    }
 }
 
 void ChannelMgr::loadConfigSettings()
 {
-    auto bannedChannels = worldConfig.chat.bannedChannels;
-    auto minimumLevel = worldConfig.chat.minimumTalkLevel;
+    const auto bannedChannels = worldConfig.chat.bannedChannels;
+    const auto minimumLevel = worldConfig.chat.minimumTalkLevel;
 
     std::lock_guard<std::mutex> guard(m_mutexConfig);
 
@@ -60,30 +62,25 @@ Channel* ChannelMgr::getOrCreateChannel(std::string name, Player const* player, 
     if (m_seperateChannels && player && name != worldConfig.getGmClientChannelName())
         channelList = &m_channelList[player->getTeam()];
 
+    {
+        std::lock_guard<std::mutex> configGuard(m_mutexConfig);
+        for (const auto& m_bannedChannel : m_bannedChannels)
+        {
+            if (name == m_bannedChannel)
+                return nullptr;
+        }
+    }
+
     std::lock_guard<std::mutex> channelGuard(m_mutexChannels);
+    const auto teamId = (m_seperateChannels && player) ? player->getTeam() : TEAM_ALLIANCE;
 
-    for (auto& channelListMember : *channelList)
-    {
-        if (name == channelListMember.first)
-            return channelListMember.second;
-    }
-
-    std::lock_guard<std::mutex> configGuard(m_mutexConfig);
-
-    for (auto& m_bannedChannel : m_bannedChannels)
-    {
-        if (name == m_bannedChannel)
-            return nullptr;
-    }
-
-    auto channel = new Channel(name, (m_seperateChannels && player) ? player->getTeam() : TEAM_ALLIANCE, typeId);
-
-    channelList->insert(make_pair(channel->getChannelName(), channel));
-
-    return channel;
+    const auto [channelItr, _] = channelList->try_emplace(name, Util::LazyInstanceCreator([&name, teamId, typeId] {
+        return std::make_unique<Channel>(name, teamId, typeId);
+    }));
+    return channelItr->second.get();
 }
 
-void ChannelMgr::removeChannel(Channel* channel)
+void ChannelMgr::removeChannel(Channel const* channel)
 {
     if (!channel)
         return;
@@ -96,11 +93,9 @@ void ChannelMgr::removeChannel(Channel* channel)
 
     for (auto channelListMember = channelList->begin(); channelListMember != channelList->end(); ++channelListMember)
     {
-        if (channelListMember->second == channel)
+        if (channelListMember->second.get() == channel)
         {
             channelList->erase(channelListMember);
-            delete channel;
-
             return;
         }
     }
@@ -114,10 +109,10 @@ Channel* ChannelMgr::getChannel(std::string name, Player const* player) const
 
     std::lock_guard<std::mutex> guard(m_mutexChannels);
 
-    for (auto& channelListMember : *channelList)
+    for (const auto& channelListMember : *channelList)
     {
         if (name == channelListMember.first)
-            return channelListMember.second;
+            return channelListMember.second.get();
     }
 
     return nullptr;
@@ -131,16 +126,16 @@ Channel* ChannelMgr::getChannel(std::string name, uint32_t team) const
 
     std::lock_guard<std::mutex> guard(m_mutexChannels);
 
-    for (auto& channelListMember : *channelList)
+    for (const auto& channelListMember : *channelList)
     {
         if (name == channelListMember.first)
-            return channelListMember.second;
+            return channelListMember.second.get();
     }
 
     return nullptr;
 }
 
-bool ChannelMgr::canPlayerJoinDefaultChannel(Player const* player, DBC::Structures::AreaTableEntry const* areaEntry, DBC::Structures::ChatChannelsEntry const* channelDbc) const
+bool ChannelMgr::canPlayerJoinDefaultChannel(Player const* player, WDB::Structures::AreaTableEntry const* areaEntry, WDB::Structures::ChatChannelsEntry const* channelDbc) const
 {
     if (player == nullptr || channelDbc == nullptr)
         return false;
@@ -169,12 +164,12 @@ bool ChannelMgr::canPlayerJoinDefaultChannel(Player const* player, DBC::Structur
     return true;
 }
 
-std::string ChannelMgr::generateChannelName(DBC::Structures::ChatChannelsEntry const* channelDbc, DBC::Structures::AreaTableEntry const* areaEntry) const
+std::string ChannelMgr::generateChannelName(WDB::Structures::ChatChannelsEntry const* channelDbc, WDB::Structures::AreaTableEntry const* areaEntry) const
 {
 #if VERSION_STRING < Cata
     char* channelNameDbc = channelDbc->name_pattern[sWorld.getDbcLocaleLanguageId()];
 #else
-    char* channelNameDbc = channelDbc->name_pattern;
+    char* channelNameDbc = channelDbc->name_pattern[0];
 #endif
 
     if (channelDbc->flags & CHANNEL_DBC_GLOBAL || !(channelDbc->flags & CHANNEL_DBC_HAS_ZONENAME))
@@ -188,7 +183,7 @@ std::string ChannelMgr::generateChannelName(DBC::Structures::ChatChannelsEntry c
 #if VERSION_STRING < Cata
         defaultAreaName = defaultArea->area_name[sWorld.getDbcLocaleLanguageId()];
 #else
-        defaultAreaName = defaultArea->area_name;
+        defaultAreaName = defaultArea->area_name[0];
 #endif
     }
 

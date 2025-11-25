@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -21,15 +21,18 @@
 #ifndef EVENTABLEOBJECT_H
 #define EVENTABLEOBJECT_H
 
-#include "EventMgr.h"
-#include <Util.hpp>
+#include "CommonTypes.hpp"
 #include <list>
+#include <map>
+#include <mutex>
 #include <set>
+#include <memory>
 
+struct TimedEvent;
 class EventableObjectHolder;
 
-typedef std::list<TimedEvent*> EventList;
-typedef std::multimap<uint32, TimedEvent*> EventMap;
+typedef std::list<std::shared_ptr<TimedEvent>> EventList;
+typedef std::multimap<uint32_t, std::shared_ptr<TimedEvent>> EventMap;
 
 #define EVENT_REMOVAL_FLAG_ALL 0xFFFFFFFF
 #define WORLD_INSTANCE -1
@@ -45,41 +48,34 @@ class SERVER_DECL EventableObject
     friend class EventableObjectHolder;
 
     protected:
-
         void event_RemoveEvents();
-        void event_RemoveEvents(uint32 EventType);
-        void event_ModifyTimeLeft(uint32 EventType, time_t TimeLeft, bool unconditioned = false);
-        void event_ModifyTime(uint32 EventType, time_t Time);
-        void event_ModifyTimeAndTimeLeft(uint32 EventType, time_t Time);
-        bool event_HasEvent(uint32 EventType);
+        void event_RemoveEvents(uint32_t EventType);
+        void event_ModifyTimeLeft(uint32_t EventType, time_t TimeLeft, bool unconditioned = false);
+        void event_ModifyTime(uint32_t EventType, time_t Time);
+        void event_ModifyTimeAndTimeLeft(uint32_t EventType, time_t Time);
+        bool event_HasEvent(uint32_t EventType);
         void event_RemoveByPointer(TimedEvent* ev);
-        int32 event_GetCurrentInstanceId() { return m_event_Instanceid; }
-        bool event_GetTimeLeft(uint32 EventType, time_t* Time);
+        int32_t event_GetCurrentInstanceId() const { return m_event_Instanceid; }
+        bool event_GetTimeLeft(uint32_t EventType, time_t* Time);
 
     public:
-
-        uint32 event_GetEventPeriod(uint32 EventType);
+        uint32_t event_GetEventPeriod(uint32_t EventType);
         // Public methods
         EventableObject();
         virtual ~EventableObject();
 
         bool event_HasEvents() { return m_events.size() > 0 ? true : false; }
-        void event_AddEvent(TimedEvent* ptr);
+        void event_AddEvent(std::shared_ptr<TimedEvent> ptr);
         void event_Relocate();
 
         /// this func needs to be implemented by all eventable classes. use it to retrieve the instance id that it needs to attach itself to.
-        virtual int32 event_GetInstanceID() { return WORLD_INSTANCE; }
-
-        void AddRef() { Sync_Add(&m_refs); }
-        void DecRef() { if (Sync_Sub(&m_refs) == 0) delete this; }
+        virtual int32_t event_GetInstanceID() { return WORLD_INSTANCE; }
 
     protected:
-
-        int32 m_event_Instanceid;
-        Mutex m_lock;
+        int32_t m_event_Instanceid;
+        std::mutex m_lock;
         EventMap m_events;
         EventableObjectHolder* m_holder;
-        volatile long m_refs;
 };
 
 
@@ -95,25 +91,23 @@ typedef std::set<EventableObject*> EventableObjectSet;
 class EventableObjectHolder
 {
     public:
-
-        EventableObjectHolder(int32 instance_id);
+        EventableObjectHolder(int32_t instance_id);
         ~EventableObjectHolder();
 
         void Update(time_t time_difference);
 
-        void AddEvent(TimedEvent* ev);
+        void AddEvent(std::shared_ptr<TimedEvent> ev);
         void AddObject(EventableObject* obj);
 
-        uint32 GetInstanceID() { return mInstanceId; }
+        uint32_t GetInstanceID() { return mInstanceId; }
 
     protected:
-
-        int32 mInstanceId;
-        Mutex m_lock;
+        int32_t mInstanceId;
+        std::mutex m_lock;
         EventList m_events;
 
-        Mutex m_insertPoolLock;
-        typedef std::list<TimedEvent*> InsertableQueue;
+        std::mutex m_insertPoolLock;
+        typedef std::list<std::shared_ptr<TimedEvent>> InsertableQueue;
         InsertableQueue m_insertPool;
 };
 

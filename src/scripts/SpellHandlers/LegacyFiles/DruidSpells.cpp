@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,10 +18,12 @@
  */
 
 #include "Setup.h"
-#include "Management/Faction.h"
-#include "Spell/SpellAuras.h"
-#include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.hpp"
+#include "Objects/Units/Unit.hpp"
+#include "Server/EventMgr.h"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
 
 bool Starfall(uint8_t effectIndex, Spell* pSpell)
 {
@@ -36,7 +38,7 @@ bool Starfall(uint8_t effectIndex, Spell* pSpell)
             continue;
 
         Unit* Target = static_cast<Unit*>(itr);
-        if (isAttackable(Target, m_caster) && m_caster->CalcDistance(itr) <= pSpell->getEffectRadius(effectIndex))
+        if (Target->isValidAttackableTarget(m_caster) && m_caster->CalcDistance(itr) <= pSpell->getEffectRadius(effectIndex))
         {
             m_caster->castSpell(Target, pSpell->getSpellInfo()->calculateEffectValue(effectIndex, m_caster), true);
             ++am;

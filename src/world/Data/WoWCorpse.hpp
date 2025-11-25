@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -12,12 +12,16 @@ This file is released under the MIT license. See README-MIT for more information
  */
 
 #pragma once
+
 #include "WoWObject.hpp"
+
+#include <array>
+
 #pragma pack(push, 1)
 
-union
+union corpse_bytes_1_union
 {
-    struct
+    struct parts
     {
         uint8_t unk1;
         uint8_t race;
@@ -25,11 +29,11 @@ union
         uint8_t skin_color;
     } s;
     uint32_t raw;
-} typedef corpse_bytes_1_union;
+};
 
-union
+union corpse_bytes_2_union
 {
-    struct
+    struct parts
     {
         uint8_t face;
         uint8_t hair_style;
@@ -37,11 +41,11 @@ union
         uint8_t facial_hair;
     } s;
     uint32_t raw;
-} typedef corpse_bytes_2_union;
+};
 
 #if VERSION_STRING == Classic
 
-#define WOWCORPSE_ITEM_COUNT 19
+static inline constexpr uint8_t WOWCORPSE_ITEM_COUNT = 19;
 
 struct WoWCorpse : WoWObject
 {
@@ -52,7 +56,7 @@ struct WoWCorpse : WoWObject
     float y;
     float z;
     uint32_t display_id;
-    uint32_t item[WOWCORPSE_ITEM_COUNT];
+    std::array<uint32_t, WOWCORPSE_ITEM_COUNT> item;
     corpse_bytes_1_union corpse_bytes_1;
     corpse_bytes_2_union corpse_bytes_2;
     uint32_t guild;
@@ -64,7 +68,7 @@ struct WoWCorpse : WoWObject
 
 #if VERSION_STRING == TBC
 
-#define WOWCORPSE_ITEM_COUNT 19
+static inline constexpr uint8_t WOWCORPSE_ITEM_COUNT = 19;
 
 struct WoWCorpse : WoWObject
 {
@@ -75,7 +79,7 @@ struct WoWCorpse : WoWObject
     float y;
     float z;
     uint32_t display_id;
-    uint32_t item[WOWCORPSE_ITEM_COUNT];
+    std::array<uint32_t, WOWCORPSE_ITEM_COUNT> item;
     corpse_bytes_1_union corpse_bytes_1;
     corpse_bytes_2_union corpse_bytes_2;
     uint32_t guild;
@@ -87,14 +91,14 @@ struct WoWCorpse : WoWObject
 
 #if VERSION_STRING == WotLK
 
-#define WOWCORPSE_ITEM_COUNT 19
+static inline constexpr uint8_t WOWCORPSE_ITEM_COUNT = 19;
 
 struct WoWCorpse : WoWObject
 {
     uint64_t owner_guid;
     uint64_t party_guid;
     uint32_t display_id;
-    uint32_t item[WOWCORPSE_ITEM_COUNT];
+    std::array<uint32_t, WOWCORPSE_ITEM_COUNT> item;
     corpse_bytes_1_union corpse_bytes_1;
     corpse_bytes_2_union corpse_bytes_2;
     uint32_t guild;
@@ -106,14 +110,14 @@ struct WoWCorpse : WoWObject
 
 #if VERSION_STRING == Cata
 
-#define WOWCORPSE_ITEM_COUNT 19
+static inline constexpr uint8_t WOWCORPSE_ITEM_COUNT = 19;
 
 struct WoWCorpse : WoWObject
 {
     uint64_t owner_guid;
     uint64_t party_guid;
     uint32_t display_id;
-    uint32_t item[WOWCORPSE_ITEM_COUNT];
+    std::array<uint32_t, WOWCORPSE_ITEM_COUNT> item;
     corpse_bytes_1_union corpse_bytes_1;
     corpse_bytes_2_union corpse_bytes_2;
     uint32_t corpse_flags;
@@ -123,14 +127,14 @@ struct WoWCorpse : WoWObject
 
 #if VERSION_STRING == Mop
 
-#define WOWCORPSE_ITEM_COUNT 19
+static inline constexpr uint8_t WOWCORPSE_ITEM_COUNT = 19;
 
 struct WoWCorpse : WoWObject
 {
     uint64_t owner_guid;
     uint64_t party_guid;
     uint32_t display_id;
-    uint32_t item[WOWCORPSE_ITEM_COUNT];
+    std::array<uint32_t, WOWCORPSE_ITEM_COUNT> item;
     corpse_bytes_1_union corpse_bytes_1;
     corpse_bytes_2_union corpse_bytes_2;
     uint32_t corpse_flags;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,20 +18,23 @@
  */
 
 #include "Setup.h"
-#include "Spell/SpellAuras.h"
-#include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.hpp"
-#include <Spell/Definitions/PowerType.hpp>
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Spell/Definitions/PowerType.hpp"
 
 bool Execute(uint8_t effectIndex, Spell* pSpell)
 {
-    if (pSpell->getPlayerCaster() == NULL || pSpell->GetUnitTarget() == NULL)
+    if (pSpell->getPlayerCaster() == NULL || pSpell->getUnitTarget() == NULL)
     {
         return true;
     }
 
     Player* Caster = pSpell->getPlayerCaster();
-    Unit* Target = pSpell->GetUnitTarget();
+    Unit* Target = pSpell->getUnitTarget();
 
     uint32_t rage = Caster->getPower(POWER_TYPE_RAGE);
 
@@ -44,13 +47,14 @@ bool Execute(uint8_t effectIndex, Spell* pSpell)
     int32_t dmg = 0;
     uint32_t multiple[] = { 0, 3, 6, 9, 12, 15, 18, 21, 30, 38, };
 
+    const uint8_t rank = pSpell->getSpellInfo()->hasSpellRanks() ? pSpell->getSpellInfo()->getRankInfo()->getRank() : 1;
     if (rage >= 30)
     {
-        toadd = (multiple[pSpell->getSpellInfo()->custom_RankNumber] * 30);
+        toadd = (multiple[rank] * 30);
     }
     else
     {
-        toadd = (multiple[pSpell->getSpellInfo()->custom_RankNumber] * rage);
+        toadd = (multiple[rank] * rage);
     }
 
     dmg = pSpell->calculateEffect(effectIndex);
@@ -122,7 +126,7 @@ bool Charge(uint8_t effectIndex, Spell* s)
     uint32_t rage_to_gen = s->getSpellInfo()->getEffectBasePoints(effectIndex) + 1;
     if (s->getPlayerCaster())
     {
-        for (std::set<uint32_t>::iterator itr = s->getPlayerCaster()->m_spells.begin(); itr != s->getPlayerCaster()->m_spells.end(); ++itr)
+        for (auto itr = s->getPlayerCaster()->getSpellSet().begin(); itr != s->getPlayerCaster()->getSpellSet().end(); ++itr)
         {
             if (*itr == 12697)
             {
@@ -144,7 +148,7 @@ bool Charge(uint8_t effectIndex, Spell* s)
 
 bool LastStand(uint8_t /*effectIndex*/, Spell* s)
 {
-    Player* playerTarget = s->GetPlayerTarget();
+    Player* playerTarget = s->getPlayerTarget();
 
     if (!playerTarget)
     {

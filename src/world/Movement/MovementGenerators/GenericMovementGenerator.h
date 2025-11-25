@@ -1,13 +1,17 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Util.hpp"
 #include "Movement/MovementGenerator.h"
 #include "Movement/Spline/MoveSplineInit.h"
+
+namespace Util
+{
+    struct SmallTimeTracker;
+}
 
 class Unit;
 
@@ -16,7 +20,7 @@ enum MovementGeneratorType : uint8_t;
 class GenericMovementGenerator : public MovementGenerator
 {
 public:
-    explicit GenericMovementGenerator(MovementNew::MoveSplineInit&& splineInit, MovementGeneratorType type, uint32_t id);
+    explicit GenericMovementGenerator(MovementMgr::MoveSplineInit&& splineInit, MovementGeneratorType type, uint32_t id);
 
     void initialize(Unit*) override;
     void reset(Unit*) override;
@@ -28,8 +32,8 @@ public:
 private:
     void movementInform(Unit*);
 
-    MovementNew::MoveSplineInit _splineInit;
+    MovementMgr::MoveSplineInit _splineInit;
     MovementGeneratorType _type;
     uint32_t _pointId;
-    SmallTimeTracker _duration;
+    std::unique_ptr<Util::SmallTimeTracker> _duration;
 };

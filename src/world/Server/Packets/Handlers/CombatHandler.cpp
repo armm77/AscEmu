@@ -1,14 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
+#include "Logging/Logger.hpp"
 #include "Server/Packets/CmsgAttackSwing.h"
 #include "Server/WorldSession.h"
 #include "Objects/Units/Players/Player.hpp"
-#include "Map/Management/MapMgr.hpp"
-#include "Management/Faction.h"
+#include "Map/Maps/WorldMap.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -18,7 +17,7 @@ void WorldSession::handleAttackSwingOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_ATTACKSWING: %u (guidLow)", srlPacket.guid.getGuidLow());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_ATTACKSWING: {} (guidLow)", srlPacket.guid.getGuidLow());
 
     if (_player->isFeared() || _player->isStunned() || _player->isPacified() || _player->isDead())
         return;
@@ -27,7 +26,7 @@ void WorldSession::handleAttackSwingOpcode(WorldPacket& recvPacket)
     if (unitTarget == nullptr)
         return;
 
-    if (!isAttackable(_player, unitTarget, false) || unitTarget->isDead())
+    if (!_player->isValidAttackableTarget(unitTarget) || unitTarget->isDead())
         return;
 
     _player->smsg_AttackStart(unitTarget);

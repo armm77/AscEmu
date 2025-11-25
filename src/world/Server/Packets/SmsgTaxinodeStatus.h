@@ -1,13 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include <cstdint>
-
+#include "AEVersion.hpp"
 #include "ManagedPacket.h"
+#include <cstdint>
 
 namespace AscEmu::Packets
 {
@@ -15,16 +15,16 @@ namespace AscEmu::Packets
     {
     public:
         uint64_t guid;
-        uint8_t status;
+        bool isNodeKnown;
 
         SmsgTaxinodeStatus() : SmsgTaxinodeStatus(0, 0)
         {
         }
 
-        SmsgTaxinodeStatus(uint64_t guid, uint8_t status) :
+        SmsgTaxinodeStatus(uint64_t guid, bool isNodeKnown) :
             ManagedPacket(SMSG_TAXINODE_STATUS, 0),
             guid(guid),
-            status(status)
+            isNodeKnown(isNodeKnown)
         {
         }
 
@@ -34,7 +34,12 @@ namespace AscEmu::Packets
 
         bool internalSerialise(WorldPacket& packet) override
         {
-            packet << guid << status;
+            packet << guid;
+#if VERSION_STRING < Cata
+            packet << static_cast<uint8_t>(isNodeKnown ? 1 : 0);
+#else
+            packet << static_cast<uint8_t>(isNodeKnown ? 1 : 2);
+#endif
             return true;
         }
 

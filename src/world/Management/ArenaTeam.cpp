@@ -1,16 +1,19 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Management/ArenaTeam.hpp"
-#include "Server/MainServerDefines.h"
+
+#include <sstream>
+
+#include "Logging/Logger.hpp"
 #include "Server/WorldSession.h"
-#include "Chat/ChatHandler.hpp"
-#include "Management/ObjectMgr.h"
-#include "Server/Packets/SmsgArenaTeamStats.h"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Units/Players/Player.hpp"
 #include "Server/Packets/SmsgMessageChat.h"
 #include "Objects/Units/Players/PlayerDefines.hpp"
+#include "Server/DatabaseDefinition.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -48,16 +51,16 @@ ArenaTeam::ArenaTeam(Field* field)
 {
     uint32_t z = 0;
 
-    m_id = field[z++].GetUInt32();
-    m_type = field[z++].GetUInt8();
-    m_leader = field[z++].GetUInt32();
-    m_name = field[z++].GetString();
-    m_emblem.emblemStyle = field[z++].GetUInt32();
-    m_emblem.emblemColour = field[z++].GetUInt32();
-    m_emblem.borderStyle = field[z++].GetUInt32();
-    m_emblem.borderColour = field[z++].GetUInt32();
-    m_emblem.backgroundColour = field[z++].GetUInt32();
-    m_stats.rating = field[z++].GetUInt32();
+    m_id = field[z++].asUint32();
+    m_type = field[z++].asUint8();
+    m_leader = field[z++].asUint32();
+    m_name = field[z++].asCString();
+    m_emblem.emblemStyle = field[z++].asUint32();
+    m_emblem.emblemColour = field[z++].asUint32();
+    m_emblem.borderStyle = field[z++].asUint32();
+    m_emblem.borderColour = field[z++].asUint32();
+    m_emblem.backgroundColour = field[z++].asUint32();
+    m_stats.rating = field[z++].asUint32();
 
     _allocateSlots(m_type);
 
@@ -67,19 +70,19 @@ ArenaTeam::ArenaTeam(Field* field)
     m_stats.won_week = 0;
     m_stats.ranking = 0;
 
-    if (sscanf(field[z++].GetString(), "%u %u %u %u", &m_stats.played_week, &m_stats.won_week, &m_stats.played_season, &m_stats.won_season) != 3)
+    if (sscanf(field[z++].asCString(), "%u %u %u %u", &m_stats.played_week, &m_stats.won_week, &m_stats.played_season, &m_stats.won_season) != 3)
         return;
 
-    m_stats.ranking = field[z++].GetUInt32();
+    m_stats.ranking = field[z++].asUint32();
     for (uint32_t i = 0; i < m_slots; ++i)
     {
         uint32_t guid;
-        const char* data = field[z++].GetString();
+        const char* data = field[z++].asCString();
         int ret = sscanf(data, "%u %u %u %u %u %u", &guid, &m_members[i].Played_ThisWeek, &m_members[i].Won_ThisWeek,
                          &m_members[i].Played_ThisSeason, &m_members[i].Won_ThisSeason, &m_members[i].PersonalRating);
         if (ret >= 5)
         {
-            m_members[i].Info = sObjectMgr.GetPlayerInfo(guid);
+            m_members[i].Info = sObjectMgr.getCachedCharacterInfo(guid);
             if (m_members[i].Info)
                 ++m_memberCount;
 
@@ -96,10 +99,7 @@ ArenaTeam::ArenaTeam(Field* field)
     }
 }
 
-ArenaTeam::~ArenaTeam()
-{
-    delete[] m_members;
-}
+ArenaTeam::~ArenaTeam() = default;
 
 void ArenaTeam::saveToDB()
 {
@@ -154,7 +154,7 @@ void ArenaTeam::saveToDB()
 
 void ArenaTeam::destroy()
 {
-    std::vector<CachedCharacterInfo*> toDestroyMembers;
+    std::vector<CachedCharacterInfo const*> toDestroyMembers;
     toDestroyMembers.reserve(m_memberCount);
 
     char buffer[1024];
@@ -171,8 +171,8 @@ void ArenaTeam::destroy()
     for (auto& itr : toDestroyMembers)
         removeMember(itr);
 
-    sObjectMgr.RemoveArenaTeam(this);
-    delete this;
+    // TODO: arena team is not removed from db? -Appled
+    sObjectMgr.removeArenaTeam(this);
 }
 
 void ArenaTeam::sendPacket(WorldPacket* data) const
@@ -181,13 +181,13 @@ void ArenaTeam::sendPacket(WorldPacket* data) const
     {
         if (m_members[i].Info)
         {
-            if (Player* loggedInPlayer = sObjectMgr.GetPlayer(m_members[i].Info->guid))
+            if (Player* loggedInPlayer = sObjectMgr.getPlayer(m_members[i].Info->guid))
                 loggedInPlayer->getSession()->SendPacket(data);
         }
     }
 }
 
-ArenaTeamMember* ArenaTeam::getMember(CachedCharacterInfo* cachedCharInfo) const
+ArenaTeamMember* ArenaTeam::getMember(CachedCharacterInfo const* cachedCharInfo) const
 {
     for (uint32_t i = 0; i < m_memberCount; ++i)
     {
@@ -207,12 +207,12 @@ ArenaTeamMember* ArenaTeam::getMemberByGuid(uint32_t lowGuid) const
     return nullptr;
 }
 
-bool ArenaTeam::addMember(CachedCharacterInfo* cachedCharInfo)
+bool ArenaTeam::addMember(CachedCharacterInfo const* cachedCharInfo)
 {
     if (!cachedCharInfo)
         return false;
 
-    if (Player* loggedInPlayer = sObjectMgr.GetPlayer(cachedCharInfo->guid))
+    if (Player* loggedInPlayer = sObjectMgr.getPlayer(cachedCharInfo->guid))
     {
         if (m_memberCount >= m_slots)
             return false;
@@ -225,18 +225,13 @@ bool ArenaTeam::addMember(CachedCharacterInfo* cachedCharInfo)
 #if VERSION_STRING != Classic
         loggedInPlayer->setArenaTeamId(m_type, m_id);
         loggedInPlayer->setArenaTeamMemberRank(m_type, 1);
-
-        loggedInPlayer->setArenaTeam(m_type, this);
-
-        loggedInPlayer->getSession()->SystemMessage("You are now a member of the arena team, '%s'.", m_name.c_str());
-
 #endif
     }
 
     return true;
 }
 
-bool ArenaTeam::removeMember(CachedCharacterInfo* cachedCharInfo)
+bool ArenaTeam::removeMember(CachedCharacterInfo const* cachedCharInfo)
 {
     if (!cachedCharInfo)
         return false;
@@ -253,7 +248,7 @@ bool ArenaTeam::removeMember(CachedCharacterInfo* cachedCharInfo)
             saveToDB();
 
 #if VERSION_STRING != Classic
-            if (Player* loggedInPlayer = sObjectMgr.GetPlayer(cachedCharInfo->guid))
+            if (Player* loggedInPlayer = sObjectMgr.getPlayer(cachedCharInfo->guid))
             {
                 loggedInPlayer->setArenaTeamId(m_type, 0);
                 loggedInPlayer->setArenaTeam(m_type, nullptr);
@@ -295,7 +290,7 @@ bool ArenaTeam::isMember(uint32_t lowGuid) const
     return false;
 }
 
-void ArenaTeam::setLeader(CachedCharacterInfo* cachedCharInfo)
+void ArenaTeam::setLeader(CachedCharacterInfo const* cachedCharInfo)
 {
     if (cachedCharInfo)
     {
@@ -312,7 +307,7 @@ void ArenaTeam::setLeader(CachedCharacterInfo* cachedCharInfo)
         {
             if (m_members[i].Info)
             {
-                if (Player* loggedInPlayer = sObjectMgr.GetPlayer(m_members[i].Info->guid))
+                if (Player* loggedInPlayer = sObjectMgr.getPlayer(m_members[i].Info->guid))
                 {
                     if (m_members[i].Info == cachedCharInfo)
                         loggedInPlayer->setArenaTeamMemberRank(m_type, 0);
@@ -336,7 +331,7 @@ std::vector<ArenaTeamPacketList> ArenaTeam::getRoosterMembers() const
             ArenaTeamPacketList arenaTeamListMember;
 
             arenaTeamListMember.guid = playerInfo->guid;
-            arenaTeamListMember.isLoggedIn = sObjectMgr.GetPlayer(playerInfo->guid) ? 1 : 0;
+            arenaTeamListMember.isLoggedIn = sObjectMgr.getPlayer(playerInfo->guid) ? 1 : 0;
             arenaTeamListMember.name = playerInfo->name;
             arenaTeamListMember.isLeader = m_members[i].Info->guid == m_leader ? 0 : 1;
             arenaTeamListMember.lastLevel = static_cast<uint8_t>(playerInfo->lastLevel);
@@ -370,8 +365,8 @@ void ArenaTeam::_allocateSlots(uint16_t type)
         return;
     }
 
-    m_members = new ArenaTeamMember[Slots];
-    memset(m_members, 0, sizeof(ArenaTeamMember) * Slots);
+    m_members = std::make_unique<ArenaTeamMember[]>(Slots);
+    std::fill(m_members.get(), m_members.get() + Slots, ArenaTeamMember());
     m_slots = Slots;
     m_memberCount = 0;
 }

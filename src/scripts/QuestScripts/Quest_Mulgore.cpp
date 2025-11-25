@@ -1,17 +1,11 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
-#include "Objects/Units/Creatures/AIInterface.h"
-#include "Objects/Item.hpp"
-#include "Map/Management/MapMgr.hpp"
-#include "Management/ItemInterface.h"
-#include "Storage/MySQLDataStore.hpp"
-#include <Management/QuestLogEntry.hpp>
-#include "Map/Maps/MapScriptInterface.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Movement/MovementManager.h"
+#include "Server/Script/CreatureAIScript.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //Quest: Rite of Vision

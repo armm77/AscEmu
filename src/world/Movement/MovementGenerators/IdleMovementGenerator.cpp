@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -71,6 +71,7 @@ void RotateMovementGenerator::reset(Unit* owner)
     initialize(owner);
 }
 
+#if VERSION_STRING <= WotLK
 bool RotateMovementGenerator::update(Unit* owner, uint32_t diff)
 {
     if (!owner)
@@ -90,7 +91,7 @@ bool RotateMovementGenerator::update(Unit* owner, uint32_t diff)
             angle += float(M_PI) * 2.f;
     }
 
-    MovementNew::MoveSplineInit init(owner);
+    MovementMgr::MoveSplineInit init(owner);
     init.MoveTo(positionToVector3(owner->GetPosition()), false);
     if (owner->hasUnitMovementFlag(MOVEFLAG_TRANSPORT) && owner->getTransGuid())
         init.DisableTransportPathTransformations();
@@ -107,6 +108,24 @@ bool RotateMovementGenerator::update(Unit* owner, uint32_t diff)
 
     return true;
 }
+#else
+bool RotateMovementGenerator::update(Unit* owner, uint32_t diff)
+{
+    float angle = owner->GetOrientation();
+    angle += (float(diff) * static_cast<float>(M_PI * 2) / _maxDuration) * (_direction == ROTATE_DIRECTION_LEFT ? 1.0f : -1.0f);
+    angle = G3D::wrap(angle, 0.0f, float(G3D::twoPi()));
+
+    owner->SetOrientation(angle);   // UpdateSplinePosition does not set orientation with UNIT_STATE_ROTATING
+    owner->setFacingTo(angle);      // Send spline movement to clients
+
+    if (_duration > diff)
+        _duration -= diff;
+    else
+        return false;
+
+    return true;
+}
+#endif
 
 void RotateMovementGenerator::deactivate(Unit*)
 {
@@ -117,7 +136,7 @@ void RotateMovementGenerator::finalize(Unit* owner, bool/* active*/, bool moveme
 {
     addFlag(MOVEMENTGENERATOR_FLAG_FINALIZED);
 
-    if (movementInform && owner->getObjectTypeId() == TYPEID_UNIT)
+    if (movementInform && owner->isCreature())
         owner->ToCreature()->getAIInterface()->movementInform(ROTATE_MOTION_TYPE, _id);
 }
 
@@ -136,6 +155,7 @@ DistractMovementGenerator::DistractMovementGenerator(uint32_t timer, float orien
     BaseUnitState = UNIT_STATE_DISTRACTED;
 }
 
+#if VERSION_STRING <= WotLK
 void DistractMovementGenerator::initialize(Unit* owner)
 {
     removeFlag(MOVEMENTGENERATOR_FLAG_INITIALIZATION_PENDING | MOVEMENTGENERATOR_FLAG_DEACTIVATED);
@@ -145,13 +165,23 @@ void DistractMovementGenerator::initialize(Unit* owner)
     if (!owner->getStandState())
         owner->setStandState(STANDSTATE_STAND);
 
-    MovementNew::MoveSplineInit init(owner);
+    MovementMgr::MoveSplineInit init(owner);
     init.MoveTo(positionToVector3(owner->GetPosition()), false);
     if (owner->hasUnitMovementFlag(MOVEFLAG_TRANSPORT) && owner->getTransGuid())
         init.DisableTransportPathTransformations();
     init.SetFacing(_orientation);
     init.Launch();
 }
+#else
+void DistractMovementGenerator::initialize(Unit* owner)
+{
+    // Distracted creatures stand up if not standing
+    if (!owner->getStandState())
+        owner->setStandState(STANDSTATE_STAND);
+
+    owner->addUnitStateFlag(UNIT_STATE_DISTRACTED);
+}
+#endif
 
 void DistractMovementGenerator::reset(Unit* owner)
 {
@@ -186,7 +216,7 @@ void DistractMovementGenerator::finalize(Unit* owner, bool/* active*/, bool move
 
     // TODO: This code should be handled somewhere else
     // If this is a creature, then return orientation to original position (for idle movement creatures)
-    if (movementInform && hasFlag(MOVEMENTGENERATOR_FLAG_INFORM_ENABLED) && owner->getObjectTypeId() == TYPEID_UNIT)
+    if (movementInform && hasFlag(MOVEMENTGENERATOR_FLAG_INFORM_ENABLED) && owner->isCreature())
     {
         float angle = owner->ToCreature()->GetSpawnPosition().getOrientation();
         owner->setFacingTo(angle);
@@ -209,8 +239,8 @@ void AssistanceDistractMovementGenerator::finalize(Unit* owner, bool/* active*/,
 {
     addFlag(MOVEMENTGENERATOR_FLAG_FINALIZED);
 
-    if (movementInform && hasFlag(MOVEMENTGENERATOR_FLAG_INFORM_ENABLED) && owner->getObjectTypeId() == TYPEID_UNIT)
-        owner->ToCreature()->getAIInterface()->setReactState(REACT_AGGRESSIVE);
+    if (movementInform && hasFlag(MOVEMENTGENERATOR_FLAG_INFORM_ENABLED) && owner->isCreature())
+        owner->getAIInterface()->stopFleeing();
 }
 
 MovementGeneratorType AssistanceDistractMovementGenerator::getMovementGeneratorType() const

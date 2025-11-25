@@ -1,20 +1,21 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Logging/Logger.hpp"
 #include "Server/Packets/ManagedPacket.h"
 #include "Server/Packets/CmsgSetActiveMover.h"
 #include "Server/Packets/MovementPacket.h"
 #include "Server/WorldSession.h"
+#include "Objects/Units/Creatures/Summons/SummonHandler.hpp"
 #include "Objects/Units/Players/Player.hpp"
-#include "Objects/Units/Creatures/Vehicle.h"
+#include "Objects/Units/Creatures/Vehicle.hpp"
 #include "Map/Cells/CellHandlerDefines.hpp"
 #include "Objects/GameObject.h"
-#include "Server/MainServerDefines.h"
 #include "Server/Warden/SpeedDetector.h"
-#include "Management/ObjectMgr.h"
-#include "Storage/MySQLDataStore.hpp"
+#include "Management/ObjectMgr.hpp"
+#include "Management/TaxiMgr.hpp"
 #include "Server/Packets/CmsgWorldTeleport.h"
 #include "Server/Packets/SmsgMountspecialAnim.h"
 #include "Server/Packets/MsgMoveTeleportAck.h"
@@ -22,10 +23,14 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Objects/Units/Creatures/Pet.h"
 #include "Server/OpcodeTable.hpp"
 #include "Spell/Definitions/AuraInterruptFlags.hpp"
+#include "Objects/Transporter.hpp"
+#include "Server/World.h"
+#include "Server/WorldSessionLog.hpp"
+#include "Spell/Spell.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
 
 using namespace AscEmu::Packets;
 
-#if VERSION_STRING < Cata
 void WorldSession::handleSetActiveMoverOpcode(WorldPacket& recvPacket)
 {
     CmsgSetActiveMover srlPacket;
@@ -35,7 +40,8 @@ void WorldSession::handleSetActiveMoverOpcode(WorldPacket& recvPacket)
     if (srlPacket.guid == m_MoverWoWGuid.getRawGuid())
         return;
 
-#if VERSION_STRING > TBC
+#if VERSION_STRING < Cata
+    #if VERSION_STRING > TBC
     if (_player->getCharmGuid() != srlPacket.guid.getRawGuid() || _player->getGuid() != srlPacket.guid.getRawGuid())
     {
         auto bad_packet = true;
@@ -47,14 +53,14 @@ void WorldSession::handleSetActiveMoverOpcode(WorldPacket& recvPacket)
         if (bad_packet)
             return;
     }
-#endif
+    #endif
 
     if (srlPacket.guid.getRawGuid() == 0)
-        m_MoverWoWGuid.Init(_player->getGuid());
+        m_MoverWoWGuid.init(_player->getGuid());
     else
         m_MoverWoWGuid = srlPacket.guid;
-}
 #endif
+}
 
 void WorldSession::updatePlayerMovementVars(uint16_t opcode)
 {
@@ -128,7 +134,7 @@ bool WorldSession::isHackDetectedInMovementData(uint16_t opcode)
 
     // Speed
     // implement worldConfig.antiHack.isSpeedHackCkeckEnabled
-    if (!_player->isOnTaxi() && _player->obj_movement_info.transport_guid == 0 && !_player->getSession()->GetPermissionCount())
+    if (_player->isOnTaxi() && _player->obj_movement_info.transport_guid.isEmpty() && !_player->getSession()->hasPermissions())
     {
         // simplified: just take the fastest speed. less chance of fuckups too
         // get the "normal speeds" not the changed ones!
@@ -152,9 +158,9 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvData)
         return;
 
     //////////////////////////////////////////////////////////////////////////////////////////
-    /// Set up some vars to simplify code
+    /// Set up some vars to simplify code. We use the internal opcode id for Multiversion support
     // Zyres: save the opcode here for better handling
-    const uint16_t opcode = recvData.GetOpcode();
+    const auto opcode = sOpcodeTables.getInternalIdForHex(recvData.GetOpcode());
 
     // Zyres: We (the player) controles the movement of us or another player/unit.
     // this is always initialise with the player, can be changed to any other unit.
@@ -256,6 +262,7 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvData)
 
     //////////////////////////////////////////////////////////////////////////////////////////
     /// Transport position
+#if VERSION_STRING <= WotLK
     if (movementInfo.hasMovementFlag(MOVEFLAG_TRANSPORT))
     {
         // if we boarded a transport, add us to it
@@ -331,6 +338,74 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvData)
         mover->GetTransport()->RemovePassenger(mover);
         movementInfo.clearTransportData();
     }
+#else
+    if (mover->isPlayer())
+    {
+        // if we boarded a transport, add us to it
+        if (movementInfo.transport_guid)
+        {
+            if (!mover->GetTransport())
+            {
+                if (Transporter* transport = sTransportHandler.getTransporter(WoWGuid::getGuidLowPartFromUInt64(movementInfo.transport_guid)))
+                {
+                    transport->AddPassenger(mover->ToPlayer());
+
+                    /* set variables */
+                    mover->obj_movement_info.transport_time = sessionMovementInfo.transport_time;
+                    mover->obj_movement_info.transport_position.x = sessionMovementInfo.transport_position.x;
+                    mover->obj_movement_info.transport_position.y = sessionMovementInfo.transport_position.y;
+                    mover->obj_movement_info.transport_position.z = sessionMovementInfo.transport_position.z;
+                    mover->obj_movement_info.transport_position.o = sessionMovementInfo.transport_position.o;
+                }
+            }
+            else if (mover->GetTransport()->getGuid() != movementInfo.transport_guid)
+            {
+                mover->GetTransport()->RemovePassenger(mover);
+                if (Transporter* transport = sTransportHandler.getTransporter(WoWGuid::getGuidLowPartFromUInt64(movementInfo.transport_guid)))
+                {
+                    transport->AddPassenger(mover->ToPlayer());
+
+                    /* set variables */
+                    mover->obj_movement_info.transport_time = sessionMovementInfo.transport_time;
+                    mover->obj_movement_info.transport_position.x = sessionMovementInfo.transport_position.x;
+                    mover->obj_movement_info.transport_position.y = sessionMovementInfo.transport_position.y;
+                    mover->obj_movement_info.transport_position.z = sessionMovementInfo.transport_position.z;
+                    mover->obj_movement_info.transport_position.o = sessionMovementInfo.transport_position.o;
+                }
+                else
+                {
+                    movementInfo.clearTransportData();
+                    mover->obj_movement_info.clearTransportData();
+                }
+            }
+            else
+            {
+                /* set variables */
+                mover->obj_movement_info.transport_time = sessionMovementInfo.transport_time;
+                mover->obj_movement_info.transport_seat = movementInfo.transport_seat;
+                mover->obj_movement_info.transport_position.x = sessionMovementInfo.transport_position.x;
+                mover->obj_movement_info.transport_position.y = sessionMovementInfo.transport_position.y;
+                mover->obj_movement_info.transport_position.z = sessionMovementInfo.transport_position.z;
+                mover->obj_movement_info.transport_position.o = sessionMovementInfo.transport_position.o;
+            }
+
+            // Transports like Elevators
+            if (!mover->GetTransport() && !mover->getVehicle())
+            {
+                GameObject* go = mover->getWorldMapGameObject(movementInfo.transport_guid);
+                if (!go || go->getGoType() != GAMEOBJECT_TYPE_TRANSPORT)
+                    movementInfo.transport_guid = 0;
+            }
+        }
+        else if (mover && mover->GetTransport())
+        {
+            // if we were on a transport, leave
+            mover->GetTransport()->RemovePassenger(mover);
+            movementInfo.clearTransportData();
+            mover->obj_movement_info.clearTransportData();
+        }
+    }
+#endif
 
     //////////////////////////////////////////////////////////////////////////////////////////
     /// Breathing & Underwaterstate
@@ -355,7 +430,7 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvData)
     data << sessionMovementInfo;
     mover->sendMessageToSet(&data, _player);
 
-#else
+#else // TBC and Classic
 
     // Zyres NOTE: versions older than WotLK do not send us the guid within the movement packet (needed for the packet send to other players)
     // but we should already received the active mover
@@ -374,7 +449,7 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvData)
     {
         if (auto const* seat = vehicle->getSeatForPassenger(mover))
         {
-            if (seat->flags & DBC::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_ALLOW_TURNING)
+            if (seat->flags & WDB::Structures::VehicleSeatFlags::VEHICLE_SEAT_FLAG_ALLOW_TURNING)
             {
                 if (movementInfo.position.getOrientation() != mover->GetOrientation())
                 {
@@ -394,8 +469,8 @@ void WorldSession::handleMovementOpcodes(WorldPacket& recvData)
 
 void WorldSession::handleAcknowledgementOpcodes(WorldPacket& recvPacket)
 {
-    sLogger.debug("Opcode %s (%u) received. This opcode is not known/implemented right now!",
-        sOpcodeTables.getNameForInternalId(recvPacket.GetOpcode()).c_str(), recvPacket.GetOpcode());
+    sLogger.debug("Opcode {} ({}) received. This opcode is not known/implemented right now!",
+        sOpcodeTables.getNameForInternalId(recvPacket.GetOpcode()), recvPacket.GetOpcode());
 
     recvPacket.rfinish();
 }
@@ -404,7 +479,7 @@ void WorldSession::handleForceSpeedChangeAck(WorldPacket& recvPacket)
 {
 #if VERSION_STRING < Cata
     /* extract packet */
-    uint32 unk1;
+    uint32_t unk1;
     float  newspeed;
     Unit* mover = _player->m_controledUnit;
 
@@ -416,6 +491,7 @@ void WorldSession::handleForceSpeedChangeAck(WorldPacket& recvPacket)
     recvPacket >> movementInfo;
 
     // now can skip not our packet
+    // TODO: following statement is always true -Appled
     if (movementInfo.getGuid() != mover->getGuid())
     {
         recvPacket.rfinish();                   // prevent warnings spam
@@ -432,20 +508,21 @@ void WorldSession::handleForceSpeedChangeAck(WorldPacket& recvPacket)
 
     static char const* move_type_name[MAX_SPEED_TYPE] = { "Walk", "Run", "RunBack", "Swim", "SwimBack", "TurnRate", "Flight", "FlightBack", "PitchRate" };
 
-    switch (recvPacket.GetOpcode())
+    const auto opcode = sOpcodeTables.getInternalIdForHex(recvPacket.GetOpcode());
+    switch (opcode)
     {
-    case CMSG_FORCE_WALK_SPEED_CHANGE_ACK:          move_type = TYPE_WALK;          force_move_type = TYPE_WALK;        break;
-    case CMSG_FORCE_RUN_SPEED_CHANGE_ACK:           move_type = TYPE_RUN;           force_move_type = TYPE_RUN;         break;
-    case CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK:      move_type = TYPE_RUN_BACK;      force_move_type = TYPE_RUN_BACK;    break;
-    case CMSG_FORCE_SWIM_SPEED_CHANGE_ACK:          move_type = TYPE_SWIM;          force_move_type = TYPE_SWIM;        break;
-    case CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK:     move_type = TYPE_SWIM_BACK;     force_move_type = TYPE_SWIM_BACK;   break;
-    case CMSG_FORCE_TURN_RATE_CHANGE_ACK:           move_type = TYPE_TURN_RATE;     force_move_type = TYPE_TURN_RATE;   break;
-    case CMSG_FORCE_FLIGHT_SPEED_CHANGE_ACK:        move_type = TYPE_FLY;           force_move_type = TYPE_FLY;         break;
-    case CMSG_FORCE_FLIGHT_BACK_SPEED_CHANGE_ACK:   move_type = TYPE_FLY_BACK;      force_move_type = TYPE_FLY_BACK;    break;
-    case CMSG_FORCE_PITCH_RATE_CHANGE_ACK:          move_type = TYPE_PITCH_RATE;    force_move_type = TYPE_PITCH_RATE;  break;
-    default:
-        sLogger.failure("WorldSession::handleForceSpeedChangeAck: Unknown move type opcode: %u", recvPacket.GetOpcode());
-        return;
+        case CMSG_FORCE_WALK_SPEED_CHANGE_ACK:          move_type = TYPE_WALK;          force_move_type = TYPE_WALK;        break;
+        case CMSG_FORCE_RUN_SPEED_CHANGE_ACK:           move_type = TYPE_RUN;           force_move_type = TYPE_RUN;         break;
+        case CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK:      move_type = TYPE_RUN_BACK;      force_move_type = TYPE_RUN_BACK;    break;
+        case CMSG_FORCE_SWIM_SPEED_CHANGE_ACK:          move_type = TYPE_SWIM;          force_move_type = TYPE_SWIM;        break;
+        case CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK:     move_type = TYPE_SWIM_BACK;     force_move_type = TYPE_SWIM_BACK;   break;
+        case CMSG_FORCE_TURN_RATE_CHANGE_ACK:           move_type = TYPE_TURN_RATE;     force_move_type = TYPE_TURN_RATE;   break;
+        case CMSG_FORCE_FLIGHT_SPEED_CHANGE_ACK:        move_type = TYPE_FLY;           force_move_type = TYPE_FLY;         break;
+        case CMSG_FORCE_FLIGHT_BACK_SPEED_CHANGE_ACK:   move_type = TYPE_FLY_BACK;      force_move_type = TYPE_FLY_BACK;    break;
+        case CMSG_FORCE_PITCH_RATE_CHANGE_ACK:          move_type = TYPE_PITCH_RATE;    force_move_type = TYPE_PITCH_RATE;  break;
+        default:
+            sLogger.failure("WorldSession::handleForceSpeedChangeAck: Unknown move type opcode: {}", recvPacket.GetOpcode());
+            return;
     }
 
     // skip all forced speed changes except last and unexpected
@@ -469,8 +546,8 @@ void WorldSession::handleForceSpeedChangeAck(WorldPacket& recvPacket)
         }
     }
 #else // todo fix for cata / mop
-    sLogger.debug("Opcode %s (%u) received. This opcode is not known/implemented right now!",
-        sOpcodeTables.getNameForInternalId(recvPacket.GetOpcode()).c_str(), recvPacket.GetOpcode());
+    sLogger.debug("Opcode {} ({}) received. This opcode is not known/implemented right now!",
+        sOpcodeTables.getNameForInternalId(recvPacket.GetOpcode()), recvPacket.GetOpcode());
 
     recvPacket.rfinish();
 #endif
@@ -559,8 +636,11 @@ void WorldSession::handleMoveTeleportAckOpcode(WorldPacket& recvPacket)
         _player->setTransferStatus(TRANSFER_NONE);
         _player->speedCheatReset();
 
-        for (auto summon : _player->getSummons())
-            summon->SetPosition(_player->GetPositionX() + 2, _player->GetPositionY() + 2, _player->GetPositionZ(), M_PI_FLOAT);
+        for (const auto& summon : _player->getSummonInterface()->getSummons())
+        {
+            if (!summon->isTotem())
+                summon->SetPosition(_player->GetPositionX() + 2, _player->GetPositionY() + 2, _player->GetPositionZ(), M_PI_FLOAT);
+        }
 
         if (_player->m_sentTeleportPosition.x != 999999.0f)
         {
@@ -581,5 +661,5 @@ void WorldSession::handleMoveNotActiveMoverOpcode(WorldPacket& recvPacket)
     if (guid != uint64_t(0) && guid == _player->getCharmGuid())
         m_MoverWoWGuid = guid;
     else
-        m_MoverWoWGuid.Init(_player->getGuid());
+        m_MoverWoWGuid.init(_player->getGuid());
 }

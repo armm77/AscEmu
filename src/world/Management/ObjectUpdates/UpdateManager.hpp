@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -44,6 +44,7 @@ class UpdateManager
     void internalPushUpdatesIfBufferIsFull(size_t additionalDataSize);
     void internalSendDelayedPackets();
     void internalUpdateMapMgr();
+
 public:
     UpdateManager(Player* owner, size_t compressionThreshold, size_t creationBufferInitialSize, size_t updateBufferInitialSize, size_t outOfRangeIdsInitialSize);
 
@@ -54,5 +55,5 @@ public:
     void pushUpdateData(ByteBuffer* data, uint32_t updateCount);
     void processPendingUpdates();
 
-    void queueDelayedPacket(WorldPacket* packet);
+    void queueDelayedPacket(std::unique_ptr<WorldPacket> packet);
 };

@@ -1,11 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "GruulTheDragonKiller.hpp"
-#include "Server/Script/CreatureAIScript.h"
+#include "Raid_GruulsLair.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Spell/Spell.hpp"
+#include "Utilities/Narrow.hpp"
+#include "Utilities/Random.hpp"
+#include "Utilities/Util.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Boss: Gruul the Dragonkiller
@@ -29,7 +34,7 @@ GruulTheDragonkillerAI::GruulTheDragonkillerAI(Creature* pCreature) : CreatureAI
 
     mHurtfulStrike = addAISpell(SPELL_HURTFUL_STRIKE, 0.0f, TARGET_ATTACKING);
 
-    addEmoteForEvent(Event_OnCombatStart, GRUUL_SAY_AGGRO);
+    addEmoteForEvent(CreatureAIScript::Event_OnCombatStart, GRUUL_SAY_AGGRO);
     addEmoteForEvent(Event_OnTargetDied, GRUUL_SAY_SLAY_01);
     addEmoteForEvent(Event_OnTargetDied, GRUUL_SAY_SLAY_02);
     addEmoteForEvent(Event_OnTargetDied, GRUUL_SAY_SLAY_03);
@@ -102,7 +107,7 @@ void GruulTheDragonkillerAI::AIUpdate(unsigned long time_passed)
 /// Spell Effect: Ground Slam
 bool GroundSlamEffect(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
 
     if (!target || !target->isPlayer())
         return true;
@@ -116,7 +121,7 @@ bool GroundSlamEffect(uint8_t /*effectIndex*/, Spell* pSpell)
 /// Spell Effect: Shatter
 bool ShatterEffect(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
 
     if (!target)
         return true;
@@ -131,16 +136,16 @@ bool ShatterEffect(uint8_t /*effectIndex*/, Spell* pSpell)
 /// Spell: Shatter Damage
 SpellScriptEffectDamage ShatterDamage::doCalculateEffect(Spell* spell, uint8_t effIndex, int32_t* dmg)
 {
-    if (effIndex != EFF_INDEX_0 || spell->GetUnitTarget() == nullptr)
+    if (effIndex != EFF_INDEX_0 || spell->getUnitTarget() == nullptr)
         return SpellScriptEffectDamage::DAMAGE_DEFAULT;
 
     float radius = spell->getEffectRadius(EFF_INDEX_0);
-    auto distance = spell->GetUnitTarget()->GetDistance2dSq(spell->getCaster());
+    auto distance = spell->getUnitTarget()->GetDistance2dSq(spell->getCaster());
 
     if (distance < 1.0f)
         distance = 1.0f;
 
-    *dmg = float2int32(*dmg * ((radius - distance ) / radius));
+    *dmg = Util::float2int32(*dmg * ((radius - distance) / radius));
 
     return SpellScriptEffectDamage::DAMAGE_FULL_RECALCULATION;
 }

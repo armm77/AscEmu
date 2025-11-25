@@ -1,19 +1,21 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "MoveSplineInit.h"
-#include <Objects/Units/Creatures/Creature.h>
-#include <Objects/Units/Creatures/Vehicle.h>
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Creatures/Vehicle.hpp"
+#include "Objects/Units/Creatures/AIInterface.h"
 #include "MoveSpline.h"
 #include "MovementPacketBuilder.h"
-#include <Objects/Units/Unit.hpp>
-#include <Objects/Transporter.h>
+#include "Objects/Units/Unit.hpp"
+#include "Objects/Transporter.hpp"
 #include "WorldPacket.h"
 #include "Movement/PathGenerator.h"
+#include "Server/Opcodes.hpp"
 
-namespace MovementNew {
+namespace MovementMgr {
 
 UnitSpeedType SelectSpeedType(uint32_t moveFlags)
 {
@@ -50,7 +52,11 @@ int32_t MoveSplineInit::Launch()
     MoveSpline& move_spline = *unit->movespline;
 
     // Elevators also use MOVEFLAG_TRANSPORT but we do not keep track of their position changes
+#if VERSION_STRING <= WotLK
     bool transport = unit->hasUnitMovementFlag(MOVEFLAG_TRANSPORT) && unit->getTransGuid();
+#else
+    bool transport = unit->getTransGuid() != 0;
+#endif
     Location real_position;
     // there is a big chance that current position is unknown if current state is not finalized, need compute it
     // this also allows CalculatePath spline position and update map position in much greater intervals
@@ -77,14 +83,15 @@ int32_t MoveSplineInit::Launch()
     args.initialOrientation = real_position.orientation;
     move_spline.onTransport = transport;
 
-#if VERSION_STRING <= WotLK
+#if VERSION_STRING == WotLK
     args.flags.enter_cycle = args.flags.cyclic;
-    args.flags.EnableCatmullRom(); // with this set pathfinding works fine // aaron02
 #endif
 
     uint32_t moveFlags = unit->obj_movement_info.getMovementFlags();
-
-#if VERSION_STRING <= WotLK
+#if VERSION_STRING <= TBC
+    moveFlags |= MOVEFLAG_SPLINE_ENABLED;
+    moveFlags = (moveFlags & ~(MOVEFLAG_MOVE_BACKWARD)) | MOVEFLAG_MOVE_FORWARD;
+#elif VERSION_STRING == WotLK
     moveFlags |= MOVEFLAG_SPLINE_ENABLED;
 
     if (!args.flags.backward)
@@ -109,13 +116,25 @@ int32_t MoveSplineInit::Launch()
             moveFlagsForSpeed &= ~MOVEFLAG_WALK;
 
         args.velocity = unit->getSpeedRate(SelectSpeedType(moveFlagsForSpeed), true);
-        if (unit->isCreature())
-            if (unit->getAIInterface()->alreadyCalledForHelp())
-                args.velocity *= 0.66f;
+
+        // TODO: move this in Unit::updateSpeed, very hacky to do in splines -Appled
+        if (unit->isCreature() && !unit->isSummon() && unit->m_playerControler == nullptr && !unit->isVehicle() && !unit->isInEvadeMode())
+        {
+            // Bosses that can be slowed will also slow down when hp drops low
+            if (!unit->hasSpellImmunity(SPELL_IMMUNITY_SLOW))
+            {
+                // Units that are below 30% hp will start gradually slow their speed
+                const auto speedReductionPct = std::min(0.0f, (1.66f * (unit->getHealthPct() - 30.0f)));
+                if (speedReductionPct < 0.0f)
+                    args.velocity *= (1.0f + (speedReductionPct / 100.0f));
+            }
+        }
     }
 
+#if VERSION_STRING > TBC
     // limit the speed in the same way the client does
     args.velocity = std::min(args.velocity, args.flags.catmullrom || args.flags.flying ? 50.0f : std::max(28.0f, unit->getSpeedRate(TYPE_RUN,  true) * 4.0f));
+#endif
 
     if (!args.Validate(unit))
         return 0;
@@ -148,7 +167,12 @@ void MoveSplineInit::Stop()
     if (move_spline.Finalized())
         return;
 
+#if VERSION_STRING <= WotLK
     bool transport = unit->hasUnitMovementFlag(MOVEFLAG_TRANSPORT) && unit->getTransGuid();
+#else
+    bool transport = unit->getTransGuid() != 0;
+#endif
+
     Location loc;
     if (move_spline.onTransport == transport)
     {
@@ -188,9 +212,21 @@ void MoveSplineInit::Stop()
     unit->sendMessageToSet(&data, true);
 }
 
+#if VERSION_STRING <= TBC
 MoveSplineInit::MoveSplineInit(Unit* m) : unit(m)
 {
-#if VERSION_STRING <= WotLK
+    args.splineId = splineIdGen.NewId();
+    // Elevators also use MOVEFLAG_TRANSPORT but we do not keep track of their position changes
+    args.TransformForTransport = unit->hasUnitMovementFlag(MOVEFLAG_TRANSPORT) && unit->getTransGuid();
+    // mix existing state into new
+    args.walk = unit->hasUnitMovementFlag(MOVEFLAG_WALK);
+    args.flags.flying = unit->obj_movement_info.hasMovementFlag(MOVEFLAG_FLYING_MASK);
+}
+#endif
+
+#if VERSION_STRING == WotLK
+MoveSplineInit::MoveSplineInit(Unit* m) : unit(m)
+{
     args.splineId = splineIdGen.NewId();
     // Elevators also use MOVEFLAG_TRANSPORT but we do not keep track of their position changes
     args.TransformForTransport = unit->hasUnitMovementFlag(MOVEFLAG_TRANSPORT) && unit->getTransGuid();
@@ -198,7 +234,12 @@ MoveSplineInit::MoveSplineInit(Unit* m) : unit(m)
     args.flags.canswim = unit->canSwim();
     args.walk = unit->hasUnitMovementFlag(MOVEFLAG_WALK);
     args.flags.flying = unit->obj_movement_info.hasMovementFlag(MOVEFLAG_FLYING_MASK);
-#else
+}
+#endif
+
+#if VERSION_STRING >= Cata
+MoveSplineInit::MoveSplineInit(Unit* m) : unit(m)
+{
     args.splineId = splineIdGen.NewId();
     // Elevators also use MOVEMENTFLAG_ONTRANSPORT but we do not keep track of their position changes
     args.TransformForTransport = unit->getTransGuid() != 0;
@@ -206,8 +247,8 @@ MoveSplineInit::MoveSplineInit(Unit* m) : unit(m)
     args.flags.walkmode = unit->obj_movement_info.hasMovementFlag(MOVEFLAG_WALK);
     args.flags.flying = unit->obj_movement_info.hasMovementFlag(MOVEFLAG_FLYING_MASK);
     args.flags.smoothGroundPath = true; // enabled by default, CatmullRom mode or client config "pathSmoothing" will disable this
-#endif
 }
+#endif
 
 MoveSplineInit::~MoveSplineInit() = default;
 
@@ -246,7 +287,7 @@ void MoveSplineInit::SetFacing(float angle)
     args.flags.EnableFacingAngle();
 }
 
-void MoveSplineInit::MovebyPath(PointsArray const& controls, int32 path_offset)
+void MoveSplineInit::MovebyPath(PointsArray const& controls, int32_t path_offset)
 {
     args.path_Idx_offset = path_offset;
     args.path.resize(controls.size());
@@ -284,19 +325,19 @@ Vector3 TransportPathTransform::operator()(Vector3 input)
 #ifdef FT_VEHICLES
         if (TransportBase* vehicle = _owner->getVehicle())
         {
-            vehicle->CalculatePassengerOffset(input.x, input.y, input.z);
+            vehicle->calculatePassengerOffset(input.x, input.y, input.z);
         }
         else if (TransportBase* transport = _owner->GetTransport())
         {
-            transport->CalculatePassengerOffset(input.x, input.y, input.z);
+            transport->calculatePassengerOffset(input.x, input.y, input.z);
         }
 #else 
         if (TransportBase* transport = _owner->GetTransport())
         {
-            transport->CalculatePassengerOffset(input.x, input.y, input.z);
+            transport->calculatePassengerOffset(input.x, input.y, input.z);
         }
 #endif
     }
     return input;
 }
-} // namespace MovementNew
+} // namespace MovementMgr

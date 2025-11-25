@@ -1,11 +1,20 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Instance_BlackfathomDeeps.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 
 class BlackfathomDeepsInstanceScript : public InstanceScript
 {

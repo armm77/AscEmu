@@ -1,13 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Raid_Magtheridons_Lair.hpp"
 #include "Magtheridon.hpp"
-#include "Management/Faction.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //Magtheridons Lair Instance
@@ -302,7 +304,7 @@ void HellfireChannelerAI::OnDied(Unit* /*killer*/)
 
 void HellfireChannelerAI::OnDamageTaken(Unit* /*mAttacker*/, uint32_t /*fAmount*/)
 {
-    if (!getCreature()->getAIInterface()->getAllowedToEnterCombat())
+    if (!getCreature()->getAIInterface()->isAllowedToEnterCombat())
         getCreature()->getAIInterface()->setAllowedToEnterCombat(true);
 }
 

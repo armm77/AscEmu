@@ -1,9 +1,17 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
+#include "LocationVector.h"
+#include "Setup.h"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/SpellScript.hpp"
 
 LocationVector const DefenseSystemLocation = { 1888.146f, 803.382f,  58.60389f, 3.071779f };
 
@@ -54,7 +62,7 @@ LocationVector const SinclariPositions[] =
 LocationVector const GuardsMovePosition = { 1802.099f, 803.7724f, 44.36466f, 0.0f };
 
 // 3 Bosses out of Total 9
-uint32 const EncounterCount = 3 + 6;
+uint32_t const EncounterCount = 3 + 6;
 
 // Waypoints
 LocationVector const FirstPortalWPs[] =
@@ -678,7 +686,7 @@ public:
 
     void AIUpdate(unsigned long /*time_passed*/) override;
 
-    void waypointReached(uint32 waypointId, uint32 /*pathId*/) override;
+    void waypointReached(uint32_t waypointId, uint32_t /*pathId*/) override;
 
     void SetCreatureData(uint32_t /*type*/, uint32_t /*data*/) override;
 

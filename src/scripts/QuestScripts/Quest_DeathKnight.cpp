@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,8 +18,17 @@
  */
 
 #include "Setup.h"
-#include "Management/TaxiMgr.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Movement/MovementManager.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/QuestScript.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellScript.hpp"
 
 enum 
 {
@@ -49,8 +58,8 @@ public:
     {
         if (plr->hasQuestInQuestLog(12670) || plr->hasQuestFinished(12670))
         {
-            if (TaxiPath* path = sTaxiMgr.GetTaxiPath(pObject->getEntry() == 29488 ? 1053 : 1054))
-                plr->startTaxiPath(path, 26308, 0);
+            if (uint32_t path = pObject->getEntry() == 29488 ? 1053 : 1054)
+                plr->activateTaxiPathTo(path, pObject->ToCreature());
         }
     }
 };
@@ -180,7 +189,7 @@ public:
         playerGUID = 0;
         getCreature()->setFaction(7);
         getCreature()->getAIInterface()->setAllowedToEnterCombat(false);
-        getCreature()->getAIInterface()->setImmuneToPC(true);
+        getCreature()->getAIInterface()->setIgnorePlayerCombat(true);
         getCreature()->getAIInterface()->setReactState(REACT_PASSIVE);
         setScriptPhase(PHASE_CHAINED);
         getCreature()->setStandState(STANDSTATE_KNEEL);
@@ -285,7 +294,7 @@ public:
                     {
                         getCreature()->setFaction(14);
                         getCreature()->getAIInterface()->setAllowedToEnterCombat(true);
-                        getCreature()->getAIInterface()->setImmuneToPC(false);
+                        getCreature()->getAIInterface()->setIgnorePlayerCombat(false);
                         getCreature()->getAIInterface()->setReactState(REACT_AGGRESSIVE);
                         setScriptPhase(PHASE_ATTACKING);
 

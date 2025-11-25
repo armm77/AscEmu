@@ -1,88 +1,53 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
-# set up our project name
-project(logon CXX)
+# set up our project name.
+set(EXECUTABLE_NAME logon)
 
-include(Auth/CMakeLists.txt)
-include(Console/CMakeLists.txt)
-include(LogonCommServer/CMakeLists.txt)
-include(Realm/CMakeLists.txt)
-include(Server/CMakeLists.txt)
+file(GLOB SRC_AUTH_FILES Auth/*.cpp Auth/*.h Auth/*.hpp)
+file(GLOB SRC_CONSOLE_FILES Console/*.cpp Console/*.h Console/*.hpp)
+file(GLOB SRC_LOGON_COMM_SERVER_FILES LogonCommServer/*.cpp LogonCommServer/*.h LogonCommServer/*.hpp)
+file(GLOB SRC_REALM_FILES Realm/*.cpp Realm/*.h Realm/*.hpp)
+file(GLOB SRC_SERVER_FILES Server/*.cpp Server/*.h Server/*.hpp)
+file(GLOB SRC_LOCAL_DIR *.cpp *.h *.hpp)
 
 if (WIN32)
-    set(SRC_LOGON_PROJECT ${SRC_LOGON_PROJECT} ${CMAKE_CURRENT_SOURCE_DIR}/resources.rc)
+    set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/resources.rc")
 endif ()
 
-source_group(logon FILES ${SRC_LOGON_PROJECT})
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
 
-set(sources
+add_executable(${EXECUTABLE_NAME}
     ${SRC_AUTH_FILES}
     ${SRC_CONSOLE_FILES}
     ${SRC_LOGON_COMM_SERVER_FILES}
     ${SRC_REALM_FILES}
     ${SRC_SERVER_FILES}
-    ${SRC_LOGON_PROJECT}
+    ${SRC_LOCAL_DIR}
+    ${APP_ICON_RESOURCE_WINDOWS}
 )
 
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/Opcodes
+target_include_directories(${EXECUTABLE_NAME} PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src/shared
     ${ZLIB_INCLUDE_DIRS}
     ${OPENSSL_INCLUDE_DIR}
-    ${PCRE_INCLUDE_DIR}
-    ${MYSQL_INCLUDE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-link_directories(${EXTRA_LIBS_PATH} ${DEPENDENCY_LIBS})
+# include library dependencies.
+target_link_libraries(${EXECUTABLE_NAME}
+    shared
+    ${MYSQL_LIBRARIES}
+    ${ZLIB_LIBRARIES}
+)
 
-add_executable(${PROJECT_NAME} ${sources})
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/LogonConf.hpp.in ${CMAKE_CURRENT_SOURCE_DIR}/LogonConf.hpp)
 
-if (APPLE)
-    target_link_libraries(${PROJECT_NAME} c++)
-elseif (CMAKE_SYSTEM_NAME STREQUAL "FreeBSD" OR CMAKE_SYSTEM_NAME STREQUAL "kFreeBSD")
-    target_link_libraries(${PROJECT_NAME} c++experimental)
+# generate precompiled header.
+if (AE_USE_PCH)
+    message(STATUS "Generate PCH for ${EXECUTABLE_NAME}")
+    target_precompile_headers(${EXECUTABLE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pchLogon.hpp)
 endif ()
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/LogonConf.h.in ${CMAKE_CURRENT_SOURCE_DIR}/LogonConf.h)
-
-# link our shared lib.
-target_link_libraries(${PROJECT_NAME} shared ${MYSQL_LIBRARIES} ${ZLIB_LIBRARIES} ${PCRE_LIBRARIES})
 
 # provide make install rules.
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION .)
-
-if (USE_PCH)
-    target_precompile_headers(${PROJECT_NAME}
-    PRIVATE
-    <iostream>
-    <list>
-    <vector>
-    <map>
-    <sstream>
-    <string>
-    <CommonDefines.hpp>
-    <Common.hpp>
-    <WorldPacket.h>
-    <Log.hpp>
-    <Logging/Logger.hpp>
-    <ByteBuffer.h>
-    <Config/Config.h>
-    <Util/Strings.hpp>
-    <Util.hpp>
-    <Auth/BigNumber.h>
-    <Auth/Sha1.h>
-    <Auth/WowCrypt.hpp>
-    <Database/Database.h>
-    <Network/Network.h>
-    LogonConf.h
-    Console/LogonConsole.h
-    Realm/RealmManager.hpp
-    Server/IpBanMgr.h
-    Server/LogonServerDefines.hpp
-    Server/Master.hpp
-)
-endif ()
-
-unset(sources)
-unset(headers)
+install(TARGETS ${EXECUTABLE_NAME} RUNTIME DESTINATION .)

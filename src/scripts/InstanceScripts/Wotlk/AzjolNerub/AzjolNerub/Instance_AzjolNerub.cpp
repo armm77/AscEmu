@@ -1,13 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 // \ todo Finish Kritkhir Encounter, needs more blizzlike | Anuburak | Add's AI and trash
 
-#include "Setup.h"
 #include "Instance_AzjolNerub.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Objects/GameObject.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
 
 class AzjolNerubInstanceScript : public InstanceScript
 {
@@ -23,7 +26,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new KrikthirAI(c); }
     explicit KrikthirAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (!_isHeroic())
+        if (!isHeroic())
         {
             addAISpell(KRIKTHIR_CURSEOFFATIGUE, 100.0f, TARGET_SELF, 0, 10);
 
@@ -72,7 +75,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new HadronoxAI(c); }
     explicit HadronoxAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (!_isHeroic())
+        if (!isHeroic())
         {
             addAISpell(HADRONOX_WEBGRAB, 22.0f, TARGET_RANDOM_SINGLE, 0, 14);
 

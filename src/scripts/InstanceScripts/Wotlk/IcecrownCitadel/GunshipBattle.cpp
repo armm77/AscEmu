@@ -1,16 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Setup.h"
 #include "GunshipBattle.hpp"
-#include "Management/Faction.h"
-#include "Objects/Units/Creatures/Summons/Summon.h"
-#include <Management/ObjectMgr.h>
-#include <Management/TransporterHandler.h>
-#include <Objects/Transporter.h>
-#include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Raid_IceCrownCitadel.hpp"
+#include "Management/ItemInterface.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Objects/Transporter.hpp"
+#include "Objects/Units/Players/Player.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Gossip: Gunship Battle Alliance

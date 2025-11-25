@@ -1,20 +1,21 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Definitions/SpellCastTargetFlags.hpp"
 #include "SpellCastTargets.hpp"
-
-#include "Management/ObjectMgr.h"
-#include <Server/WorldSocket.h>
+#include "Objects/Transporter.hpp"
+#include "Management/ObjectMgr.hpp"
+#include "Management/TransporterHandler.hpp"
+#include "Server/WorldSocket.h"
 
 void SpellCastTargets::reset()
 {
     m_targetMask = 0;
-    m_gameObjectTarget = 0;
-    m_unitTarget = 0;
-    m_itemTarget = 0;
+    m_gameObjectTargetGuid = 0;
+    m_unitTargetGuid = 0;
+    m_itemTargetGuid = 0;
     unkuint64_1 = 0;
     unkuint64_2 = 0;
     m_source = LocationVector();
@@ -23,7 +24,7 @@ void SpellCastTargets::reset()
 }
 
 SpellCastTargets::SpellCastTargets(uint64_t unitTarget) : m_targetMask(TARGET_FLAG_UNIT),
-m_unitTarget(unitTarget)
+m_unitTargetGuid(unitTarget)
 {
 }
 
@@ -34,9 +35,9 @@ SpellCastTargets::SpellCastTargets(WorldPacket& data, uint64_t caster)
 
 SpellCastTargets& SpellCastTargets::operator=(const SpellCastTargets& target)
 {
-    m_gameObjectTarget = target.getGameObjectTarget();
-    m_unitTarget = target.getUnitTarget();
-    m_itemTarget = target.getItemTarget();
+    m_gameObjectTargetGuid = target.getGameObjectTargetGuid();
+    m_unitTargetGuid = target.getUnitTargetGuid();
+    m_itemTargetGuid = target.getItemTargetGuid();
 
     setSource(target.getSource());
     setDestination(target.getDestination());
@@ -63,29 +64,29 @@ void SpellCastTargets::read(WorldPacket& data, uint64_t caster)
 
     if (m_targetMask == TARGET_FLAG_SELF)
     {
-        m_unitTarget = caster;
+        m_unitTargetGuid = caster;
         return;
     }
 
-    if (m_targetMask & (TARGET_FLAG_OBJECT | TARGET_FLAG_OBJECT_CASTER))
+    if (m_targetMask & (TARGET_FLAG_OBJECT | TARGET_FLAG_OPEN_LOCK))
     {
         WoWGuid guid;
         data >> guid;
-        m_gameObjectTarget = guid.getRawGuid();
+        m_gameObjectTargetGuid = guid.getRawGuid();
     }
 
     if (m_targetMask & (TARGET_FLAG_UNIT | TARGET_FLAG_CORPSE | TARGET_FLAG_CORPSE2 | TARGET_FLAG_UNK17))
     {
         WoWGuid guid;
         data >> guid;
-        m_unitTarget = guid.getRawGuid();
+        m_unitTargetGuid = guid.getRawGuid();
     }
 
     if (m_targetMask & (TARGET_FLAG_ITEM | TARGET_FLAG_TRADE_ITEM))
     {
         WoWGuid guid;
         data >> guid;
-        m_itemTarget = guid.getRawGuid();
+        m_itemTargetGuid = guid.getRawGuid();
     }
 
     if (m_targetMask & TARGET_FLAG_SOURCE_LOCATION)
@@ -118,7 +119,7 @@ void SpellCastTargets::read(WorldPacket& data, uint64_t caster)
 
         if (transporter)
         {
-            transporter->CalculatePassengerPosition(lv.x, lv.y, lv.z);
+            transporter->calculatePassengerPosition(lv.x, lv.y, lv.z);
         }
 
         setDestination(lv);
@@ -134,19 +135,19 @@ void SpellCastTargets::write(WorldPacket& data) const
 {
     data << m_targetMask;
 
-    if (m_targetMask & (TARGET_FLAG_OBJECT | TARGET_FLAG_OBJECT_CASTER))
+    if (m_targetMask & (TARGET_FLAG_OBJECT | TARGET_FLAG_OPEN_LOCK))
     {
-        FastGUIDPack(data, m_gameObjectTarget);
+        FastGUIDPack(data, m_gameObjectTargetGuid);
     }
 
     if (m_targetMask & (TARGET_FLAG_UNIT | TARGET_FLAG_CORPSE | TARGET_FLAG_CORPSE2 | TARGET_FLAG_UNK17))
     {
-        FastGUIDPack(data, m_unitTarget);
+        FastGUIDPack(data, m_unitTargetGuid);
     }
 
     if (m_targetMask & (TARGET_FLAG_ITEM | TARGET_FLAG_TRADE_ITEM))
     {
-        FastGUIDPack(data, m_itemTarget);
+        FastGUIDPack(data, m_itemTargetGuid);
     }
 
     if (m_targetMask & TARGET_FLAG_SOURCE_LOCATION)
@@ -165,6 +166,12 @@ void SpellCastTargets::write(WorldPacket& data) const
     {
         data << m_strTarget.c_str();
     }
+}
+
+bool SpellCastTargets::isEmpty() const
+{
+    return m_gameObjectTargetGuid == 0 && m_unitTargetGuid == 0 && m_itemTargetGuid == 0 && unkuint64_1 == 0 &&
+        unkuint64_2 == 0 && !hasSource() && !hasDestination();
 }
 
 bool SpellCastTargets::hasSource() const
@@ -197,19 +204,19 @@ void SpellCastTargets::addTargetMask(uint32_t mask)
     setTargetMask(getTargetMask() | mask);
 }
 
-uint64_t SpellCastTargets::getGameObjectTarget() const
+uint64_t SpellCastTargets::getGameObjectTargetGuid() const
 {
-    return m_gameObjectTarget;
+    return m_gameObjectTargetGuid;
 }
 
-uint64_t SpellCastTargets::getUnitTarget() const
+uint64_t SpellCastTargets::getUnitTargetGuid() const
 {
-    return m_unitTarget;
+    return m_unitTargetGuid;
 }
 
-uint64_t SpellCastTargets::getItemTarget() const
+uint64_t SpellCastTargets::getItemTargetGuid() const
 {
-    return m_itemTarget;
+    return m_itemTargetGuid;
 }
 
 LocationVector SpellCastTargets::getSource() const
@@ -224,19 +231,19 @@ LocationVector SpellCastTargets::getDestination() const
 
 void SpellCastTargets::setGameObjectTarget(uint64_t guid)
 {
-    m_gameObjectTarget = guid;
+    m_gameObjectTargetGuid = guid;
     addTargetMask(TARGET_FLAG_OBJECT);
 }
 
 void SpellCastTargets::setUnitTarget(uint64_t guid)
 {
-    m_unitTarget = guid;
+    m_unitTargetGuid = guid;
     addTargetMask(TARGET_FLAG_UNIT);
 }
 
 void SpellCastTargets::setItemTarget(uint64_t guid)
 {
-    m_itemTarget = guid;
+    m_itemTargetGuid = guid;
     addTargetMask(TARGET_FLAG_ITEM);
 }
 

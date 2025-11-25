@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,6 +19,11 @@
  */
 
 #include "Setup.h"
+#include "Management/QuestProperties.hpp"
+#include "Management/QuestLogEntry.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // On quest accept
@@ -34,7 +39,7 @@ void Hanazua(Player* pPlayer, Object* pObject)
 
 void AHumbleTask(Player* /*pPlayer*/, Object* pObject)
 {
-    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Greatmother Hawkwind gestures to the pitcher of water sitting on the edge of the well.");
+    (static_cast<Creature*>(pObject))->sendChatMessage(CHAT_MSG_MONSTER_EMOTE, LANG_UNIVERSAL, "Greatmother Hawkwind gestures to the pitcher of water sitting on the edge of the well.");
 }
 
 void Yorus_Barleybrew(Player* pPlayer, Object* pObject)

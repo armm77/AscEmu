@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,11 +7,11 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "Spline.h"
 #include "MoveSplineInitArgs.h"
+#include "Objects/Units/UnitDefines.hpp"
 #include <G3D/Vector3.h>
-
 #include "LocationVector.h"
 
-namespace MovementNew {
+namespace MovementMgr {
 
 struct Location : public Vector3
 {
@@ -118,8 +118,10 @@ public:
     Vector3 CurrentDestination() const { return Initialized() ? spline.getPoint(point_Idx + 1) : Vector3(); }
     int32_t currentPathIdx() const;
 
+#if VERSION_STRING >= WotLK
     bool HasAnimation() const { return splineflags.animation; }
-    AnimationTier GetAnimationTier() const { return static_cast<AnimationTier>(splineflags.animTier); }
+    UnitBytes1_AnimationFlag GetAnimationTier() const { return static_cast<UnitBytes1_AnimationFlag>(splineflags.animTier); }
+#endif
 
     bool onTransport;
     std::string ToString() const;
@@ -128,4 +130,4 @@ public:
         return time_passed > 0;
     }
 };
-} // namespace MovementNew
+} // namespace MovementMgr

@@ -1,21 +1,26 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
-
 
 #include "VMapFactory.h"
 #include "VMapManager2.h"
 #include "MMapManager.h"
 #include "MMapFactory.h"
 #include "Map/Cells/MapCell.hpp"
+
+#include "Logging/Logger.hpp"
 #include "Map/Management/MapMgr.hpp"
 #include "Objects/Units/Creatures/Creature.h"
 #include "Objects/GameObject.h"
-#include "Management/ObjectMgr.h"
+#include "Management/ObjectMgr.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObjectProperties.hpp"
+#include "Server/EventMgr.h"
+#include "Server/World.h"
 #include "Storage/MySQLDataStore.hpp"
 
-Mutex m_cellloadLock;
+std::mutex m_cellloadLock;
 uint32_t m_celltilesLoaded[MAX_NUM_MAPS][64][64];
 
 extern bool bServerShutdown;
@@ -103,14 +108,14 @@ void MapCell::setActivity(bool state)
             std::string vmapPath = worldConfig.server.dataDir + "vmaps";
             std::string mmapPath = worldConfig.server.dataDir + "mmaps";
 
-            m_cellloadLock.Acquire();
+            std::lock_guard lock(m_cellloadLock);
+
             if (m_celltilesLoaded[mapId][tileX][tileY] == 0)
             {
                 mgr->loadMap(vmapPath.c_str(), mapId, tileX, tileY);
                 mmgr->loadMap(mmapPath, mapId, tileX, tileY);
             }
             ++m_celltilesLoaded[mapId][tileX][tileY];
-            m_cellloadLock.Release();
         }
     }
     else if (_active && !state)
@@ -129,14 +134,13 @@ void MapCell::setActivity(bool state)
         {
             const auto mgr = VMAP::VMapFactory::createOrGetVMapManager();
             MMAP::MMapManager* mmgr = MMAP::MMapFactory::createOrGetMMapManager();
-            m_cellloadLock.Acquire();
+            std::lock_guard lock(m_cellloadLock);
+
             if (!(--m_celltilesLoaded[mapId][tileX][tileY]))
             {
                 mgr->unloadMap(mapId, tileX, tileY);
                 mmgr->unloadMap(mapId, tileX, tileY);
             }
-
-            m_cellloadLock.Release();
         }
     }
 
@@ -262,7 +266,7 @@ void MapCell::loadObjects(CellSpawns* sp)
             else
             {
                 MySQLStructure::CreatureSpawn* spawn = (*i);
-                sLogger.failure("Failed spawning Creature %u with spawnId %u MapId %u", spawn->entry, spawn->id, _map->getBaseMap()->getMapId());
+                sLogger.failure("Failed spawning Creature {} with spawnId {} MapId {}", spawn->entry, spawn->id, _map->getBaseMap()->getMapId());
                 delete c;       //missing proto or something of that kind
             }
         }
@@ -305,7 +309,7 @@ void MapCell::loadObjects(CellSpawns* sp)
             else
             {
                 MySQLStructure::GameobjectSpawn* spawn = (*i);
-                sLogger.failure("Failed spawning GameObject %u with spawnId %u MapId %u", spawn->entry, spawn->id, _map->getBaseMap()->getMapId());
+                sLogger.failure("Failed spawning GameObject {} with spawnId {} MapId {}", spawn->entry, spawn->id, _map->getBaseMap()->getMapId());
                 delete go;          //missing proto or something of that kind
             }
         }
@@ -323,7 +327,7 @@ void MapCell::scheduleCellIdleState()
         return;
 
     _idlepending = true;
-    sLogger.debug("Queueing pending idle of cell %u %u", _x, _y);
+    sLogger.debug("Queueing pending idle of cell {} {}", _x, _y);
     sEventMgr.AddEvent(_map, &WorldMap::setCellIdle, _x, _y, this, MAKE_CELL_EVENT(_x, _y), 30000, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
 }
 
@@ -332,7 +336,7 @@ void MapCell::cancelPendingIdle()
     if (!isIdlePending() || _unloadpending)
         return;
 
-    sLogger.debug("Cancelling pending idle of cell %u %u", _x, _y);
+    sLogger.debug("Cancelling pending idle of cell {} {}", _x, _y);
     sEventMgr.RemoveEvents(_map, MAKE_CELL_EVENT(_x, _y));
     _idlepending = false;
 }
@@ -346,13 +350,13 @@ void MapCell::queueUnloadPending()
         cancelPendingIdle();
 
     _unloadpending = true;
-    sLogger.debug("Queueing pending unload of cell %u %u", _x, _y);
+    sLogger.debug("Queueing pending unload of cell {} {}", _x, _y);
     sEventMgr.AddEvent(_map, &WorldMap::unloadCell, (uint32_t)_x, (uint32_t)_y, MAKE_CELL_EVENT(_x, _y), worldConfig.server.mapUnloadTime * 1000, 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
 }
 
 void MapCell::cancelPendingUnload()
 {
-    sLogger.debug("Cancelling pending unload of cell %u %u", _x, _y);
+    sLogger.debug("Cancelling pending unload of cell {} {}", _x, _y);
     if (!_unloadpending)
         return;
 
@@ -367,7 +371,7 @@ void MapCell::unload()
 {
     if (_unloadpending)
     {
-        sLogger.debug("Unloading cell %u %u", _x, _y);
+        sLogger.debug("Unloading cell {} {}", _x, _y);
 
         if (_active)
         {
@@ -385,7 +389,7 @@ void MapCell::unload()
         a reference to a deleted Object in MapCell::_objects, iterated in RemoveObjects(). Calling it here fixes this issue.
         Note: RemoveObjects() is still called in ~MapCell, due to fancy ArcEmu behaviors, like the in-game command ".mapcell delete <x> <y>*/
 
-        sLogger.debug("Unloading cell %u %u", _x, _y);
+        sLogger.debug("Unloading cell {} {}", _x, _y);
 
         removeObjects();
         _map->remove(_x, _y);

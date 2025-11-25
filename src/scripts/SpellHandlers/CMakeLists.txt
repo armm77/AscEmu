@@ -1,6 +1,7 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
-project(SpellHandlers CXX)
+# set up our project name.
+set(LIBRARY_NAME SpellHandlers)
 
 include(Scripts/CMakeLists.txt)
 include(LegacyFiles/CMakeLists.txt)
@@ -14,16 +15,21 @@ set(sources
     # required for linker
     ../../world/Server/ServerState.cpp
     ../../world/Spell/SpellCastTargets.cpp
-    ../../shared/Util.cpp
+    ../../shared/Utilities/Util.cpp
 )
 
 set(headers
     Setup.h
+    pchSpellHandlers.hpp
 )
 
-include_directories(
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(${LIBRARY_NAME} SHARED ${sources} ${headers})
+
+target_include_directories(${LIBRARY_NAME} PUBLIC 
     ${OPENSSL_INCLUDE_DIR}
-    ${PCRE_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Detour/Include
     ${CMAKE_SOURCE_DIR}/src/collision
     ${CMAKE_SOURCE_DIR}/src/collision/Management
@@ -36,36 +42,22 @@ include_directories(
     ${ZLIB_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/dep/utf8cpp
 )
-add_library(${PROJECT_NAME} SHARED ${sources} ${headers})
-add_definitions(-DSCRIPTLIB -DSKIP_ALLOCATOR_SHARING)
 
-target_link_libraries(${PROJECT_NAME} world)
+add_compile_options(-DSCRIPTLIB -DSKIP_ALLOCATOR_SHARING)
 
-if (USE_PCH)
-    ##gen_cxx_pch(${PROJECT_NAME} Setup.h ${CMAKE_CURRENT_SOURCE_DIR}/Setup.cpp)
-endif ()
-
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${ASCEMU_SCRIPTLIB_PATH} LIBRARY DESTINATION ${ASCEMU_SCRIPTLIB_PATH} )
-
-if (USE_PCH)
-    target_precompile_headers(${PROJECT_NAME}
-    PRIVATE
-    Setup.h
-    <Objects/Item.hpp>
-    <Management/ItemInterface.h>
-    <Map/Management/MapMgr.hpp>
-    <Management/Faction.h>
-    <Spell/Spell.h>
-    <Spell/SpellMgr.hpp>
-    <Spell/SpellAuras.h>
-    <Spell/Definitions/ProcFlags.hpp>
-    <Spell/Definitions/SpellEffects.hpp>
-    <Spell/Definitions/PowerType.hpp>
-    <Server/Script/CreatureAIScript.h>
-    <Server/Script/ScriptMgr.h>
-    <Objects/Units/Creatures/Pet.h>
+# include library dependencies.
+target_link_libraries(${LIBRARY_NAME}
+  PUBLIC
+    world
 )
+
+# generate precompiled header.
+if (AE_USE_PCH)
+    message(STATUS "Generate PCH for ${LIBRARY_NAME}")
+    target_precompile_headers(${LIBRARY_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pchSpellHandlers.hpp)
 endif ()
+
+install(TARGETS ${LIBRARY_NAME} RUNTIME DESTINATION ${ASCEMU_SCRIPTLIB_PATH} LIBRARY DESTINATION ${ASCEMU_SCRIPTLIB_PATH})
 
 unset(sources)
 unset(headers)

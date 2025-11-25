@@ -1,9 +1,21 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
+#include "Management/ItemInterface.h"
+#include "Management/ObjectMgr.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Item.hpp"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Master.h"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //\details <b>Winter Veil</b>\n
@@ -85,16 +97,15 @@ void WinterReveler(Player* pPlayer, Unit* pUnit)
         }
         else
         {
-            Item* item = sObjectMgr.CreateItem(Winteritem, pPlayer);
+            auto item = sObjectMgr.createItem(Winteritem, pPlayer);
             if (item == nullptr)
                 return;
 
             item->setStackCount(5);
-            auto item_add_result = pPlayer->getItemInterface()->SafeAddItem(item, slotresult.ContainerSlot, slotresult.Slot);
+            const auto [item_add_result, returnedItem] = pPlayer->getItemInterface()->SafeAddItem(std::move(item), slotresult.ContainerSlot, slotresult.Slot);
             if (!item_add_result)
             {
-                DLLLogDetail("Error while adding item %u to player %s", item->getEntry(), pPlayer->getName().c_str());
-                item->deleteMe();
+                DLLLogDetail("Error while adding item %u to player %s", returnedItem->getEntry(), pPlayer->getName().c_str());
             }
             else
             {

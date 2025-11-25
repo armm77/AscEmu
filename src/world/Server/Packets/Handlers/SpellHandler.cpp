@@ -1,24 +1,27 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
-#include "Chat/ChatHandler.hpp"
-#include "Objects/Item.hpp"
-#include "Management/ItemInterface.h"
+#include "Logging/Logger.hpp"
 #include "Management/Battleground/Battleground.hpp"
 #include "Map/Management/MapMgr.hpp"
-#include "Server/MainServerDefines.h"
+#include "Map/Maps/WorldMap.hpp"
 #include "Spell/SpellMgr.hpp"
-#include "Spell/SpellAuras.h"
-#include "Storage/MySQLDataStore.hpp"
+#include "Spell/SpellAura.hpp"
 #include "Objects/Units/Creatures/Pet.h"
-#include "Objects/Units/Creatures/Summons/Summon.h"
-#include "Objects/Units/UnitDefines.hpp"
-#include "Management/Faction.h"
+#include "Objects/Units/Creatures/Summons/Summon.hpp"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Units/Creatures/Summons/SummonHandler.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Server/WorldSessionLog.hpp"
 #include "Server/Packets/CmsgCastSpell.h"
 #include "Server/Packets/CmsgPetCastSpell.h"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Storage/WDB/WDBStores.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -68,7 +71,7 @@ void WorldSession::handleSpellClick(WorldPacket& recvPacket)
             else
             {
                 sChatHandler.BlueSystemMessage(this, "NPC Id %u (%s) has no spellclick spell associated with it.", creatureTarget->GetCreatureProperties()->Id, creatureTarget->GetCreatureProperties()->Name.c_str());
-                sLogger.failure("Spellclick packet received for creature %u but there is no spell associated with it.", creatureTarget->getEntry());
+                sLogger.failure("Spellclick packet received for creature {} but there is no spell associated with it.", creatureTarget->getEntry());
                 return;
             }
 
@@ -90,7 +93,7 @@ void WorldSession::handleCastSpellOpcode(WorldPacket& recvPacket)
     const auto spellInfo = sSpellMgr.getSpellInfo(srlPacket.spell_id);
     if (spellInfo == nullptr)
     {
-        sLogger.failure("Unknown spell id %u in handleCastSpellOpcode().", srlPacket.spell_id);
+        sLogger.failure("Unknown spell id {} in handleCastSpellOpcode().", srlPacket.spell_id);
         return;
     }
 
@@ -98,7 +101,7 @@ void WorldSession::handleCastSpellOpcode(WorldPacket& recvPacket)
     if (!_player->hasSpell(srlPacket.spell_id))
     {
         sCheatLog.writefromsession(this, "WORLD: Player %u tried to cast spell %u but player does not have it.", _player->getGuidLow(), srlPacket.spell_id);
-        sLogger.info("WORLD: Player %u tried to cast spell %u but player does not have it.", _player->getGuidLow(), srlPacket.spell_id);
+        sLogger.info("WORLD: Player {} tried to cast spell {} but player does not have it.", _player->getGuidLow(), srlPacket.spell_id);
         return;
     }
 
@@ -106,7 +109,7 @@ void WorldSession::handleCastSpellOpcode(WorldPacket& recvPacket)
     if (spellInfo->isPassive())
     {
         sCheatLog.writefromsession(this, "WORLD: Player %u tried to cast a passive spell %u, ignored", _player->getGuidLow(), srlPacket.spell_id);
-        sLogger.info("WORLD: Player %u tried to cast a passive spell %u, ignored", _player->getGuidLow(), srlPacket.spell_id);
+        sLogger.info("WORLD: Player {} tried to cast a passive spell {}, ignored", _player->getGuidLow(), srlPacket.spell_id);
         return;
     }
 
@@ -244,16 +247,16 @@ void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
     if (spellInfo == nullptr)
         return;
 
-    if (_player->getFirstPetFromSummons() == nullptr && _player->getCharmGuid() == 0)
+    if (_player->getPet() == nullptr && _player->getCharmGuid() == 0)
     {
-        sLogger.failure("Received opcode but player %u has no pet.", _player->getGuidLow());
+        sLogger.failure("Received opcode but player {} has no pet.", _player->getGuidLow());
         return;
     }
 
     Unit* petUnit = _player->getWorldMap()->getUnit(srlPacket.petGuid);
     if (petUnit == nullptr)
     {
-        sLogger.failure("Pet entity cannot be found for player %u.", _player->getGuidLow());
+        sLogger.failure("Pet entity cannot be found for player {}.", _player->getGuidLow());
         return;
     }
 
@@ -261,17 +264,17 @@ void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
         return;
 
     // If pet is summoned by player
-    if (_player->getFirstPetFromSummons() == petUnit)
+    if (_player->getPet() == petUnit)
     {
         // Check does the pet have the spell
-        if (!dynamic_cast<Pet*>(petUnit)->HasSpell(srlPacket.spellId))
+        if (!dynamic_cast<Pet*>(petUnit)->hasSpell(srlPacket.spellId))
             return;
     }
     // If pet is charmed or possessed by player
     else if (_player->getCharmGuid() == srlPacket.petGuid)
     {
         bool found = false;
-        for (auto aiSpell : petUnit->getAIInterface()->m_spells)
+        for (const auto& aiSpell : petUnit->getAIInterface()->m_spells)
         {
             if (aiSpell->spell->getId() == srlPacket.spellId)
             {
@@ -285,7 +288,7 @@ void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
             Creature* petCreature = dynamic_cast<Creature*>(petUnit);
             if (petCreature->GetCreatureProperties()->spelldataid != 0)
             {
-                if (const auto creatureSpellData = sCreatureSpellDataStore.LookupEntry(petCreature->GetCreatureProperties()->spelldataid))
+                if (const auto creatureSpellData = sCreatureSpellDataStore.lookupEntry(petCreature->GetCreatureProperties()->spelldataid))
                 {
                     for (uint8_t i = 0; i < 3; ++i)
                     {
@@ -316,7 +319,7 @@ void WorldSession::handlePetCastSpell(WorldPacket& recvPacket)
     }
     else
     {
-        sLogger.failure("Pet doesn't belong to player %u", _player->getGuidLow());
+        sLogger.failure("Pet doesn't belong to player {}", _player->getGuidLow());
         return;
     }
 
@@ -361,15 +364,17 @@ void WorldSession::handleCancelTotem(WorldPacket& recvPacket)
     uint8_t totemSlot;
     recvPacket >> totemSlot;
 
-    if (totemSlot >= SUMMON_SLOT_MINIPET)
+    // Clientside slot is zero indexed
+    totemSlot += 1;
+    if (totemSlot >= MAX_SUMMON_SLOT)
     {
-        sLogger.failure("Player %u tried to cancel totem from out of range slot %u, ignored.", _player->getGuidLow(), totemSlot);
+        sLogger.failure("Player {} tried to cancel totem from out of range slot {}, ignored.", _player->getGuidLow(), totemSlot);
         return;
     }
 
-    const auto totem = _player->getTotem(SummonSlot(totemSlot + 1));
-    if (totem != nullptr)
-        totem->unSummon();
+    const auto summon = _player->getSummonInterface()->getSummonInSlot(static_cast<SummonSlot>(totemSlot));
+    if (summon != nullptr)
+        summon->unSummon();
 }
 
 void WorldSession::handleUpdateProjectilePosition(WorldPacket& recvPacket)

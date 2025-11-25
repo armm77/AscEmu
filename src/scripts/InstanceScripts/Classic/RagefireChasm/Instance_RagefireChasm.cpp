@@ -1,11 +1,20 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Instance_RagefireChasm.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 
 class RagefireChasmInstanceScript : public InstanceScript
 {

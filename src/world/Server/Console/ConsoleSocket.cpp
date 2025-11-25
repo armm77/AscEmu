@@ -1,17 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
-
-
 
 #include "ConsoleSocket.h"
 #include "ConsoleAuthMgr.h"
 #include "BaseConsole.h"
-
 #include "Server/LogonCommClient/LogonCommHandler.h"
 #include "Network/Network.h"
-
+#include "Utilities/Strings.hpp"
 
 ConsoleSocket::ConsoleSocket(SOCKET iFd) :
     Socket(iFd, 10000, 1000),
@@ -22,30 +19,18 @@ ConsoleSocket::ConsoleSocket(SOCKET iFd) :
     mRequestId(0),
     isWebClient(false)
 {
-    mInputBuffer = new char[ConsoleDefines::localBuffer];
-    mRemoteConsole = new RemoteConsole(this);
-    
+    mInputBuffer = std::make_unique<char[]>(ConsoleDefines::localBuffer);
+    mRemoteConsole = std::make_unique<RemoteConsole>(this);
 }
 
 ConsoleSocket::~ConsoleSocket()
 {
-    if (mInputBuffer != NULL)
-    {
-        delete[] mInputBuffer;
-    }
-
-    if (mRemoteConsole != nullptr)
-    {
-        delete mRemoteConsole;
-    }
-
     if (mRequestId)
     {
         sConsoleAuthMgr.addRequestIdSocket(mRequestId, nullptr);
         mRequestId = 0;
     }
 }
-
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // virtual functions (Socket)
@@ -64,7 +49,6 @@ void ConsoleSocket::OnDisconnect()
 {
     closeRemoteConnection();
 }
-
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // handle console input
@@ -88,10 +72,10 @@ void ConsoleSocket::handleConsoleInput()
     readBuffer.Read(&mInputBuffer[mInputBufferPosition], readLength);
     mInputBufferPosition += readLength;
 
-    char* inputChar = strchr(mInputBuffer, '\n');
+    char* inputChar = strchr(mInputBuffer.get(), '\n');
     while (inputChar != NULL)
     {
-        uint32_t inputLength = (uint32_t)((inputChar + 1) - mInputBuffer);
+        uint32_t inputLength = (uint32_t)((inputChar + 1) - mInputBuffer.get());
         if (*(inputChar - 1) == '\r')
         {
             *(inputChar - 1) = '\0';
@@ -99,20 +83,20 @@ void ConsoleSocket::handleConsoleInput()
 
         *inputChar = '\0';
 
-        if (*mInputBuffer != '\0')
+        if (mInputBuffer[0] != '\0')
         {
             switch (mConsoleSocketState)
             {
                 case ConsoleDefines::RemoteConsoleState::WaitForUsername:
                 {
-                    mConsoleAuthName = std::string(mInputBuffer);
+                    mConsoleAuthName = std::string(mInputBuffer.get());
                     mRemoteConsole->Write("password: ");
                     mConsoleSocketState = ConsoleDefines::RemoteConsoleState::WaitForPassword;
 
                 } break;
                 case ConsoleDefines::RemoteConsoleState::WaitForPassword:
                 {
-                    mConsoleAuthPassword = std::string(mInputBuffer);
+                    mConsoleAuthPassword = std::string(mInputBuffer.get());
                     mRemoteConsole->Write("\r\nAttempting to authenticate. Please wait.\r\n");
 
                     mRequestId = sConsoleAuthMgr.getGeneratedId();
@@ -123,13 +107,13 @@ void ConsoleSocket::handleConsoleInput()
                 } break;
                 case ConsoleDefines::RemoteConsoleState::UserLoggedIn:
                 {
-                    if (!strnicmp(mInputBuffer, "quit", 4))
+                    if (AscEmu::Util::Strings::isEqual(mInputBuffer.get(), "quit"))
                     {
                         Disconnect();
                         break;
                     }
 
-                    if (!strnicmp(mInputBuffer, "webclient", 9))
+                    if (AscEmu::Util::Strings::isEqual(mInputBuffer.get(), "webclient"))
                     {
                         isWebClient = true;
                         break;
@@ -137,7 +121,7 @@ void ConsoleSocket::handleConsoleInput()
                 }
                 default:
                 {
-                    processConsoleInput(mRemoteConsole, mInputBuffer, isWebClient);
+                    processConsoleInput(mRemoteConsole.get(), mInputBuffer.get(), isWebClient);
 
                 } break;
             }
@@ -150,11 +134,11 @@ void ConsoleSocket::handleConsoleInput()
         }
         else
         {
-            memcpy(mInputBuffer, &mInputBuffer[inputLength], mInputBufferPosition - inputLength);
+            memcpy(mInputBuffer.get(), &mInputBuffer[inputLength], mInputBufferPosition - inputLength);
             mInputBufferPosition -= inputLength;
         }
 
-        inputChar = strchr(mInputBuffer, '\n');
+        inputChar = strchr(mInputBuffer.get(), '\n');
     }
 }
 
@@ -168,7 +152,7 @@ void ConsoleSocket::closeRemoteConnection()
 
     if (mConsoleSocketState == ConsoleDefines::RemoteConsoleState::UserLoggedIn)
     {
-        sLogger.info("RemoteConsole : User `%s` disconnected.", mConsoleAuthName.c_str());
+        sLogger.info("RemoteConsole : User `{}` disconnected.", mConsoleAuthName);
     }
 }
 
@@ -194,7 +178,7 @@ void ConsoleSocket::getConsoleAuthResult(bool result)
     else
     {
         mRemoteConsole->Write("User `%s` authenticated.\r\n\r\n", mConsoleAuthName.c_str());
-        sLogger.info("RemoteConsole : User `%s` authenticated.", mConsoleAuthName.c_str());
+        sLogger.info("RemoteConsole : User `{}` authenticated.", mConsoleAuthName);
         //const char* argv[1];
         //handServerleInfoCommand(mRemoteConsole, 1, "");
         mRemoteConsole->Write("Type ? to see commands, quit to end session.\r\n");

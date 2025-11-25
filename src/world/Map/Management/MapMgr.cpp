@@ -1,29 +1,31 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Objects/DynamicObject.h"
-#include "Map/Cells/CellHandler.hpp"
-#include "Management/WorldStatesHandler.h"
-#include "Objects/Item.hpp"
+#include "WoWGuid.hpp"
+#include "MapMgr.hpp"
+#include "Objects/DynamicObject.hpp"
 #include "Map/Area/AreaStorage.hpp"
-#include "Objects/Units/Creatures/Summons/Summon.h"
 #include "Objects/Units/Unit.hpp"
 #include "VMapFactory.h"
 #include "MMapFactory.h"
+#include "Logging/Logger.hpp"
+#include "Management/Group.h"
+#include "Management/ItemInterface.h"
 #include "Storage/MySQLDataStore.hpp"
-#include "Macros/ScriptMacros.hpp"
-#include "MapMgr.hpp"
-#include "Map/Maps/MapScriptInterface.h"
+#include "Storage/WDB/WDBStores.hpp"
 #include "Objects/Units/Creatures/Pet.h"
-#include "Server/Packets/SmsgUpdateWorldState.h"
-#include "Server/Packets/SmsgDefenseMessage.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Map/Maps/BattleGroundMap.hpp"
+#include "Map/Maps/InstanceMap.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/World.h"
+#include "Server/WorldSession.h"
+#include "Storage/WDB/WDBStructures.hpp"
 
-#include "shared/WoWGuid.h"
-
-using namespace AscEmu::Packets;
+MapMgr::MapMgr() = default;
+MapMgr::~MapMgr() = default;
 
 MapMgr& MapMgr::getInstance()
 {
@@ -39,7 +41,7 @@ void MapMgr::initialize()
     {
         if (mapInfo->second.mapid >= MAX_NUM_MAPS)
         {
-            sLogger.failure("InstanceMgr : One or more of your worldmap_info rows specifies an invalid map: %u", mapInfo->second.mapid);
+            sLogger.failure("InstanceMgr : One or more of your worldmap_info rows specifies an invalid map: {}", mapInfo->second.mapid);
             continue;
         }
 
@@ -61,7 +63,6 @@ void MapMgr::shutdown()
     for (auto map = m_WorldMaps.cbegin(); map != m_WorldMaps.cend();)
     {
         map->second->unloadAll(true);
-        delete map->second;
         map = m_WorldMaps.erase(map);
     }
 
@@ -69,15 +70,10 @@ void MapMgr::shutdown()
     for (auto ini = m_InstancedMaps.cbegin(); ini != m_InstancedMaps.cend();)
     {
         ini->second->unloadAll(true);
-        delete ini->second;
         ini = m_InstancedMaps.erase(ini);
     }
 
-    for (auto itr = m_pendingRemoveMaps.cbegin(); itr != m_pendingRemoveMaps.cend();)
-    {
-        delete itr->first;
-        itr = m_pendingRemoveMaps.erase(itr);
-    }
+    m_pendingRemoveMaps.clear();
 }
 
 void MapMgr::removeInstance(uint32_t instanceId)
@@ -90,24 +86,25 @@ void MapMgr::removeInstance(uint32_t instanceId)
     {
         if (ini->second->isUnloadPending())
         {
-            m_InstancedMaps.erase(ini);
+            auto&& mapHolder = std::move(m_InstancedMaps.extract(ini));
+            mapHolder.mapped()->shutdownMapThread();
+            // Wait for thread to finish its work before freeing memory
+            m_pendingRemoveMaps.emplace_back(std::move(mapHolder.mapped()));
         }
     }
 }
 
-void MapMgr::addMapToRemovePool(WorldMap* map, bool killThreadOnly)
+void MapMgr::addMapToRemovePool(WorldMap const* map)
 {
     std::scoped_lock<std::mutex> lock(m_mapsLock);
-    auto itr = m_pendingRemoveMaps.find(map);
-    if (itr != m_pendingRemoveMaps.cend())
+    auto itr = m_WorldMaps.find(map->getBaseMap()->getMapId());
+    if (itr != m_WorldMaps.cend())
     {
-        if (itr->second)
-            itr->second = killThreadOnly;
-
-        return;
+        auto&& mapHolder = std::move(m_WorldMaps.extract(itr));
+        mapHolder.mapped()->shutdownMapThread();
+        // Wait for thread to finish its work before freeing memory
+        m_pendingRemoveMaps.emplace_back(std::move(mapHolder.mapped()));
     }
-
-    m_pendingRemoveMaps.insert(std::make_pair(map, killThreadOnly));
 }
 
 void MapMgr::update()
@@ -115,15 +112,10 @@ void MapMgr::update()
     std::scoped_lock<std::mutex> lock(m_mapsLock);
     for (auto itr = m_pendingRemoveMaps.cbegin(); itr != m_pendingRemoveMaps.cend();)
     {
-        if (itr->first->isMapReadyForDelete())
-        {
-            if (itr->second)
-                itr->first->unsafeKillMapThread();
-            else
-                delete itr->first;
-
+        if ((*itr)->isMapReadyForDelete())
             itr = m_pendingRemoveMaps.erase(itr);
-        }
+        else
+            ++itr;
     }
 }
 
@@ -136,7 +128,7 @@ void MapMgr::createBaseMap(uint32_t mapId)
         std::scoped_lock<std::mutex> lock(m_mapsLock);
 
         // Only Create Valid Maps
-        const auto mapEntry = sMapStore.LookupEntry(mapId);
+        const auto mapEntry = sMapStore.lookupEntry(mapId);
         if (mapEntry == nullptr)
             return;
 
@@ -144,11 +136,11 @@ void MapMgr::createBaseMap(uint32_t mapId)
         if (mapInfo == nullptr)
             return;
 
-        m_BaseMaps[mapId] = new BaseMap(mapId, mapInfo, mapEntry);
+        m_BaseMaps.insert_or_assign(mapId, std::make_unique<BaseMap>(mapId, mapInfo, mapEntry));
 
-        if (!mapEntry->instanceable())
+        if (!mapEntry->isInstanceableMap())
         {
-            m_WorldMaps[mapId] = createWorldMap(mapId, worldConfig.server.mapUnloadTime * 1000);
+            m_WorldMaps.insert_or_assign(mapId, createWorldMap(mapId, worldConfig.server.mapUnloadTime * 1000));
         }
     }
 }
@@ -156,18 +148,18 @@ void MapMgr::createBaseMap(uint32_t mapId)
 BaseMap* MapMgr::findBaseMap(uint32_t mapId) const
 {
     const auto& iter = m_BaseMaps.find(mapId);
-    return (iter == m_BaseMaps.end() ? nullptr : iter->second);
+    return (iter == m_BaseMaps.end() ? nullptr : iter->second.get());
 }
 
-WorldMap* MapMgr::createWorldMap(uint32_t mapId, uint32_t unloadTime)
+std::unique_ptr<WorldMap> MapMgr::createWorldMap(uint32_t mapId, uint32_t unloadTime) const
 {
     const auto& baseMap = findBaseMap(mapId);
     if (baseMap == nullptr)
         return nullptr;
 
-    sLogger.debug("MapMgr::createWorldMap Create Continent %s for Map %u", baseMap->getMapName().c_str(), mapId);
+    sLogger.debug("MapMgr::createWorldMap Create Continent {} for Map {}", baseMap->getMapName(), mapId);
 
-    WorldMap* map = new WorldMap(baseMap, mapId, unloadTime, 0, InstanceDifficulty::Difficulties::DUNGEON_NORMAL);
+    auto map = std::make_unique<WorldMap>(baseMap, mapId, unloadTime, 0, InstanceDifficulty::Difficulties::DUNGEON_NORMAL);
 
     // Load Saved Respawns when existing
     map->loadRespawnTimes();
@@ -184,13 +176,13 @@ WorldMap* MapMgr::createWorldMap(uint32_t mapId, uint32_t unloadTime)
 WorldMap* MapMgr::findWorldMap(uint32_t mapid) const
 {
     const auto& iter = m_WorldMaps.find(mapid);
-    return (iter == m_WorldMaps.end() ? nullptr : iter->second);
+    return (iter == m_WorldMaps.end() ? nullptr : iter->second.get());
 }
 
 InstanceMap* MapMgr::findInstanceMap(uint32_t instanceId) const
 {
     const auto& iter = m_InstancedMaps.find(instanceId);
-    return (iter == m_InstancedMaps.end() ? nullptr : static_cast<InstanceMap*>(iter->second));
+    return (iter == m_InstancedMaps.end() ? nullptr : static_cast<InstanceMap*>(iter->second.get()));
 }
 
 std::list<InstanceMap*> MapMgr::findInstancedMaps(uint32_t mapId)
@@ -199,8 +191,8 @@ std::list<InstanceMap*> MapMgr::findInstancedMaps(uint32_t mapId)
 
     for (auto const& maps : m_InstancedMaps)
     {
-        if (maps.second->getBaseMap()->getMapId() == mapId && maps.second->getBaseMap()->isDungeon())
-            list.push_back(static_cast<InstanceMap*>(maps.second));
+        if (maps.second->getBaseMap()->getMapId() == mapId && maps.second->getBaseMap()->isInstanceMap())
+            list.push_back(static_cast<InstanceMap*>(maps.second.get()));
     }
 
     return list;
@@ -213,7 +205,7 @@ WorldMap* MapMgr::findWorldMap(uint32_t mapId, uint32_t instanceId) const
     if (!baseMap)
         return nullptr;
 
-    if (baseMap->instanceable())
+    if (baseMap->isInstanceableMap())
     {
         map = findInstanceMap(instanceId);
     }
@@ -255,12 +247,9 @@ WorldMap* MapMgr::createInstanceForPlayer(uint32_t mapId, Player* player, uint32
                 return map;
             }
 
-            InstanceGroupBind* groupBind = nullptr;
-            Group* group = player->getGroup();
-            if (group)
+            if (const auto group = player->getGroup())
             {
-                groupBind = group->getBoundInstance(baseMap);
-                if (groupBind)
+                if (const InstanceGroupBind* groupBind = group->getBoundInstance(baseMap))
                 {
                     // solo instance saves should be reset when entering a group's instance
                     player->unbindInstance(baseMap->getMapId(), player->getDifficulty(baseMap->isRaid()));
@@ -289,7 +278,7 @@ WorldMap* MapMgr::createInstanceForPlayer(uint32_t mapId, Player* player, uint32
     }
 
     if (map)
-        sLogger.debug("MapMgr::createInstanceForPlayer Create Instance %s for Map %u", baseMap->getMapName().c_str(), mapId);
+        sLogger.debug("MapMgr::createInstanceForPlayer Create Instance {} for Map {}", baseMap->getMapName(), mapId);
 
     return map;
 }
@@ -303,22 +292,22 @@ InstanceMap* MapMgr::createInstance(uint32_t mapId, uint32_t InstanceId, Instanc
     const auto& baseMap = findBaseMap(mapId);
     if (!baseMap)
     {
-        sLogger.failure("MapMgr::createInstance: no BaseMap for map %u", mapId);
+        sLogger.failure("MapMgr::createInstance: no BaseMap for map {}", mapId);
         return nullptr;
     }
 
     // make sure we have a valid map id
-    DBC::Structures::MapEntry const* entry = sMapStore.LookupEntry(mapId);
+    WDB::Structures::MapEntry const* entry = sMapStore.lookupEntry(mapId);
     if (!entry)
     {
-        sLogger.failure("MapMgr::createInstance: no entry for map %u", mapId);
+        sLogger.failure("MapMgr::createInstance: no entry for map {}", mapId);
         return nullptr;
     }
 
     const auto mapInfo = sMySQLStore.getWorldMapInfo(mapId);
     if (mapInfo == nullptr)
     {
-        sLogger.failure("MapMgr::createInstance: no WorldMapInfo for map %u", mapId);
+        sLogger.failure("MapMgr::createInstance: no WorldMapInfo for map {}", mapId);
         return nullptr;
     }
 
@@ -326,9 +315,9 @@ InstanceMap* MapMgr::createInstance(uint32_t mapId, uint32_t InstanceId, Instanc
 #if VERSION_STRING > TBC
     getDownscaledMapDifficultyData(mapId, difficulty);
 #endif
-    sLogger.debug("MapMgr::createInstance Create %s map instance %d for %u created with difficulty %s", save ? "" : "new ", InstanceId, mapId, difficulty ? "heroic" : "normal");
+    sLogger.debug("MapMgr::createInstance Create {} map instance {} for {} created with difficulty {}", save ? "" : "new ", InstanceId, mapId, difficulty ? "heroic" : "normal");
 
-    InstanceMap* map = new InstanceMap(baseMap, mapId, worldConfig.server.mapUnloadTime * 1000, InstanceId, difficulty, InstanceTeam);
+    auto map = std::make_unique<InstanceMap>(baseMap, mapId, worldConfig.server.mapUnloadTime * 1000, InstanceId, difficulty, InstanceTeam);
 
     // Load Saved Respawns when existing
     map->loadRespawnTimes();
@@ -343,13 +332,18 @@ InstanceMap* MapMgr::createInstance(uint32_t mapId, uint32_t InstanceId, Instanc
     // In Instances we load all Cells
     map->updateAllCells(true);
 
+    // Save pointer to InstanceMap to avoid casting later -Appled
+    auto* instMap = map.get();
     // Add current Instance to our Active Instances
-    m_InstancedMaps[InstanceId] = map;
+    const auto [_, emplaced] = m_InstancedMaps.try_emplace(InstanceId, std::move(map));
+
+    if (!emplaced)
+        return nullptr;
 
     // Scheduling the new map for running
-    map->startMapThread();
+    instMap->startMapThread();
 
-    return map;
+    return instMap;
 }
 
 BattlegroundMap* MapMgr::createBattleground(uint32_t mapId)
@@ -364,13 +358,13 @@ BattlegroundMap* MapMgr::createBattleground(uint32_t mapId)
     const auto& baseMap = findBaseMap(mapId);
     if (!baseMap)
     {
-        sLogger.failure("MapMgr::createInstance: no BaseMap for map %u", mapId);
+        sLogger.failure("MapMgr::createInstance: no BaseMap for map {}", mapId);
         return nullptr;
     }
 
     uint8_t spawnMode = InstanceDifficulty::Difficulties::DUNGEON_NORMAL;
 
-    BattlegroundMap* map = new BattlegroundMap(baseMap, mapId, worldConfig.server.mapUnloadTime * 1000, newInstanceId, spawnMode);
+    auto map = std::make_unique<BattlegroundMap>(baseMap, mapId, worldConfig.server.mapUnloadTime * 1000, newInstanceId, spawnMode);
 
     // Initialize Map Script and Load Static Spawns
     map->initialize();
@@ -378,12 +372,17 @@ BattlegroundMap* MapMgr::createBattleground(uint32_t mapId)
     // In Battlegrounds we load all Cells
     map->updateAllCells(true);
 
-    m_InstancedMaps[newInstanceId] = map;
+    // Save pointer to BattlegroundMap to avoid casting later -Appled
+    auto* bgMap = map.get();
+    const auto [_, emplaced] = m_InstancedMaps.try_emplace(newInstanceId, std::move(map));
+
+    if (!emplaced)
+        return nullptr;
 
     // Scheduling the new map for running
-    map->startMapThread();
+    bgMap->startMapThread();
 
-    return map;
+    return bgMap;
 }
 
 WorldMap* MapMgr::createMap(uint32_t mapId, Player* player, uint32_t instanceId)
@@ -393,7 +392,7 @@ WorldMap* MapMgr::createMap(uint32_t mapId, Player* player, uint32_t instanceId)
 
     if (baseMap)
     {
-        if (baseMap->instanceable())
+        if (baseMap->isInstanceableMap())
         {
             // instance check.
             map = createInstanceForPlayer(mapId, player, instanceId);
@@ -409,15 +408,15 @@ WorldMap* MapMgr::createMap(uint32_t mapId, Player* player, uint32_t instanceId)
 
 EnterState MapMgr::canPlayerEnter(uint32_t mapid, uint32_t minLevel, Player* player, bool loginCheck)
 {
-    DBC::Structures::MapEntry const* entry = sMapStore.LookupEntry(mapid);
+    WDB::Structures::MapEntry const* entry = sMapStore.lookupEntry(mapid);
     if (!entry)
         return CANNOT_ENTER_NO_ENTRY;
 
-    if (!entry->isDungeon())
+    if (!entry->isInstanceMap())
         return CAN_ENTER;
 
     MySQLStructure::MapInfo const* mapInfo = sMySQLStore.getWorldMapInfo(mapid);
-    if (!mapInfo && mapInfo->isNonInstanceMap())
+    if (!mapInfo && mapInfo->isWorldMap())
         return CANNOT_ENTER_UNINSTANCED_DUNGEON;
 
     InstanceDifficulty::Difficulties targetDifficulty, requestedDifficulty;
@@ -425,7 +424,7 @@ EnterState MapMgr::canPlayerEnter(uint32_t mapid, uint32_t minLevel, Player* pla
 
 #if VERSION_STRING > TBC
     // Get the highest available difficulty if current setting is higher than the instance allows
-    DBC::Structures::MapDifficulty const* mapDiff = getDownscaledMapDifficultyData(entry->id, targetDifficulty);
+    WDB::Structures::MapDifficulty const* mapDiff = getDownscaledMapDifficultyData(entry->id, targetDifficulty);
     if (!mapDiff)
         return CANNOT_ENTER_DIFFICULTY_UNAVAILABLE;
 #endif
@@ -464,10 +463,10 @@ EnterState MapMgr::canPlayerEnter(uint32_t mapid, uint32_t minLevel, Player* pla
         )
         return CANNOT_ENTER_KEY;
 
-    if (!mapInfo->isNonInstanceMap() && player->getDungeonDifficulty() >= InstanceDifficulty::DUNGEON_HEROIC && player->getLevel() < mapInfo->minlevel_heroic)
+    if (!entry->isWorldMap() && player->getDungeonDifficulty() >= InstanceDifficulty::DUNGEON_HEROIC && player->getLevel() < mapInfo->minlevel_heroic)
         return CANNOT_ENTER_MIN_LEVEL_HC;
 
-    Group* group = player->getGroup();
+    const auto group = player->getGroup();
     if (entry->isRaid()) // can only enter in a raid group
         if ((!group || !group->isRaidGroup()) && !player->m_cheats.hasTriggerpassCheat)
             return CANNOT_ENTER_NOT_IN_RAID;
@@ -493,7 +492,7 @@ EnterState MapMgr::canPlayerEnter(uint32_t mapid, uint32_t minLevel, Player* pla
     }
 
     // players are only allowed to enter 5 instances per hour
-    if (entry->isDungeon() && (!player->getGroup() || (player->getGroup() && !player->getGroup()->isLFGGroup())))
+    if (entry->isInstanceMap() && (!player->getGroup() || (player->getGroup() && !player->getGroup()->isLFGGroup())))
     {
         uint32_t instanceIdToCheck = 0;
         if (InstanceSaved* save = player->getInstanceSave(mapid, entry->isRaid()))

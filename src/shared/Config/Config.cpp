@@ -1,13 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Common.hpp"
 #include "Config.h"
 #include "Logging/Logger.hpp"
-#include "Util.hpp"
+#include "Utilities/Util.hpp"
 #include <stdexcept>
+
+#include "Debugging/Errors.h"
 
 bool ConfigFile::openAndLoadConfigFile(const std::string& configFileName)
 {
@@ -431,7 +432,7 @@ bool ConfigFile::tryGetBool(const std::string& sectionName, const std::string& c
 
     catch (std::invalid_argument& e)
     {
-        sLogger.failure("%s", e.what());
+        sLogger.failure("{}", e.what());
         ASSERT(false)
     }
     return false;
@@ -450,7 +451,7 @@ bool ConfigFile::tryGetFloat(const std::string& sectionName, const std::string& 
 
     catch (std::invalid_argument& e)
     {
-        sLogger.failure("%s", e.what());
+        sLogger.failure("{}", e.what());
         ASSERT(false)
     }
     return false;
@@ -469,7 +470,7 @@ bool ConfigFile::tryGetInt(const std::string& sectionName, const std::string& co
 
     catch (std::invalid_argument& e)
     {
-        sLogger.failure("%s", e.what());
+        sLogger.failure("{}", e.what());
         ASSERT(false)
     }
     return false;
@@ -488,7 +489,7 @@ bool ConfigFile::tryGetInt(const std::string& sectionName, const std::string& co
 
     catch (std::invalid_argument& e)
     {
-        sLogger.failure("%s", e.what());
+        sLogger.failure("{}", e.what());
         ASSERT(false)
     }
     return false;
@@ -507,7 +508,7 @@ bool ConfigFile::tryGetInt(const std::string& sectionName, const std::string& co
 
     catch (std::invalid_argument& e)
     {
-        sLogger.failure("%s", e.what());
+        sLogger.failure("{}", e.what());
         ASSERT(false)
     }
     return false;
@@ -526,7 +527,7 @@ bool ConfigFile::tryGetString(const std::string& sectionName, const std::string&
 
     catch (std::invalid_argument& e)
     {
-        sLogger.failure("%s", e.what());
+        sLogger.failure("{}", e.what());
         ASSERT(false)
     }
     return false;

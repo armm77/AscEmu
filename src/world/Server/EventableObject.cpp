@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -20,7 +20,9 @@
  */
 
 #include "EventableObject.h"
+#include "EventMgr.h"
 #include "Logging/Logger.hpp"
+#include "Threading/LegacyThreadPool.h"
 
 EventableObject::~EventableObject()
 {
@@ -29,7 +31,6 @@ EventableObject::~EventableObject()
     for (; itr != m_events.end(); ++itr)
     {
         itr->second->deleted = true;
-        itr->second->DecRef();
     }
 
     m_events.clear();
@@ -40,16 +41,15 @@ EventableObject::EventableObject()
     /* commented, these will be allocated when the first event is added. */
     //m_event_Instanceid = event_GetInstanceID();
     //m_holder = sEventMgr.GetEventHolder(m_event_Instanceid);
-    m_refs = 1;
     m_holder = 0;
     m_event_Instanceid = -1;
 
     m_events.clear();
 }
 
-void EventableObject::event_AddEvent(TimedEvent* ptr)
+void EventableObject::event_AddEvent(std::shared_ptr<TimedEvent> ptr)
 {
-    m_lock.Acquire();
+    m_lock.lock();
 
     if (m_holder == nullptr)
     {
@@ -68,6 +68,7 @@ void EventableObject::event_AddEvent(TimedEvent* ptr)
     if (m_holder == nullptr)
     {
         sLogger.failure("EventableObject::event_AddEvent not able to find a event holder, return!");
+        m_lock.unlock();
         return;
     }
 
@@ -75,26 +76,22 @@ void EventableObject::event_AddEvent(TimedEvent* ptr)
     // This is much better than adding us to the eventholder and removing on an update
     if (m_event_Instanceid == WORLD_INSTANCE && (ptr->eventFlag & EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT))
     {
-        delete ptr->cb;
-        delete ptr;
-
-        m_lock.Release();
+        m_lock.unlock();
         return;
     }
 
-    ptr->IncRef();
     ptr->instanceId = m_event_Instanceid;
-    std::pair<uint32, TimedEvent*> p(ptr->eventType, ptr);
-    m_events.insert(p);
-    m_lock.Release();
+    m_events.emplace(ptr->eventType, ptr);
+    m_lock.unlock();
 
     /* Add to event manager */
-    m_holder->AddEvent(ptr);
+    m_holder->AddEvent(std::move(ptr));
 }
 
 void EventableObject::event_RemoveByPointer(TimedEvent* ev)
 {
-    m_lock.Acquire();
+    std::lock_guard lock(m_lock);
+
     EventMap::iterator itr = m_events.find(ev->eventType);
     EventMap::iterator it2;
     if (itr != m_events.end())
@@ -103,29 +100,24 @@ void EventableObject::event_RemoveByPointer(TimedEvent* ev)
         {
             it2 = itr++;
 
-            if (it2->second == ev)
+            if (it2->second.get() == ev)
             {
                 it2->second->deleted = true;
-                it2->second->DecRef();
                 m_events.erase(it2);
-                m_lock.Release();
                 return;
             }
 
         }
         while (itr != m_events.upper_bound(ev->eventType));
     }
-    m_lock.Release();
 }
 
-void EventableObject::event_RemoveEvents(uint32 EventType)
+void EventableObject::event_RemoveEvents(uint32_t EventType)
 {
-    m_lock.Acquire();
+    std::lock_guard lock(m_lock);
+
     if (!m_events.size())
-    {
-        m_lock.Release();
         return;
-    }
 
     if (EventType == EVENT_REMOVAL_FLAG_ALL)
     {
@@ -133,7 +125,6 @@ void EventableObject::event_RemoveEvents(uint32 EventType)
         for (; itr != m_events.end(); ++itr)
         {
             itr->second->deleted = true;
-            itr->second->DecRef();
         }
         m_events.clear();
     }
@@ -148,15 +139,12 @@ void EventableObject::event_RemoveEvents(uint32 EventType)
                 it2 = itr++;
 
                 it2->second->deleted = true;
-                it2->second->DecRef();
                 m_events.erase(it2);
 
             }
             while (itr != m_events.upper_bound(EventType));
         }
     }
-
-    m_lock.Release();
 }
 
 void EventableObject::event_RemoveEvents()
@@ -164,14 +152,12 @@ void EventableObject::event_RemoveEvents()
     event_RemoveEvents(EVENT_REMOVAL_FLAG_ALL);
 }
 
-void EventableObject::event_ModifyTimeLeft(uint32 EventType, time_t TimeLeft, bool unconditioned)
+void EventableObject::event_ModifyTimeLeft(uint32_t EventType, time_t TimeLeft, bool unconditioned)
 {
-    m_lock.Acquire();
+    std::lock_guard lock(m_lock);
+
     if (!m_events.size())
-    {
-        m_lock.Release();
         return;
-    }
 
     EventMap::iterator itr = m_events.find(EventType);
     if (itr != m_events.end())
@@ -185,18 +171,14 @@ void EventableObject::event_ModifyTimeLeft(uint32 EventType, time_t TimeLeft, bo
         }
         while (itr != m_events.upper_bound(EventType));
     }
-
-    m_lock.Release();
 }
 
-bool EventableObject::event_GetTimeLeft(uint32 EventType, time_t* Time)
+bool EventableObject::event_GetTimeLeft(uint32_t EventType, time_t* Time)
 {
-    m_lock.Acquire();
+    std::lock_guard lock(m_lock);
+
     if (!m_events.size())
-    {
-        m_lock.Release();
         return false;
-    }
 
     EventMap::iterator itr = m_events.find(EventType);
     if (itr != m_events.end())
@@ -209,26 +191,22 @@ bool EventableObject::event_GetTimeLeft(uint32 EventType, time_t* Time)
                 continue;
             }
 
-            *Time = (uint32)itr->second->currTime;
-            m_lock.Release();
+            *Time = (uint32_t)itr->second->currTime;
             return true;
 
         }
         while (itr != m_events.upper_bound(EventType));
     }
 
-    m_lock.Release();
     return false;
 }
 
-void EventableObject::event_ModifyTime(uint32 EventType, time_t Time)
+void EventableObject::event_ModifyTime(uint32_t EventType, time_t Time)
 {
-    m_lock.Acquire();
+    std::lock_guard lock(m_lock);
+
     if (!m_events.size())
-    {
-        m_lock.Release();
         return;
-    }
 
     EventMap::iterator itr = m_events.find(EventType);
     if (itr != m_events.end())
@@ -240,18 +218,14 @@ void EventableObject::event_ModifyTime(uint32 EventType, time_t Time)
         }
         while (itr != m_events.upper_bound(EventType));
     }
-
-    m_lock.Release();
 }
 
-void EventableObject::event_ModifyTimeAndTimeLeft(uint32 EventType, time_t Time)
+void EventableObject::event_ModifyTimeAndTimeLeft(uint32_t EventType, time_t Time)
 {
-    m_lock.Acquire();
+    std::lock_guard lock(m_lock);
+
     if (!m_events.size())
-    {
-        m_lock.Release();
         return;
-    }
 
     EventMap::iterator itr = m_events.find(EventType);
     if (itr != m_events.end())
@@ -263,20 +237,16 @@ void EventableObject::event_ModifyTimeAndTimeLeft(uint32 EventType, time_t Time)
         }
         while (itr != m_events.upper_bound(EventType));
     }
-
-    m_lock.Release();
 }
 
-
-bool EventableObject::event_HasEvent(uint32 EventType)
+bool EventableObject::event_HasEvent(uint32_t EventType)
 {
     bool ret = false;
-    m_lock.Acquire();
+
+    std::lock_guard lock(m_lock);
+
     if (!m_events.size())
-    {
-        m_lock.Release();
         return false;
-    }
 
     //ret = m_events.find(EventType) == m_events.end() ? false : true;
     EventMap::iterator itr = m_events.find(EventType);
@@ -294,11 +264,10 @@ bool EventableObject::event_HasEvent(uint32 EventType)
         while (itr != m_events.upper_bound(EventType));
     }
 
-    m_lock.Release();
     return ret;
 }
 
-EventableObjectHolder::EventableObjectHolder(int32 instance_id) : mInstanceId(instance_id)
+EventableObjectHolder::EventableObjectHolder(int32_t instance_id) : mInstanceId(instance_id)
 {
     m_insertPool.clear();
     sEventMgr.AddEventHolder(this, instance_id);
@@ -308,41 +277,35 @@ EventableObjectHolder::~EventableObjectHolder()
 {
     sEventMgr.RemoveEventHolder(this);
 
-    m_insertPoolLock.Acquire();
-    EventList::iterator insertPoolItr = m_insertPool.begin();
-    for (; insertPoolItr != m_insertPool.end(); ++insertPoolItr)
-        (*insertPoolItr)->DecRef();
-    m_insertPoolLock.Release();
+    m_insertPoolLock.lock();
+    m_insertPool.clear();
+    m_insertPoolLock.unlock();
 
-    /* decrement events reference count */
-    m_lock.Acquire();
-    EventList::iterator itr = m_events.begin();
-    for (; itr != m_events.end(); ++itr)
-        (*itr)->DecRef();
-    m_lock.Release();
+    // decrement events reference count
+    std::lock_guard lock(m_lock);
+
+    m_events.clear();
 }
 
 void EventableObjectHolder::Update(time_t time_difference)
 {
-    m_lock.Acquire();            // <<<<
+    std::lock_guard lock(m_lock);
 
-    /* Insert any pending objects in the insert pool. */
-    m_insertPoolLock.Acquire();
+    // Insert any pending objects in the insert pool.
+    m_insertPoolLock.lock();
     InsertableQueue::iterator iqi;
     InsertableQueue::iterator iq2 = m_insertPool.begin();
     while (iq2 != m_insertPool.end())
     {
         iqi = iq2++;
-        if ((*iqi)->deleted || (*iqi)->instanceId != mInstanceId)
-            (*iqi)->DecRef();
-        else
-            m_events.push_back((*iqi));
+        if (!((*iqi)->deleted || (*iqi)->instanceId != mInstanceId))
+            m_events.push_back(std::move((*iqi)));
 
         m_insertPool.erase(iqi);
     }
-    m_insertPoolLock.Release();
+    m_insertPoolLock.unlock();
 
-    /* Now we can proceed normally. */
+    // Now we can proceed normally.
     EventList::iterator itr = m_events.begin();
     EventList::iterator it2;
     TimedEvent* ev;
@@ -353,9 +316,6 @@ void EventableObjectHolder::Update(time_t time_difference)
 
         if ((*it2)->instanceId != mInstanceId || (*it2)->deleted)
         {
-
-            (*it2)->DecRef();
-
             // remove from this list.
             m_events.erase(it2);
 
@@ -363,17 +323,16 @@ void EventableObjectHolder::Update(time_t time_difference)
         }
 
         // Event Update Procedure
-        ev = *it2;
+        ev = it2->get();
 
         if (ev->currTime <= time_difference)
         {
             // execute the callback
             if (ev->eventFlag & EVENT_FLAG_DELETES_OBJECT)
             {
-                m_events.erase(it2);
                 ev->deleted = true;
                 ev->cb->execute();
-                ev->DecRef();
+                m_events.erase(it2);
                 continue;
             }
             else
@@ -390,7 +349,6 @@ void EventableObjectHolder::Update(time_t time_difference)
 
                 /* remove the event from here */
                 ev->deleted = true;
-                ev->DecRef();
                 m_events.erase(it2);
 
                 continue;
@@ -398,7 +356,6 @@ void EventableObjectHolder::Update(time_t time_difference)
             else if (ev->deleted)
             {
                 // event is now deleted
-                ev->DecRef(); //this was added on "addevent"
                 m_events.erase(it2);
                 continue;
             }
@@ -412,14 +369,11 @@ void EventableObjectHolder::Update(time_t time_difference)
             ev->currTime -= time_difference;
         }
     }
-
-    m_lock.Release();
 }
 
 void EventableObject::event_Relocate()
 {
-    /* prevent any new stuff from getting added */
-    m_lock.Acquire();
+    std::lock_guard lock(m_lock);
 
     EventableObjectHolder* nh = sEventMgr.GetEventHolder(event_GetInstanceID());
     if (nh != m_holder)
@@ -447,48 +401,44 @@ void EventableObject::event_Relocate()
         // reset our m_holder pointer
         m_holder = nh;
     }
-
-    /* safe again to add */
-    m_lock.Release();
 }
 
-uint32 EventableObject::event_GetEventPeriod(uint32 EventType)
+uint32_t EventableObject::event_GetEventPeriod(uint32_t EventType)
 {
-    uint32 ret = 0;
-    m_lock.Acquire();
+    uint32_t ret = 0;
+    std::lock_guard lock(m_lock);
+
     EventMap::iterator itr = m_events.find(EventType);
     if (itr != m_events.end())
-        ret = (uint32)itr->second->msTime;
+        ret = (uint32_t)itr->second->msTime;
 
-    m_lock.Release();
     return ret;
 }
 
-void EventableObjectHolder::AddEvent(TimedEvent* ev)
+void EventableObjectHolder::AddEvent(std::shared_ptr<TimedEvent> ev)
 {
     // m_lock NEEDS TO BE A RECURSIVE MUTEX
-    ev->IncRef();
-    if (!m_lock.AttemptAcquire())
+    if (!m_lock.try_lock())
     {
-        m_insertPoolLock.Acquire();
-        m_insertPool.push_back(ev);
-        m_insertPoolLock.Release();
+        m_insertPoolLock.lock();
+        m_insertPool.push_back(std::move(ev));
+        m_insertPoolLock.unlock();
     }
     else
     {
-        m_events.push_back(ev);
-        m_lock.Release();
+        m_events.push_back(std::move(ev));
+        m_lock.unlock();
     }
 }
 
 void EventableObjectHolder::AddObject(EventableObject* obj)
 {
     // transfer all of this objects events into our holder
-    if (!m_lock.AttemptAcquire())
+    if (!m_lock.try_lock())
     {
         // The other thread is obviously occupied. We have to use an insert pool here, otherwise
         // if 2 threads relocate at once we'll hit a deadlock situation.
-        m_insertPoolLock.Acquire();
+        m_insertPoolLock.lock();
         EventMap::iterator it2;
 
         for (EventMap::iterator itr = obj->m_events.begin(); itr != obj->m_events.end(); ++itr)
@@ -502,16 +452,12 @@ void EventableObjectHolder::AddObject(EventableObject* obj)
                 continue;
             }
 
-            itr->second->IncRef();
             itr->second->instanceId = mInstanceId;
             m_insertPool.push_back(itr->second);
         }
 
         // Release the insert pool.
-        m_insertPoolLock.Release();
-
-        // Ignore the rest of this stuff
-        return;
+        m_insertPoolLock.unlock();
     }
     else
     {
@@ -521,10 +467,9 @@ void EventableObjectHolder::AddObject(EventableObject* obj)
             if (itr->second->deleted)
                 continue;
 
-            itr->second->IncRef();
             itr->second->instanceId = mInstanceId;
             m_events.push_back(itr->second);
         }
-        m_lock.Release();
+        m_lock.unlock();
     }
 }

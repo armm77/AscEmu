@@ -1,22 +1,21 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "LogonServerDefines.hpp"
-#include <Common.Legacy.h>
-#include "Database/Database.h"
+#include <set>
+#include <atomic>
+#include <mutex>
 
-extern Database* sLogonSQL;
+class AuthSocket;
+class Database;
+
+extern std::unique_ptr<Database> sLogonSQL;
 
 extern std::atomic<bool> mrunning;
-class AuthSocket;
-extern std::set<AuthSocket*> _authSockets;
-extern Mutex _authSocketLock;
 
-class MasterLogon;
 class MasterLogon
 {
 private:
@@ -46,8 +45,11 @@ public:
     void PrintBanner();
     void WritePidFile();
 
-    uint32 clientMinBuild;
-    uint32 clientMaxBuild;
+    uint32_t m_clientMinBuild;
+    uint32_t m_clientMaxBuild;
+
+    void addAuthSocket(AuthSocket* _authSocket);
+    void removeAuthSocket(AuthSocket* _authSocket);
 
 private:
     void _HookSignals();
@@ -55,6 +57,9 @@ private:
 
     static void _OnSignal(int s);
     bool m_stopEvent;
+
+    std::set<AuthSocket*> m_authSockets;
+    std::mutex m_authSocketLock;
 };
 
 #define sMasterLogon MasterLogon::getInstance()

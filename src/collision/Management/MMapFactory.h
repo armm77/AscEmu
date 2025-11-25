@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,12 +20,7 @@
 #ifndef _MMAP_FACTORY_H
 #define _MMAP_FACTORY_H
 
-#include "Common.hpp"
 #include "MMapManager.h"
-#include "DetourAlloc.h"
-#include "DetourNavMesh.h"
-#include "DetourNavMeshQuery.h"
-#include <unordered_map>
 
 namespace MMAP
 {
@@ -44,7 +39,7 @@ namespace MMAP
         public:
             static MMapManager* createOrGetMMapManager();
             static void clear();
-            static bool IsPathfindingEnabled(uint32 mapId);
+            static bool IsPathfindingEnabled(uint32_t mapId);
     };
 }
 

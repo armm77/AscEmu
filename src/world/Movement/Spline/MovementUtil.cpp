@@ -1,12 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "MoveSplineFlag.h"
 #include <cmath>
 
-namespace MovementNew {
+#include "MoveSplineFlag.h"
+
+namespace MovementMgr {
 
 float gravity = static_cast<float>(19.29110527038574);
 UInt32Counter splineIdGen;
@@ -179,4 +180,4 @@ std::string MoveSplineFlag::ToString() const
     print_flags(raw(), g_SplineFlag_names, str);
     return str;
 }
-} // namespace MovementNew
+} // namespace MovementMgr

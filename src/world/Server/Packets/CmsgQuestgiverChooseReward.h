@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -40,7 +40,7 @@ namespace AscEmu::Packets
         {
             uint64_t unpackedGuid;
             packet >> unpackedGuid >> questId >> rewardSlot;
-            questgiverGuid.Init(unpackedGuid);
+            questgiverGuid.init(unpackedGuid);
             return true;
         }
     };

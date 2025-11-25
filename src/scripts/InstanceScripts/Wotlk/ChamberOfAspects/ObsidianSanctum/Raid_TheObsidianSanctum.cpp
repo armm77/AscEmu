@@ -1,11 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Raid_TheObsidianSanctum.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
 
 class ObsidianSanctumScript : public InstanceScript
 {
@@ -153,7 +155,7 @@ public:
         addAISpell(SARTHARION_CLEAVE, 24.0f, TARGET_ATTACKING, 0, 8);
 
         CreatureAISpells* mFlame = nullptr;
-        if (_isHeroic())
+        if (isHeroic())
         {
             mFlame = addAISpell(58956, 18.0f, TARGET_SELF, 2, 16);
             addAISpell(58957, 40.0f, TARGET_SELF, 0, 12);

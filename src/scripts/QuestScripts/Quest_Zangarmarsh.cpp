@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,6 +20,13 @@
  */
 
 #include "Setup.h"
+#include "Management/ItemInterface.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Server/WorldSession.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 
 class AncientMarks : public GossipScript
 {
@@ -58,13 +65,13 @@ public:
             {
                 plr->addQuestKill(9785, 0, 0);
 
-                if (plr->getFactionStandingRank(942) == 4)
+                if (plr->getFactionStandingRank(942) == Standing::FRIENDLY)
                     casta->castSpell(plr, 31808, true);
-                else if (plr->getFactionStandingRank(942) == 5)
+                else if (plr->getFactionStandingRank(942) == Standing::HONORED)
                     casta->castSpell(plr, 31810, true);
-                else if (plr->getFactionStandingRank(942) == 6)
+                else if (plr->getFactionStandingRank(942) == Standing::REVERED)
                     casta->castSpell(plr, 31811, true);
-                else if (plr->getFactionStandingRank(942) == 7)
+                else if (plr->getFactionStandingRank(942) == Standing::EXALTED)
                     casta->castSpell(plr, 31815, true);
 
             } break;
@@ -72,13 +79,13 @@ public:
             {
                 plr->addQuestKill(9785, 1, 0);
 
-                if (plr->getFactionStandingRank(942) == 4)
+                if (plr->getFactionStandingRank(942) == Standing::FRIENDLY)
                     casta->castSpell(plr, 31807, true);
-                else if (plr->getFactionStandingRank(942) == 5)
+                else if (plr->getFactionStandingRank(942) == Standing::HONORED)
                     casta->castSpell(plr, 31814, true);
-                else if (plr->getFactionStandingRank(942) == 6)
+                else if (plr->getFactionStandingRank(942) == Standing::REVERED)
                     casta->castSpell(plr, 31813, true);
-                else if (plr->getFactionStandingRank(942) == 7)
+                else if (plr->getFactionStandingRank(942) == Standing::EXALTED)
                     casta->castSpell(plr, 31812, true);
 
             } break;

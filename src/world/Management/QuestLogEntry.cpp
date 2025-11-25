@@ -1,17 +1,21 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
-#include "Log.hpp"
+#include "Logging/Log.hpp"
 #include "QuestLogEntry.hpp"
+
+#include <sstream>
+
 #include "Server/WorldSession.h"
-#include "Server/MainServerDefines.h"
-#include "Database/Database.h"
 #include "Management/ItemInterface.h"
 #include "QuestMgr.h"
-
+#include "Logging/Logger.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/DatabaseDefinition.hpp"
+#include "Server/EventMgr.h"
+#include "Server/Script/QuestScript.hpp"
 
 QuestLogEntry::QuestLogEntry(QuestProperties const* questProperties, Player* player, uint8_t slot) : m_slot(slot), m_questProperties(questProperties), m_player(player)
 {
@@ -48,8 +52,6 @@ void QuestLogEntry::initPlayerData()
         }
     }
 
-    m_player->setQuestLogInSlot(this, m_slot);
-
     if (!m_player->getSession()->m_loggingInPlayer)
         if (const auto questScript = getQuestScript())
             questScript->OnQuestStart(m_player, this);
@@ -60,18 +62,18 @@ void QuestLogEntry::loadFromDB(Field* fields)
     //     1          2         3       4      5      6      7      8      9     10     11     12
     // playerguid, questid, timeleft, area0, area1, area2, area3, kill0, kill1, kill2, kill3, state
 
-    m_expirytime = fields[3].GetUInt32();
+    m_expirytime = fields[3].asUint32();
 
     for (uint8_t i = 0; i < 4; ++i)
     {
-        m_explored_areas[i] = fields[4 + i].GetUInt32();
+        m_explored_areas[i] = fields[4 + i].asUint32();
         if (const auto questScript = getQuestScript())
             questScript->OnExploreArea(m_explored_areas[i], m_player, this);
     }
 
     for (uint8_t i = 0; i < 4; ++i)
     {
-        m_mobcount[i] = fields[8 + i].GetUInt32();
+        m_mobcount[i] = fields[8 + i].asUint32();
 
         if (getQuestProperties()->required_mobtype[i] == QUEST_MOB_TYPE_CREATURE)
         {
@@ -85,7 +87,7 @@ void QuestLogEntry::loadFromDB(Field* fields)
         }
     }
 
-    m_state = fields[12].GetUInt32();
+    m_state = fields[12].asUint32();
 }
 
 void QuestLogEntry::saveToDB(QueryBuffer* queryBuffer)
@@ -114,7 +116,7 @@ void QuestLogEntry::setSlot(uint8_t slot)
 {
     if (slot > MAX_QUEST_LOG_SIZE)
     {
-        sLogger.failure("%u is not a valid questlog slot!", uint32_t(slot));
+        sLogger.failure("{} is not a valid questlog slot!", uint32_t(slot));
         return;
     }
 
@@ -127,7 +129,7 @@ uint32_t QuestLogEntry::getMobCountByIndex(uint8_t index) const
 {
     if (index >= 4)
     {
-        sLogger.failure("%u is not a valid index for questlog mob count!", uint32_t(index));
+        sLogger.failure("{} is not a valid index for questlog mob count!", uint32_t(index));
         return 0;
     }
 
@@ -138,7 +140,7 @@ void QuestLogEntry::setMobCountForIndex(uint8_t index, uint32_t count)
 {
     if (index >= 4)
     {
-        sLogger.failure("%u is not a valid index for questlog mob count!", uint32_t(index));
+        sLogger.failure("{} is not a valid index for questlog mob count!", uint32_t(index));
         return;
     }
 
@@ -149,7 +151,7 @@ void QuestLogEntry::incrementMobCountForIndex(uint8_t index)
 {
     if (index >= 4)
     {
-        sLogger.failure("%u is not a valid index for questlog mob count!", uint32_t(index));
+        sLogger.failure("{} is not a valid index for questlog mob count!", uint32_t(index));
         return;
     }
 
@@ -160,7 +162,7 @@ uint32_t QuestLogEntry::getExploredAreaByIndex(uint8_t index) const
 {
     if (index >= 4)
     {
-        sLogger.failure("%u is not a valid index for questlog explore areas!", uint32_t(index));
+        sLogger.failure("{} is not a valid index for questlog explore areas!", uint32_t(index));
         return 0;
     }
 
@@ -171,7 +173,7 @@ void QuestLogEntry::setExploredAreaForIndex(uint8_t index)
 {
     if (index >= 4)
     {
-        sLogger.failure("%u is not a valid index for questlog explore areas!", uint32_t(index));
+        sLogger.failure("{} is not a valid index for questlog explore areas!", uint32_t(index));
         return;
     }
     m_explored_areas[index] = 1;
@@ -185,10 +187,8 @@ QuestProperties const* QuestLogEntry::getQuestProperties() const { return m_ques
 bool QuestLogEntry::isUnitAffected(Unit* unit) const
 {
     if (unit)
-    {
-        if (m_affected_units.find(unit->getGuid()) != m_affected_units.end())
+        if (m_affected_units.contains(unit->getGuid()))
             return true;
-    }
 
     return false;
 }
@@ -273,10 +273,8 @@ void QuestLogEntry::finishAndRemove()
     m_player->setQuestLogRequiredMobOrGoBySlot(m_slot, 0);
     m_player->setQuestLogExpireTimeBySlot(m_slot, 0);
 
-    m_player->setQuestLogInSlot(nullptr, m_slot);
     m_player->addQuestToRemove(m_questProperties->id);
-
-    delete this;
+    m_player->createQuestLogInSlot(nullptr, m_slot);
 }
 
 void QuestLogEntry::sendQuestFailed(bool isTimerExpired /*=false*/)
@@ -415,7 +413,7 @@ void QuestLogEntry::sendUpdateAddKill(uint8_t index)
 {
     if (index >= 4)
     {
-        sLogger.failure("%u is not a valid index for questlog mob count!", uint32_t(index));
+        sLogger.failure("{} is not a valid index for questlog mob count!", uint32_t(index));
         return;
     }
 

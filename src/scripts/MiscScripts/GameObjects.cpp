@@ -1,9 +1,19 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
+#include "Management/ItemInterface.h"
+#include "Management/QuestLogEntry.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Utilities/Random.hpp"
 
 class TyraliusPrison : public GameObjectAIScript
 {

@@ -1,13 +1,21 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Raid_SerpentshrineCavern.h"
-#include "Management/Faction.h"
-#include <Spell/Definitions/PowerType.hpp>
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Objects/GameObject.h"
+#include "Objects/GameObjectProperties.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Utilities/Random.hpp"
 
 class HydrossTheUnstableAI : public CreatureAIScript
 {
@@ -479,8 +487,8 @@ public:
     void SwitchToHumanForm()
     {
         getCreature()->setDisplayId(20514);
-        getCreature()->setVirtualItemSlotId(MELEE, (getCreature()->m_spawn != nullptr) ? getCreature()->m_spawn->Item1SlotDisplay : 0);
-        getCreature()->setVirtualItemSlotId(OFFHAND, (getCreature()->m_spawn != nullptr) ?  getCreature()->m_spawn->Item2SlotDisplay : 0);
+        getCreature()->setVirtualItemSlotId(MELEE, (getCreature()->m_spawn != nullptr) ? getCreature()->m_spawn->Item1SlotEntry : 0);
+        getCreature()->setVirtualItemSlotId(OFFHAND, (getCreature()->m_spawn != nullptr) ?  getCreature()->m_spawn->Item2SlotEntry : 0);
     }
 
     void SwitchToDemonForm()
@@ -697,7 +705,7 @@ public:
                 float NearestDist = 0;
                 for (const auto& itr : getCreature()->getInRangePlayersSet())
                 {
-                    if (itr && isHostile(getCreature(), itr) && (itr->GetDistance2dSq(getCreature()) < NearestDist || !NearestDist))
+                    if (itr && getCreature()->isHostileTo(itr) && (itr->GetDistance2dSq(getCreature()) < NearestDist || !NearestDist))
                     {
                         NearestDist = itr->GetDistance2dSq(getCreature());
                         NearestPlayer = static_cast<Player*>(itr);
@@ -818,7 +826,7 @@ public:
             std::vector<Unit*> TargetTable;
             for (const auto& itr : getCreature()->getInRangeObjectsSet())
             {
-                if (itr && isHostile(getCreature(), itr) && itr->isCreatureOrPlayer())
+                if (itr && getCreature()->isHostileTo(itr) && itr->isCreatureOrPlayer())
                 {
                     Unit* RandomTarget = static_cast<Unit*>(itr);
 
@@ -838,6 +846,7 @@ public:
             //let's force this effect
             SpellForcedBasePoints forcedBasePoints;
             forcedBasePoints.set(0, random_target->getMaxHealth() / 2);
+
             getCreature()->castSpell(random_target, info_cataclysmic_bolt, forcedBasePoints, true);
             TargetTable.clear();
         }
@@ -1274,7 +1283,7 @@ public:
         bool InRange = false;
         for (const auto& itr : getCreature()->getInRangeObjectsSet())
         {
-            if (itr && isHostile(getCreature(), itr) && getCreature()->GetDistance2dSq(itr) < 100) //10 yards
+            if (itr && getCreature()->isHostileTo(itr) && getCreature()->GetDistance2dSq(itr) < 100) //10 yards
             {
                 InRange = true;
                 break;
@@ -1324,7 +1333,7 @@ public:
                 float nearestdist = 0;
                 for (const auto& itr : summoned->getInRangeObjectsSet())
                 {
-                    if (itr && itr->isCreatureOrPlayer() && isHostile(summoned, itr) && (summoned->GetDistance2dSq(itr) < nearestdist || !nearestdist))
+                    if (itr && itr->isCreatureOrPlayer() && summoned->isHostileTo(itr) && (summoned->GetDistance2dSq(itr) < nearestdist || !nearestdist))
                     {
                         nearestdist = summoned->GetDistance2dSq(itr);
                         nearest = static_cast<Unit*>(itr);
@@ -1347,7 +1356,7 @@ public:
                 float nearestdist = 0;
                 for (const auto& itr : summoned->getInRangeObjectsSet())
                 {
-                    if (itr && itr->isCreatureOrPlayer() && isHostile(summoned, itr) && (summoned->GetDistance2dSq(itr) < nearestdist || !nearestdist))
+                    if (itr && itr->isCreatureOrPlayer() && summoned->isHostileTo(itr) && (summoned->GetDistance2dSq(itr) < nearestdist || !nearestdist))
                     {
                         nearestdist = summoned->GetDistance2dSq(itr);
                         nearest = static_cast<Unit*>(itr);

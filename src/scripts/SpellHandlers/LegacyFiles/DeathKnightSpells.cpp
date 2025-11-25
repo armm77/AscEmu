@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -19,12 +19,15 @@
 
 #include "Setup.h"
 #include "Map/Management/MapMgr.hpp"
-#include "Management/Faction.h"
-#include "Spell/SpellAuras.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/Units/Players/Player.hpp"
 #include "Server/Opcodes.hpp"
-#include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.hpp"
-#include <Spell/Definitions/DispelType.hpp>
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Spell/Definitions/DispelType.hpp"
 
 enum
 {
@@ -55,7 +58,7 @@ bool Pestilence(uint8_t effectIndex, Spell* pSpell)
             if (Main->getGuid() == Target->getGuid() && !u_caster->hasAurasWithId(63334))
                 continue;
 
-            if (isAttackable(Target, u_caster) && u_caster->CalcDistance(itr) <= (pSpell->getEffectRadius(effectIndex) + inc))
+            if (Target->isValidAttackableTarget(u_caster) && u_caster->CalcDistance(itr) <= (pSpell->getEffectRadius(effectIndex) + inc))
             {
                 if (blood)
                     u_caster->castSpell(Target, BLOOD_PLAGUE, true);
@@ -70,10 +73,10 @@ bool Pestilence(uint8_t effectIndex, Spell* pSpell)
 
 bool DeathStrike(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    if (pSpell->getPlayerCaster() == NULL || pSpell->GetUnitTarget() == NULL)
+    if (pSpell->getPlayerCaster() == NULL || pSpell->getUnitTarget() == NULL)
         return true;
 
-    Unit* Target = pSpell->GetUnitTarget();
+    Unit* Target = pSpell->getUnitTarget();
 
     // Get count of diseases on target which were casted by caster
     uint32_t count = Target->getAuraCountWithDispelType(DISPEL_DISEASE, pSpell->getPlayerCaster()->getGuid());
@@ -168,7 +171,7 @@ bool RaiseDead(uint8_t /*effectIndex*/, Spell* s)
 
 bool DeathGrip(uint8_t effectIndex, Spell* s)
 {
-    Unit* unitTarget = s->GetUnitTarget();
+    Unit* unitTarget = s->getUnitTarget();
 
     if (!s->getUnitCaster() || !s->getUnitCaster()->isAlive() || !unitTarget || !unitTarget->isAlive())
         return false;
@@ -183,7 +186,7 @@ bool DeathGrip(uint8_t effectIndex, Spell* s)
 
         // Blizzard screwed this up, so we won't.
         // ^^^^^^^^^^^^ glass houses
-        if (playerTarget->obj_movement_info.hasMovementFlag(MOVEFLAG_TRANSPORT))
+        if (playerTarget->getTransGuid())
             return false;
 
         s->SpellEffectPlayerPull(effectIndex);
@@ -250,7 +253,7 @@ bool DeathGrip(uint8_t effectIndex, Spell* s)
 
 bool DeathCoil(uint8_t /*effectIndex*/, Spell* s)
 {
-    Unit* unitTarget = s->GetUnitTarget();
+    Unit* unitTarget = s->getUnitTarget();
 
     if (s->getPlayerCaster() == NULL || unitTarget == NULL)
         return false;
@@ -258,7 +261,7 @@ bool DeathCoil(uint8_t /*effectIndex*/, Spell* s)
     int32_t dmg = s->damage;
 
     SpellForcedBasePoints forcedBasePoints;
-    if (isAttackable(s->getPlayerCaster(), unitTarget, false))
+    if (s->getPlayerCaster()->isValidAttackableTarget(unitTarget))
     {
         forcedBasePoints.set(EFF_INDEX_0, dmg);
         s->getPlayerCaster()->castSpell(unitTarget, 47632, forcedBasePoints, true);
@@ -332,18 +335,18 @@ bool WillOfTheNecropolis(uint8_t effectIndex, Spell* spell)
     switch (spell->getSpellInfo()->getId())
     {
         case 49189:
-            plr->removeSpell(52285, false, false, 0);
-            plr->removeSpell(52286, false, false, 0);
+            plr->removeSpell(52285, false);
+            plr->removeSpell(52286, false);
             break;
 
         case 50149:
-            plr->removeSpell(52284, false, false, 0);
-            plr->removeSpell(52286, false, false, 0);
+            plr->removeSpell(52284, false);
+            plr->removeSpell(52286, false);
             break;
 
         case 50150:
-            plr->removeSpell(52284, false, false, 0);
-            plr->removeSpell(52285, false, false, 0);
+            plr->removeSpell(52284, false);
+            plr->removeSpell(52285, false);
             break;
     }
 

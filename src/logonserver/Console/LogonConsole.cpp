@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -25,8 +25,12 @@
 #include <Server/AccountMgr.h>
 #include <Server/IpBanMgr.h>
 #include <Network/Network.h>
-#include <LogonConf.h>
-#include <Util/Strings.cpp>
+#include <LogonConf.hpp>
+#include <sstream>
+#include <Utilities/Strings.hpp>
+
+#include "Database/Database.h"
+#include "Threading/LegacyThreading.h"
 
 LogonConsole& LogonConsole::getInstance()
 {
@@ -59,7 +63,7 @@ void LogonConsole::threadDemoCmd(char* /*str*/)
     }
 
     std::function<void(AscEmu::Threading::AEThread&)> f = [this](AscEmu::Threading::AEThread& thread) { this->demoTicker(thread); };
-    m_demoThread = new AscEmu::Threading::AEThread(std::string("DemoThread"), f, std::chrono::milliseconds(100));
+    m_demoThread = std::make_unique<AscEmu::Threading::AEThread>(std::string("DemoThread"), f, std::chrono::milliseconds(100));
 }
 
 void LogonConsole::Kill()
@@ -410,7 +414,7 @@ void LogonConsole::AccountChangePassword(char* str)
     std::cout << "Account password changed." << std::endl;
 }
 
-void LogonConsole::checkAccountName(std::string name, uint8 type)
+void LogonConsole::checkAccountName(std::string name, uint8_t type)
 {
     std::string aname(name);
 

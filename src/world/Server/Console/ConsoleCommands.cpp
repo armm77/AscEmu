@@ -1,18 +1,33 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "ConsoleCommands.h"
-#include <git_version.h>
+#include <git_version.hpp>
+#include <iostream>
+#include <sstream>
+
+#include "Common.hpp"
+#include "Chat/ChatDefines.hpp"
 #include "Server/LogonCommClient/LogonCommHandler.h"
 #include "Server/Console/BaseConsole.h"
-#include "Server/MainServerDefines.h"
 #include "Server/Master.h"
-#include "crc32.h"
+#include "Management/MailMgr.h"
 #include "Server/World.h"
-#include "Management/ObjectMgr.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/DatabaseDefinition.hpp"
+#include "Server/WorldSession.h"
+#include "Server/WorldSocket.h"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Strings.hpp"
+#include "Threading/LegacyThreading.h"
+#include "Utilities/Util.hpp"
+
+#include <openssl/opensslv.h>
+#include <openssl/crypto.h>
 
 bool handleSendChatAnnounceCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool /*isWebClient*/)
 {
@@ -116,18 +131,18 @@ bool handleServerInfoCommand(BaseConsole* baseConsole, int /*argumentCount*/, st
     int onlineCount = 0;
     int avgLatency = 0;
 
-    sObjectMgr._playerslock.lock();
-    for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
+    std::lock_guard guard(sObjectMgr.m_playerLock);
+    for (const auto playerPair : sObjectMgr.getPlayerStorage())
     {
-        if (itr->second->getSession())
+        const Player* player = playerPair.second;
+        if (player->getSession())
         {
             onlineCount++;
-            avgLatency += itr->second->getSession()->GetLatency();
-            if (itr->second->getSession()->GetPermissionCount())
+            avgLatency += player->getSession()->GetLatency();
+            if (player->getSession()->hasPermissions())
                 gmCount++;
         }
     }
-    sObjectMgr._playerslock.unlock();
 
     if (isWebClient)
     {
@@ -139,9 +154,10 @@ bool handleServerInfoCommand(BaseConsole* baseConsole, int /*argumentCount*/, st
         baseConsole->Write("======================================================================\r\n");
         baseConsole->Write("Server Information: \r\n");
         baseConsole->Write("======================================================================\r\n");
-        baseConsole->Write("Server Revision: AscEmu %s-%s-%s (www.ascemu.org)\r\n", CONFIG, AE_PLATFORM, AE_ARCHITECTURE);
-        baseConsole->Write("Build hash: %s\r\n", BUILD_HASH_STR);
-        baseConsole->Write("Server Uptime: %s\r\n", sWorld.getWorldUptimeString().c_str());
+        baseConsole->Write("Info: AscEmu %s/%s-%s-%s (www.ascemu.org)\r\n", AE_BUILD_HASH, CONFIG, AE_PLATFORM, AE_ARCHITECTURE);
+        baseConsole->Write("Using %s/Library %s\r\n", OPENSSL_VERSION_TEXT, SSLeay_version(SSLEAY_VERSION));
+        baseConsole->Write("Uptime: %s\r\n", sWorld.getWorldUptimeString().c_str());
+        baseConsole->Write("Active Branch: %s\r\n", AE_BUILD_BRANCH);
         baseConsole->Write("Current Players: %d (%d GMs, %d queued)\r\n", clientsNum, gmCount, 0);
         baseConsole->Write("Active Thread Count: %u\r\n", ThreadPool.GetActiveThreadCount());
         baseConsole->Write("Free Thread Count: %u\r\n", ThreadPool.GetFreeThreadCount());
@@ -164,16 +180,16 @@ bool handleOnlineGmsCommand(BaseConsole* baseConsole, int /*argumentCount*/, std
     baseConsole->Write("| %21s | %15s | % 03s                                                |\r\n", "Name", "Permissions", "Latency");
     baseConsole->Write("======================================================================\r\n");
 
-    sObjectMgr._playerslock.lock();
-    for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
+    std::lock_guard guard(sObjectMgr.m_playerLock);
+    for (const auto playerPair : sObjectMgr.getPlayerStorage())
     {
-        if (itr->second->getSession()->GetPermissionCount())
+        const Player* player = playerPair.second;
+        if (player->getSession()->hasPermissions())
         {
-            baseConsole->Write("| %21s | %15s | %03u ms |\r\n", itr->second->getName().c_str(), itr->second->getSession()->GetPermissions(),
-                itr->second->getSession()->GetLatency());
+            baseConsole->Write("| %21s | %15s | %03u ms |\r\n", player->getName().c_str(), player->getSession()->GetPermissions().get(),
+                player->getSession()->GetLatency());
         }
     }
-    sObjectMgr._playerslock.unlock();
 
     baseConsole->Write("======================================================================\r\n\r\n");
 
@@ -195,7 +211,7 @@ bool handleKickPlayerCommand(BaseConsole* baseConsole, int argumentCount, std::s
     if (characterName.empty())
         return false;
 
-    Player* player = sObjectMgr.GetPlayer(characterName.c_str());
+    Player* player = sObjectMgr.getPlayer(characterName.c_str());
     if (player == nullptr)
     {
         baseConsole->Write("Could not find player, %s.\r\n", characterName.c_str());
@@ -238,13 +254,13 @@ bool handleListOnlinePlayersCommand(BaseConsole* baseConsole, int /*argumentCoun
     baseConsole->Write("| %21s | %15s | % 03s                  |\r\n", "Name", "Level", "Latency");
     baseConsole->Write("======================================================================\r\n");
 
-    sObjectMgr._playerslock.lock();
-    for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
+    std::lock_guard guard(sObjectMgr.m_playerLock);
+    for (const auto playerPair : sObjectMgr.getPlayerStorage())
     {
-        baseConsole->Write("| %21s | %15u | %03u ms                   |\r\n", itr->second->getName().c_str(), itr->second->getSession()->GetPlayer()->getLevel(),
-            itr->second->getSession()->GetLatency());
+        const Player* player = playerPair.second;
+        baseConsole->Write("| %21s | %15u | %03u ms                   |\r\n", player->getName().c_str(), player->getSession()->GetPlayer()->getLevel(),
+            player->getSession()->GetLatency());
     }
-    sObjectMgr._playerslock.unlock();
 
     baseConsole->Write("======================================================================\r\n\r\n");
     return true;
@@ -255,7 +271,7 @@ bool handlePlayerInfoCommand(BaseConsole* baseConsole, int argumentCount, std::s
     if (argumentCount > 0 && consoleInput.empty())
         return false;
 
-    Player* player = sObjectMgr.GetPlayer(consoleInput.c_str());
+    Player* player = sObjectMgr.getPlayer(consoleInput.c_str());
     if (player == nullptr)
     {
         baseConsole->Write("Player not found.\r\n");
@@ -282,13 +298,13 @@ bool handleShutDownServerCommand(BaseConsole* baseConsole, int /*argumentCount*/
 
     if (consoleInput.empty())
     {
-        sObjectMgr._playerslock.lock();
-        for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
+        std::lock_guard guard(sObjectMgr.m_playerLock);
+        for (const auto playerPair : sObjectMgr.getPlayerStorage())
         {
-            if (itr->second->getSession())
-                itr->second->saveToDB(false);
+            Player* player = playerPair.second;
+            if (player->getSession())
+                player->saveToDB(false);
         }
-        sObjectMgr._playerslock.unlock();
 
         exit(0);
     }
@@ -353,7 +369,7 @@ bool handleWhisperCommand(BaseConsole* baseConsole, int argumentCount, std::stri
     if (whisperMessage.empty())
         return false;
 
-    Player* player = sObjectMgr.GetPlayer(characterName.c_str());
+    Player* player = sObjectMgr.getPlayer(characterName.c_str());
     if (player == nullptr)
     {
         baseConsole->Write("Could not find player, %s.\r\n", characterName.c_str());
@@ -369,23 +385,12 @@ bool handleWhisperCommand(BaseConsole* baseConsole, int argumentCount, std::stri
     return true;
 }
 
-bool handleCreateNameHashCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool /*isWebClient*/)
-{
-    if (argumentCount > 0 && consoleInput.empty())
-        return false;
-
-    baseConsole->Write("Name Hash for %s is 0x%X \r\n", consoleInput.c_str(), crc32((const unsigned char*)consoleInput.c_str(), 
-        (unsigned int)consoleInput.length()));
-
-    return true;
-}
-
 bool handleRevivePlayerCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool /*isWebClient*/)
 {
     if (argumentCount > 0 && consoleInput.empty())
         return false;
 
-    Player* player = sObjectMgr.GetPlayer(consoleInput.c_str(), false);
+    Player* player = sObjectMgr.getPlayer(consoleInput.c_str(), false);
     if (player == nullptr)
     {
         baseConsole->Write("Could not find player %s.\r\n", consoleInput.c_str());
@@ -444,6 +449,33 @@ bool handleGetAccountsCommand(BaseConsole* baseConsole, int /*argumentCount*/, s
     std::cout << "Command result is: " << sLogonCommHandler.accountResult << "\n";
 
     baseConsole->Write("%s\r\n", sLogonCommHandler.accountResult.c_str());
+
+    return true;
+}
+
+bool handleSendMailGold(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool /*isWebClient*/)
+{
+    if (argumentCount > 0 && consoleInput.empty())
+        return false;
+
+    std::vector<std::string> mailVector = AscEmu::Util::Strings::split(consoleInput, "|");
+
+    std::string* mailString = mailVector.data();
+    std::string charName(mailString[0].erase(0, 1));
+    std::string subject(mailString[1]);
+    std::string body(mailString[2]);
+    uint32_t gold(std::stoul(mailString[3]));
+
+    std::cout << charName << " check" << "\n";
+    std::cout << subject << " check" << "\n";
+    std::cout << body << " check" << "\n";
+    std::cout << gold << " check" << "\n";
+
+    if (auto result = CharacterDatabase.Query("SELECT guid FROM characters WHERE name = '%s'", charName.c_str()))
+    {
+        uint64_t guid = result->Fetch()[0].asUint64();
+        sMailSystem.SendAutomatedMessage(MAIL_TYPE_NORMAL, guid, guid, subject, body, gold, 0, 0, MAIL_STATIONERY_GM);
+    }
 
     return true;
 }

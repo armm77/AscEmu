@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@
 #ifndef __LOGONCONSOLE_H
 #define __LOGONCONSOLE_H
 
-#include "Common.hpp"
 #include "CThreads.h"
 #include <Threading/AEThread.h>
 
@@ -44,7 +43,7 @@ class LogonConsole
 {
     friend class LogonConsoleThread;
 
-    AscEmu::Threading::AEThread* m_demoThread;
+    std::unique_ptr<AscEmu::Threading::AEThread> m_demoThread;
     int m_demoCounter = 0;
 
     void demoTicker(AscEmu::Threading::AEThread& thread);
@@ -94,7 +93,7 @@ class LogonConsole
         void AccountSetPassword(char* str);
         void AccountChangePassword(char* str);
 
-        void checkAccountName(std::string name, uint8 type);
+        void checkAccountName(std::string name, uint8_t type);
 };
 
 #define sLogonConsole LogonConsole::getInstance()

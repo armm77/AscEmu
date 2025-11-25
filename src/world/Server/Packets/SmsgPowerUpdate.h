@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -65,9 +66,9 @@ namespace AscEmu::Packets
 #elif VERSION_STRING != Mop
             packet << guid;
 
-#if VERSION_STRING == Cata
+    #if VERSION_STRING == Cata
             packet << uint32_t(1);
-#endif
+    #endif
             packet << powerType << power;
 #endif
             return true;

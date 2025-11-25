@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -18,19 +18,22 @@
  */
 
 #include "Setup.h"
-#include "Server/Script/ScriptSetup.h"
+
 #include "AlteracValley/AlteracValley.h"
 #include "ArathiBasin/ArathiBasin.h"
 #include "CircleOfBlood/CircleOfBlood.h"
 #include "DalaranSewers/DalaranSewers.h"
 #include "EyeOfTheStorm/EyeOfTheStorm.h"
 #include "IsleOfConquest/IsleOfConquest.h"
+#include "Management/Battleground/BattlegroundMgr.hpp"
 #include "RingOfTrials/RingOfTrials.h"
 #include "RingOfValor/RingOfValor.h"
 #include "RuinsOfLordaeron/RuinsOfLordaeron.h"
+#include "Server/ServerState.h"
 #include "StrandOfTheAncient/StrandOfTheAncient.h"
 #include "WarsongGulch/WarsongGulch.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Server/Script/ScriptSetup.hpp"
 
 extern "C" SCRIPT_DECL void _exp_set_serverstate_singleton(ServerState* state)
 {

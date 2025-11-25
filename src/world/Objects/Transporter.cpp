@@ -1,16 +1,28 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include <G3D/Vector3.h>
+#include "Objects/Transporter.hpp"
+
+#include "GameObjectProperties.hpp"
+#include "Data/Flags.hpp"
+#include "Logging/Logger.hpp"
+#include "Management/TransporterHandler.hpp"
 #include "Storage/MySQLDataStore.hpp"
-#include "Macros/ScriptMacros.hpp"
 #include "Map/Management/MapMgr.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Models/GameObjectModel.h"
 #include "Server/Packets/SmsgTransferPending.h"
-#include <Movement/Spline/Spline.h>
-#include "Server/Script/ScriptMgr.h"
+#include "Movement/Spline/Spline.h"
+#include "Server/Script/ScriptMgr.hpp"
 #include "Server/Definitions.h"
+#include "Server/WorldSession.h"
+#include "Server/Script/InstanceScript.hpp"
+#include "Units/Creatures/Creature.h"
+#include "Units/Creatures/Vehicle.hpp"
+#include "Units/Players/Player.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -54,14 +66,14 @@ bool Transporter::Create(uint32_t entry, uint32_t mapid, float x, float y, float
     gameobject_properties = sMySQLStore.getGameObjectProperties(entry);
     if (gameobject_properties == nullptr)
     {
-        sLogger.failure("Something tried to create a GameObject with invalid entry %u", entry);
+        sLogger.failure("Something tried to create a GameObject with invalid entry {}", entry);
         return false;
     }
 
     TransportTemplate const* tInfo = sTransportHandler.getTransportTemplate(entry);
     if (!tInfo)
     {
-        sLogger.failure("Transport %u will not be created, missing `transport_template` entry.", entry);
+        sLogger.failure("Transport {} will not be created, missing `transport_template` entry.", entry);
         return false;
     }
 
@@ -134,7 +146,7 @@ void Transporter::Update(unsigned long time_passed)
     uint32_t timer = m_goValue.PathProgress % getTransportPeriod();
     bool justStopped = false;
 
-    //sLogger.debug("Transporter: current node %u and pathprogress %u \n", _currentFrame->Index, GetTimer());
+    //sLogger.debug("Transporter: current node {} and pathprogress {} \n", _currentFrame->Index, GetTimer());
 
     for (;;)
     {
@@ -237,7 +249,9 @@ void Transporter::AddPassenger(Player* passenger)
     if (_passengers.insert(passenger).second)
     {
         passenger->SetTransport(this);
+#if VERSION_STRING <= WotLK
         passenger->obj_movement_info.addMovementFlag(MOVEFLAG_TRANSPORT);
+#endif
         passenger->obj_movement_info.transport_guid = getGuid();
         if (passenger->isPlayer())
         {
@@ -269,7 +283,9 @@ void Transporter::RemovePassenger(Object* passenger)
     if (erased || _staticPassengers.erase(passenger))
     {
         passenger->SetTransport(nullptr);
+#if VERSION_STRING <= WotLK
         passenger->obj_movement_info.removeMovementFlag(MOVEFLAG_TRANSPORT);
+#endif
         passenger->obj_movement_info.clearTransportData();
         if (passenger->isPlayer())
         {
@@ -298,7 +314,7 @@ Creature* Transporter::createNPCPassenger(MySQLStructure::CreatureSpawn* data)
     pCreature->SetTransport(this);
     pCreature->obj_movement_info.setTransportData(this->getGuid(), x, y, z, o, 0, 0);
 
-    CalculatePassengerPosition(x, y, z, &o);
+    calculatePassengerPosition(x, y, z, &o);
     pCreature->SetPosition(x, y, z, o);
     pCreature->SetSpawnLocation(x, y, z, o);
     pCreature->SetTransportHomePosition(pCreature->obj_movement_info.transport_position);
@@ -311,13 +327,15 @@ Creature* Transporter::createNPCPassenger(MySQLStructure::CreatureSpawn* data)
 
     // AddToWorld
     pCreature->AddToWorld(map);
+#if VERSION_STRING <= WotLK
     pCreature->setUnitMovementFlags(MOVEFLAG_TRANSPORT);
     pCreature->obj_movement_info.addMovementFlag(MOVEFLAG_TRANSPORT);
+#endif
 
     // Equipment
-    pCreature->setVirtualItemSlotId(MELEE, sMySQLStore.getItemDisplayIdForEntry(creature_properties->itemslot_1));
-    pCreature->setVirtualItemSlotId(OFFHAND, sMySQLStore.getItemDisplayIdForEntry(creature_properties->itemslot_2));
-    pCreature->setVirtualItemSlotId(RANGED, sMySQLStore.getItemDisplayIdForEntry(creature_properties->itemslot_3));
+    pCreature->setVirtualItemSlotId(MELEE, creature_properties->itemslot_1);
+    pCreature->setVirtualItemSlotId(OFFHAND, creature_properties->itemslot_2);
+    pCreature->setVirtualItemSlotId(RANGED, creature_properties->itemslot_3);
 
     if (data->emote_state)
         pCreature->setEmoteState(data->emote_state);
@@ -351,7 +369,7 @@ GameObject* Transporter::createGOPassenger(MySQLStructure::GameobjectSpawn* data
     pGameobject->SetTransport(this);
     pGameobject->obj_movement_info.setTransportData(this->getGuid(), x, y, z, o, 0, 0);
 
-    CalculatePassengerPosition(x, y, z, &o);
+    calculatePassengerPosition(x, y, z, &o);
     pGameobject->SetPosition(x, y, z, o);
 
     pGameobject->setAnimationProgress(255);
@@ -381,18 +399,18 @@ void Transporter::LoadStaticPassengers()
     if (GetGameObjectProperties()->mo_transport.map_id == 0)
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_MAP, "TransportHandler : Start populating transport %u ", getEntry());
+    sLogger.debugFlag(AscEmu::Logging::LF_MAP, "TransportHandler : Start populating transport {} ", getEntry());
     {
         for (auto creature_spawn : sMySQLStore._creatureSpawnsStore[GetGameObjectProperties()->mo_transport.map_id])
         {
             if (createNPCPassenger(creature_spawn) == 0)
-                sLogger.failure("Failed to add npc entry: %u to transport: %u", creature_spawn->entry, getGuid());
+                sLogger.failure("Failed to add npc entry: {} to transport: {}", creature_spawn->entry, getGuid());
         }
 
         /*for (auto go_spawn : sMySQLStore._gameobjectSpawnsStore[GetGameObjectProperties()->mo_transport.map_id])
         {
             if (createGOPassenger(go_spawn) == 0)
-                sLogger.failure("Failed to add go entry: %u to transport: %u", go_spawn->entry, getGuid());
+                sLogger.failure("Failed to add go entry: {} to transport: {}", go_spawn->entry, getGuid());
         }*/
     }
 }
@@ -439,7 +457,7 @@ void Transporter::UpdatePassengerPositions(PassengerSet& passengers)
 
         float x, y, z, o;
         passenger->obj_movement_info.transport_position.getPosition(x, y, z, o);
-        CalculatePassengerPosition(x, y, z, &o);
+        calculatePassengerPosition(x, y, z, &o);
         switch (passenger->getObjectTypeId())
         {
             case TYPEID_PLAYER:
@@ -455,7 +473,7 @@ void Transporter::UpdatePassengerPositions(PassengerSet& passengers)
                 Creature* creature = static_cast<Creature*>(passenger);
                 creature->SetPosition(x, y, z, o, false);
                 creature->GetTransportHomePosition(x, y, z, o);
-                CalculatePassengerPosition(x, y, z, &o);
+                calculatePassengerPosition(x, y, z, &o);
                 creature->SetSpawnLocation(x, y, z, o);
                 break;
             }
@@ -487,7 +505,7 @@ void Transporter::UpdatePlayerPositions(PassengerSet& passengers)
 
         float x, y, z, o;
         passenger->obj_movement_info.transport_position.getPosition(x, y, z, o);
-        CalculatePassengerPosition(x, y, z, &o);
+        calculatePassengerPosition(x, y, z, &o);
         switch (passenger->getObjectTypeId())
         {
         case TYPEID_PLAYER:
@@ -561,6 +579,16 @@ void Transporter::removeFromMap()
     _delayedMapRemove = true;
 }
 
+void Transporter::calculatePassengerPosition(float& x, float& y, float& z, float* o)
+{
+    TransportBase::CalculatePassengerPosition(x, y, z, o, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation());
+}
+
+void Transporter::calculatePassengerOffset(float& x, float& y, float& z, float* o)
+{
+    TransportBase::CalculatePassengerOffset(x, y, z, o, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation());
+}
+
 bool Transporter::TeleportTransport(uint32_t newMapid, float x, float y, float z, float o)
 {
     WorldMap* oldMap = getWorldMap();
@@ -622,7 +650,7 @@ void Transporter::TeleportPlayers(float x, float y, float z, float o, uint32_t n
 {
     for (PassengerSet::iterator itr = _passengers.begin(); itr != _passengers.end(); ++itr)
     {
-        if ((*itr)->getObjectTypeId() == TYPEID_PLAYER)
+        if ((*itr)->isPlayer())
         {
             Player* player = reinterpret_cast<Player*>(*itr);
 
@@ -699,7 +727,7 @@ void Transporter::DoEventIfAny(KeyFrame const& node, bool departure)
 {
     if (uint32_t eventid = departure ? node.Node.DepartureEventID : node.Node.ArrivalEventID)
     {
-        sLogger.debugFlag(AscEmu::Logging::LF_MAP, "Taxi %s event %u", departure ? "departure" : "arrival", eventid);
+        sLogger.debugFlag(AscEmu::Logging::LF_MAP, "Taxi {} event {}", departure ? "departure" : "arrival", eventid);
 
         // Use MapScript Interface to Handle these if not handle it here
         if (getWorldMap() && getWorldMap()->getScript())

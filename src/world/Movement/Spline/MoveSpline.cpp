@@ -1,23 +1,23 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "MoveSpline.h"
 
 #include <sstream>
-#include "WorldConf.h"
-#include "CommonDefines.hpp"
+
 #include "Logging/Logger.hpp"
 
-namespace MovementNew {
+namespace MovementMgr {
 
+#if VERSION_STRING >= Cata
 Location MoveSpline::ComputePosition() const
 {
     ASSERT(Initialized());
 
     float u = 1.f;
-    int32_t seg_time = spline.length(point_Idx, point_Idx+1);
+    int32_t seg_time = spline.length(point_Idx, point_Idx + 1);
     if (seg_time > 0)
         u = (time_passed - spline.length(point_Idx)) / (float)seg_time;
     Location c;
@@ -48,17 +48,89 @@ Location MoveSpline::ComputePosition() const
             c.orientation = std::atan2(hermite.y, hermite.x);
         }
 
-#if VERSION_STRING < Cata
-        if (splineflags.backward)
-            c.orientation = c.orientation - float(M_PI);
-#else
         if (splineflags.orientationInversed)
             c.orientation = -c.orientation;
-#endif
-
     }
     return c;
 }
+#elif VERSION_STRING == WotLK
+Location MoveSpline::ComputePosition() const
+{
+    ASSERT(Initialized());
+
+    float u = 1.f;
+    int32_t seg_time = spline.length(point_Idx, point_Idx + 1);
+    if (seg_time > 0)
+        u = (time_passed - spline.length(point_Idx)) / (float)seg_time;
+    Location c;
+    c.orientation = initialOrientation;
+    spline.evaluate_percent(point_Idx, u, c);
+
+    if (splineflags.animation)
+        ;// MoveSplineFlag::Animation disables falling or parabolic movement
+    else if (splineflags.parabolic)
+        computeParabolicElevation(c.z);
+    else if (splineflags.falling)
+        computeFallElevation(c.z);
+
+    if (splineflags.done && splineflags.isFacing())
+    {
+        if (splineflags.final_angle)
+            c.orientation = facing.angle;
+        else if (splineflags.final_point)
+            c.orientation = std::atan2(facing.f.y - c.y, facing.f.x - c.x);
+        //nothing to do for MoveSplineFlag::Final_Target flag
+    }
+    else
+    {
+        if (!splineflags.hasFlag(MoveSplineFlag::OrientationFixed | MoveSplineFlag::Falling))
+        {
+            Vector3 hermite;
+            spline.evaluate_derivative(point_Idx, u, hermite);
+            c.orientation = std::atan2(hermite.y, hermite.x);
+        }
+
+        if (splineflags.backward)
+            c.orientation = c.orientation - float(M_PI);
+    }
+    return c;
+}
+#else
+Location MoveSpline::ComputePosition() const
+{
+    ASSERT(Initialized());
+
+    float u = 1.f;
+    int32_t seg_time = spline.length(point_Idx, point_Idx + 1);
+    if (seg_time > 0)
+        u = (time_passed - spline.length(point_Idx)) / (float)seg_time;
+    Location c;
+    c.orientation = initialOrientation;
+    spline.evaluate_percent(point_Idx, u, c);
+    
+    if (splineflags.falling)
+        computeFallElevation(c.z);
+
+    if (splineflags.done && splineflags.isFacing())
+    {
+        if (splineflags.final_angle)
+            c.orientation = facing.angle;
+        else if (splineflags.final_point)
+            c.orientation = std::atan2(facing.f.y - c.y, facing.f.x - c.x);
+        //nothing to do for MoveSplineFlag::Final_Target flag
+    }
+    else
+    {
+        if (!splineflags.hasFlag(MoveSplineFlag::Falling))
+        {
+            Vector3 hermite;
+            spline.evaluate_derivative(point_Idx, u, hermite);
+            c.orientation = std::atan2(hermite.y, hermite.x);
+        }
+    }
+    return c;
+}
+#endif
 
 void MoveSpline::computeParabolicElevation(float& el) const
 {
@@ -75,7 +147,7 @@ void MoveSpline::computeParabolicElevation(float& el) const
 
 void MoveSpline::computeFallElevation(float& el) const
 {
-    float z_now = spline.getPoint(spline.first()).z - MovementNew::computeFallElevation(MSToSec(time_passed), false);
+    float z_now = spline.getPoint(spline.first()).z - MovementMgr::computeFallElevation(MSToSec(time_passed), false);
     float final_z = FinalDestination().z;
     el = std::max(z_now, final_z);
 }
@@ -89,9 +161,9 @@ struct FallInitializer
 {
     FallInitializer(float _start_elevation) : start_elevation(_start_elevation) { }
     float start_elevation;
-    inline int32_t operator()(Spline<int32>& s, int32_t i)
+    inline int32_t operator()(Spline<int32_t>& s, int32_t i)
     {
-        return static_cast<int32_t>(MovementNew::computeFallTime(start_elevation - s.getPoint(i + 1).z, false) * 1000.f);
+        return static_cast<int32_t>(MovementMgr::computeFallTime(start_elevation - s.getPoint(i + 1).z, false) * 1000.f);
     }
 };
 
@@ -105,7 +177,7 @@ struct CommonInitializer
     CommonInitializer(float _velocity) : velocityInv(1000.f/_velocity), time(minimal_duration) { }
     float velocityInv;
     int32_t time;
-    inline int32_t operator()(Spline<int32>& s, int32_t i)
+    inline int32_t operator()(Spline<int32_t>& s, int32_t i)
     {
         time += static_cast<int32_t>(s.SegLength(i) * velocityInv);
         return time;
@@ -200,9 +272,9 @@ bool MoveSplineInitArgs::Validate(Unit* unit) const
     if (!(exp))\
     {\
         if (unit)\
-            sLogger.failure("misc.movesplineinitargs MoveSplineInitArgs::Validate: expression '%s' failed", #exp);\
+            sLogger.failure("misc.movesplineinitargs MoveSplineInitArgs::Validate: expression '{}' failed", #exp);\
         else\
-            sLogger.failure("misc.movesplineinitargs MoveSplineInitArgs::Validate: expression '%s' failed for cyclic spline continuation", #exp); \
+            sLogger.failure("misc.movesplineinitargs MoveSplineInitArgs::Validate: expression '{}' failed for cyclic spline continuation", #exp); \
         return false;\
     }
     CHECK(path.size() > 1);
@@ -361,4 +433,4 @@ int32_t MoveSpline::currentPathIdx() const
         point = point % (spline.last()-spline.first());
     return point;
 }
-} // namespace MovementNew
+} // namespace MovementMgr

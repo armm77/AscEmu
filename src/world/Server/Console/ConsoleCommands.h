@@ -1,12 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Server/Console/BaseConsole.h"
 #include <string>
+
+#include "Server/Console/BaseConsole.h"
 
 bool handleSendChatAnnounceCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool isWebClient);
 bool handleBanAccountCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool isWebClient);
@@ -24,9 +25,9 @@ bool handleRehashConfigCommand(BaseConsole* baseConsole, int /*argumentCount*/, 
 bool handleUnbanAccountCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool isWebClient);
 bool handleSendWAnnounceCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool isWebClient);
 bool handleWhisperCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool isWebClient);
-bool handleCreateNameHashCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool isWebClient);
 bool handleRevivePlayerCommand(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool isWebClient);
 bool handleClearConsoleCommand(BaseConsole* baseConsole, int /*argumentCount*/, std::string /*consoleInput*/, bool isWebClient);
 bool handleReloadScriptEngineCommand(BaseConsole* baseConsole, int /*argumentCount*/, std::string /*consoleInput*/, bool isWebClient);
 bool handlePrintTimeDateCommand(BaseConsole* baseConsole, int /*argumentCount*/, std::string /*consoleInput*/, bool isWebClient);
 bool handleGetAccountsCommand(BaseConsole* baseConsole, int /*argumentCount*/, std::string /*consoleInput*/, bool isWebClient);
+bool handleSendMailGold(BaseConsole* baseConsole, int argumentCount, std::string consoleInput, bool isWebClient);

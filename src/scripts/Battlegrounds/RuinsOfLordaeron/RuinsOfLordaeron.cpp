@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -17,9 +17,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Setup.h"
 #include "RuinsOfLordaeron.h"
-#include "Map/Management/MapMgr.hpp"
+
+#include "Map/Maps/BattleGroundMap.hpp"
 #include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
 #include "Server/Master.h"
 
 RuinsOfLordaeron::RuinsOfLordaeron(BattlegroundMap* mgr, uint32_t id, uint32_t lgroup, uint32_t t, uint32_t players_per_side) :

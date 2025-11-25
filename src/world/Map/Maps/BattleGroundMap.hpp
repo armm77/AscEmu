@@ -1,16 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include <cstdint>
-#include "InstanceMgr.hpp"
-#include "InstanceDefines.hpp"
 #include "WorldMap.hpp"
 
+#include <cstdint>
+
 class Battleground;
+class Player;
 
 class SERVER_DECL BattlegroundMap : public WorldMap
 {

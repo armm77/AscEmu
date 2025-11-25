@@ -1,11 +1,11 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-namespace MovementNew {
+namespace MovementMgr {
 
 template<typename length_type> void Spline<length_type>::evaluate_percent( float t, Vector3 & c ) const
 {
@@ -81,4 +81,4 @@ template<typename length_type> void Spline<length_type>::clear()
     SplineBase::clear();
     lengths.clear();
 }
-} // namespace MovementNew
+} // namespace MovementMgr

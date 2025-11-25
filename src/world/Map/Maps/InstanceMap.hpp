@@ -1,14 +1,17 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include <cstdint>
-#include "InstanceMgr.hpp"
 #include "InstanceDefines.hpp"
 #include "WorldMap.hpp"
+
+#include <cstdint>
+
+enum PlayerTeam : uint8_t;
+class Player;
 
 class SERVER_DECL InstanceMap : public WorldMap
 {
@@ -35,8 +38,8 @@ public:
     bool hasPermBoundPlayers();
     uint32_t getMaxPlayers();
 
-    PlayerTeam getTeamIdInInstance() { return instanceTeam; }
-    uint32_t getTeamInInstance() { return instanceTeam == TEAM_ALLIANCE ? ALLIANCE : HORDE; }
+    PlayerTeam getTeamIdInInstance();
+    uint32_t getTeamInInstance();
 
 private:
     bool m_resetAfterUnload = false;

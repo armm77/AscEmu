@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -12,10 +12,12 @@ This file is released under the MIT license. See README-MIT for more information
  */
 
 #pragma once
+
 #include "WoWObject.hpp"
+
 #pragma pack(push, 1)
 
-#if VERSION_STRING < Mop
+#if VERSION_STRING == Cata
 struct WoWAreaTrigger : WoWObject
 {
     uint32_t spell_id;
@@ -25,7 +27,7 @@ struct WoWAreaTrigger : WoWObject
     float pos_y;
     float pos_z;
 };
-#else
+#elif VERSION_STRING == Mop
 struct WoWAreaTrigger : WoWObject
 {
     guid_union caster_guid;

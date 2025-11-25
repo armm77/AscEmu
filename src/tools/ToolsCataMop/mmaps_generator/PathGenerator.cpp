@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 
 #include "PathCommon.h"
 #include "MapBuilder.h"
-#include "Util.hpp"
+#include "Utilities/Util.hpp"
 
 namespace fs = std::filesystem;
 
@@ -77,7 +77,7 @@ bool handleArgs(int argc, char** argv,
                bool &bigBaseUnit,
                char* &offMeshInputPath,
                char* &file,
-               int& threads)
+               unsigned int& threads)
 {
     char* param = NULL;
     for (int i = 1; i < argc; ++i)
@@ -88,7 +88,7 @@ bool handleArgs(int argc, char** argv,
             if (!param)
                 return false;
 
-            float maxangle = atof(param);
+            float maxangle = static_cast<float>(atof(param));
             if (maxangle <= 90.f && maxangle >= 45.f)
                 maxAngle = maxangle;
             else
@@ -99,7 +99,7 @@ bool handleArgs(int argc, char** argv,
             param = argv[++i];
             if (!param)
                 return false;
-            threads = atoi(param);
+            threads = static_cast<unsigned int>(std::max(0, atoi(param)));
             printf("Using %i threads to extract mmaps\n", threads);
         }
         else if (strcmp(argv[i], "--file") == 0)
@@ -246,7 +246,8 @@ int finish(const char* message, int returnValue)
 
 int main(int argc, char** argv)
 {
-    int threads = 3, mapnum = -1;
+    unsigned int threads = std::thread::hardware_concurrency();
+    int mapnum = -1;
     float maxAngle = 70.0f;
     int tileX = -1, tileY = -1;
     bool skipLiquid = false,
@@ -291,11 +292,11 @@ int main(int argc, char** argv)
     else if (tileX > -1 && tileY > -1 && mapnum >= 0)
         builder.buildSingleTile(mapnum, tileX, tileY);
     else if (mapnum >= 0)
-        builder.buildMap(uint32(mapnum));
+        builder.buildMap(uint32_t(mapnum));
     else
         builder.buildAllMaps(threads);
 
     if (!silent)
-        printf("Finished. MMAPS were built in %u ms!\n", Util::GetTimeDifferenceToNow(startTime));
+        printf("Finished. MMAPS were built in %I64d ms!\n", Util::GetTimeDifferenceToNow(startTime));
     return 0;
 }

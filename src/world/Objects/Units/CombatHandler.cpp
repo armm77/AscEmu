@@ -1,13 +1,18 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "CombatHandler.hpp"
 #include "Players/Player.hpp"
-#include "Server/Script/ScriptMgr.h"
+#include "Server/Script/ScriptMgr.hpp"
 #include "Unit.hpp"
 #include "UnitDefines.hpp"
+#include "Creatures/AIInterface.h"
+#include "Creatures/Summons/Summon.hpp"
+#include "Creatures/Summons/SummonHandler.hpp"
+#include "Server/Script/HookInterface.hpp"
+#include "Utilities/Util.hpp"
 
 CombatHandler::CombatHandler(Unit* owner) : m_owner(owner)
 {}
@@ -206,7 +211,7 @@ void CombatHandler::updateCombat(uint32_t msTime)
                 sHookInterface.OnEnterCombat(dynamic_cast<Player*>(getOwner()), m_enterCombatInfo.enteringCombatWith);
 
             if (getOwner()->isCreature() && getOwner()->getAIInterface())
-                getOwner()->getAIInterface()->justEnteredCombat(m_enterCombatInfo.enteringCombatWith);
+                getOwner()->getAIInterface()->combatStart(m_enterCombatInfo.enteringCombatWith);
 
             // If summons get in combat master will also get in combat
             // However if master gets in combat summons won't get in combat if kept on passive
@@ -265,6 +270,13 @@ void CombatHandler::updateCombat(uint32_t msTime)
         if (!m_combatPlayerTargets.empty())
             return;
 
+        // Check if any of owner's summons is in combat
+        for (const auto* summon : getOwner()->getSummonInterface()->getSummons())
+        {
+            if (summon->isInCombat())
+                return;
+        }
+
         // Owner can leave combat
         _leaveCombat();
     }
@@ -307,6 +319,10 @@ void CombatHandler::_leaveCombat()
 
     getOwner()->removeUnitFlags(UNIT_FLAG_COMBAT);
     m_inCombat = false;
+
+    // Potion cooldown starts when combat ends
+    if (getOwner()->isPlayer())
+        dynamic_cast<Player*>(getOwner())->updatePotionCooldown();
 
     std::lock_guard<std::mutex> guard(m_mutexPlayerCombat);
     m_combatPlayerTargets.clear();
@@ -361,16 +377,9 @@ void CombatHandler::_notifyOwner(bool friendlyAction, Unit* enteringCombatWith, 
 
     // Skip combat delay for owner as it was already delayed for this unit
     if (initiatingCombat)
-    {
-        if (friendlyAction)
-            owner->getCombatHandler().onFriendlyAction(enteringCombatWith, true);
-        else
-            owner->getCombatHandler().onHostileAction(enteringCombatWith, true);
-    }
+        owner->getCombatHandler()._combatAction(enteringCombatWith, Util::getMSTime(), friendlyAction, true);
     else
-    {
         owner->getCombatHandler().takeCombatAction(enteringCombatWith, false, true);
-    }
 }
 
 void CombatHandler::_checkPvpFlags(Unit* target, bool friendlyAction)

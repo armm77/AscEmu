@@ -1,17 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
+#include <iostream>
 
 #include "Server/Console/BaseConsole.h"
 #include "Server/Console/ConsoleThread.h"
-#include "Log.hpp"
-
-#include <iostream>
-
+#include "Logging/Log.hpp"
 #include "Logging/Logger.hpp"
+#include "Threading/LegacyThreadPool.h"
 
 #ifndef WIN32
     #include <poll.h>
@@ -25,7 +23,6 @@ bool ConsoleThread::runThread()
 
 #ifndef WIN32
     struct pollfd pollInput;
-
     pollInput.fd = 0;
     pollInput.events = POLLIN | POLLPRI;
     pollInput.revents = 0;

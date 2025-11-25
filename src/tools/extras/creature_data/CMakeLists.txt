@@ -1,13 +1,17 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
-file(GLOB creature_data_sources *.cpp *.h)
+# set up our project name.
+set(EXECUTABLE_NAME creature_data)
 
-set(creature_SRCS
-    ${creature_data_sources}
-)
+file(GLOB SRC_CREATURE_DATA *.cpp *.h)
+
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(${EXECUTABLE_NAME} ${SRC_CREATURE_DATA})
 
 if (NOT WIN32 AND NOT IS_64BIT)
-    add_definitions(-D_FILE_OFFSET_BITS=64)
+    add_compile_options(-D_FILE_OFFSET_BITS=64)
 endif ()
 
 include_directories(
@@ -17,6 +21,11 @@ include_directories(
     ${LOADLIB_PATH}
 )
 
-add_executable(creature_data ${creature_SRCS})
-target_link_libraries(creature_data dbcfile ${ZLIB_LIBRARIES})
-install(TARGETS creature_data RUNTIME DESTINATION ${ASCEMU_TOOLS_PATH})
+# include library dependencies.
+target_link_libraries(${EXECUTABLE_NAME}
+  PUBLIC
+    dbcfile
+    ${ZLIB_LIBRARIES}
+)
+
+install(TARGETS ${EXECUTABLE_NAME} RUNTIME DESTINATION ${ASCEMU_TOOLS_PATH})

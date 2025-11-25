@@ -1,17 +1,17 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include "CommonTypes.hpp"
-#include "ChannelDefines.hpp"
 
-#include <cstdint>
 #include <map>
 #include <mutex>
 #include <set>
+#include <cstdint>
+#include <string>
 
 class CachedCharacterInfo;
 class Player;
@@ -31,8 +31,8 @@ public:
     uint32_t getChannelId() const;
     uint8_t getChannelFlags() const;
     uint8_t getChannelTeam() const;
-    // Used by Lua API
-    void setChannelName(std::string name);
+
+    void setChannelName(std::string name); // Used by Lua API
 
     void attemptJoin(Player* plr, std::string password, bool skipCheck = false);
     void leaveChannel(Player* plr, bool sendPacket = true);
@@ -76,7 +76,7 @@ private:
 
     uint8_t m_channelTeam = 0;
     uint32_t m_channelId = 0;
-    uint8_t m_channelFlags = CHANNEL_FLAGS_NONE;
+    uint8_t m_channelFlags = 0;
     bool m_muted = false;
     bool m_announcePlayers = true;
     uint8_t m_minimumLevel = 1;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2008 WEmu Team
@@ -19,7 +19,13 @@
  */
 
 #include "Setup.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Management/QuestLogEntry.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Movement/MovementManager.h"
+#include "Movement/Spline/MoveSplineInit.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/QuestScript.hpp"
 
 LocationVector const WaypointTheSummoning[] =
 {
@@ -43,13 +49,13 @@ public:
         {
             windwatcher->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, "Follow me");
 
-            MovementNew::PointsArray path;
+            MovementMgr::PointsArray path;
             path.reserve(pathSize);
             std::transform(std::begin(WaypointTheSummoning), std::end(WaypointTheSummoning), std::back_inserter(path), [](LocationVector const& pos)
             {
                 return G3D::Vector3(pos.x, pos.y, pos.z);
             });
-            MovementNew::MoveSplineInit init(windwatcher);
+            MovementMgr::MoveSplineInit init(windwatcher);
             init.SetWalk(true);
             init.MovebyPath(path);
             windwatcher->getMovementManager()->launchMoveSpline(std::move(init), 0, MOTION_PRIORITY_NORMAL, POINT_MOTION_TYPE);

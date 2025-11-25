@@ -1,12 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "NazanAndVazruden.hpp"
-
-#include "Server/Script/CreatureAIScript.h"
+#include "Instance_HellfireRamparts.hpp"
+#include "Movement/MovementManager.h"
+#include "Spell/SpellInfo.hpp"
+#include "CommonTime.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Boss: Nazan
@@ -20,7 +22,7 @@ NazanAI::NazanAI(Creature* pCreature) : CreatureAIScript(pCreature)
     m_ConeOfFireSpell->setAvailableForScriptPhase({ GROUND_PHASE });
 
     // Heroic
-    if (_isHeroic())
+    if (isHeroic())
     {
         m_BelowingRoarSpell = addAISpell(SPELL_BELLOWING_ROAR, 8.0f, TARGET_SELF, 0, 12);
         m_BelowingRoarSpell->setAvailableForScriptPhase({ GROUND_PHASE });
@@ -90,7 +92,7 @@ void NazanAI::onSummonedCreature(Creature* summon)
     {
         summon->setFaction(getCreature()->getFactionTemplate());
 
-        if (!_isHeroic())
+        if (!isHeroic())
             summon->castSpell(nullptr, SPELL_SUMMON_LIQUID_FIRE);
         else
             summon->castSpell(nullptr, SPELL_SUMMON_LIQUID_FIRE_H);
@@ -104,16 +106,12 @@ void NazanAI::onSummonedCreature(Creature* summon)
 VazrudenAI::VazrudenAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
     // Normal
-    if (!_isHeroic())
-    {
+    if (!isHeroic())
         m_RenevgeSpell = addAISpell(SPELL_REVENGE, 30.0f, TARGET_SELF, 0, 5);
-    }
-
-    // Heroic
-    if (_isHeroic())
-    {
+    else
         m_RenevgeSpell = addAISpell(SPELL_REVENGE_H, 30.0f, TARGET_SELF, 0, 5);
-    }
+
+    m_ConeOfFireSpell = 0;
 
     // Emotes
     addEmoteForEvent(Event_OnCombatStart, VAZRUDEN_AGGRO1);

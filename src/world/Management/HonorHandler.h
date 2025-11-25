@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2005-2007 Ascent Team
  *
@@ -20,16 +20,16 @@
 #pragma once
 
 #include "CommonTypes.hpp"
+
 #include <cstdint>
 
 class Player;
 
 class SERVER_DECL HonorHandler
 {
-    public:
-        static int32 CalculateHonorPointsForKill(uint32_t playerLevel, uint32_t victimLevel);
-        static void RecalculateHonorFields(Player* pPlayer);
-        static void AddHonorPointsToPlayer(Player* pPlayer, uint32_t uAmount);
-        static void OnPlayerKilled(Player* pPlayer, Player* pVictim);
+public:
+    static int32_t CalculateHonorPointsForKill(uint32_t playerLevel, uint32_t victimLevel);
+    static void RecalculateHonorFields(Player* pPlayer);
+    static void AddHonorPointsToPlayer(Player* pPlayer, uint32_t uAmount);
+    static void OnPlayerKilled(Player* pPlayer, Player* pVictim);
 };
-

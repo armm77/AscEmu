@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,10 +20,10 @@
 #ifndef _MMAP_MANAGER_H
 #define _MMAP_MANAGER_H
 
-#include "Common.hpp"
 #include "DetourNavMesh.h"
 #include "DetourNavMeshQuery.h"
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -31,8 +31,8 @@
 //  move map related classes
 namespace MMAP
 {
-    typedef std::unordered_map<uint32, dtTileRef> MMapTileSet;
-    typedef std::unordered_map<uint32, dtNavMeshQuery*> NavMeshQuerySet;
+    typedef std::unordered_map<uint32_t, dtTileRef> MMapTileSet;
+    typedef std::unordered_map<uint32_t, dtNavMeshQuery*> NavMeshQuerySet;
 
     // dummy struct to hold map's mmap data
     struct MMapData
@@ -55,7 +55,7 @@ namespace MMAP
     };
 
 
-    typedef std::unordered_map<uint32, MMapData*> MMapDataSet;
+    typedef std::unordered_map<uint32_t, std::unique_ptr<MMapData>> MMapDataSet;
 
     // singleton class
     // holds all all access to mmap loading unloading and meshes
@@ -65,25 +65,25 @@ namespace MMAP
             MMapManager() : loadedTiles(0), thread_safe_environment(true) {}
             ~MMapManager();
 
-            void InitializeThreadUnsafe(const std::vector<uint32>& mapIds);
-            bool loadMap(const std::string& basePath, uint32 mapId, int32 x, int32 y);
-            bool unloadMap(uint32 mapId, int32 x, int32 y);
-            bool unloadMap(uint32 mapId);
-            bool unloadMapInstance(uint32 mapId, uint32 instanceId);
+            void InitializeThreadUnsafe(const std::vector<uint32_t>& mapIds);
+            bool loadMap(const std::string& basePath, uint32_t mapId, int32_t x, int32_t y);
+            bool unloadMap(uint32_t mapId, int32_t x, int32_t y);
+            bool unloadMap(uint32_t mapId);
+            bool unloadMapInstance(uint32_t mapId, uint32_t instanceId);
 
             // the returned [dtNavMeshQuery const*] is NOT threadsafe
-            dtNavMeshQuery const* GetNavMeshQuery(uint32 mapId, uint32 instanceId);
-            dtNavMesh const* GetNavMesh(uint32 mapId);
+            dtNavMeshQuery const* GetNavMeshQuery(uint32_t mapId, uint32_t instanceId);
+            dtNavMesh const* GetNavMesh(uint32_t mapId);
 
-            uint32 getLoadedTilesCount() const { return loadedTiles; }
-            uint32 getLoadedMapsCount() const { return uint32(loadedMMaps.size()); }
+            uint32_t getLoadedTilesCount() const { return loadedTiles; }
+            uint32_t getLoadedMapsCount() const { return uint32_t(loadedMMaps.size()); }
         private:
-            bool loadMapData(uint32 mapId);
-            uint32 packTileID(int32 x, int32 y);
+            bool loadMapData(uint32_t mapId);
+            uint32_t packTileID(int32_t x, int32_t y);
 
-            MMapDataSet::const_iterator GetMMapData(uint32 mapId) const;
+            MMapDataSet::const_iterator GetMMapData(uint32_t mapId) const;
             MMapDataSet loadedMMaps;
-            uint32 loadedTiles;
+            uint32_t loadedTiles;
             bool thread_safe_environment;
     };
 }

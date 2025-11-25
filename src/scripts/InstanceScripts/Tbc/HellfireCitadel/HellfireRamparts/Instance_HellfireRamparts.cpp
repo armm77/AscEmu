@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -8,8 +8,8 @@ This file is released under the MIT license. See README-MIT for more information
 #include "WatchkeeperGargolmar.hpp"
 #include "Omor.hpp"
 #include "NazanAndVazruden.hpp"
-
-#include "Server/Script/CreatureAIScript.h"
+#include "Objects/GameObject.h"
+#include "Server/Script/CreatureAIScript.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Hellfire Ramparts Instance

@@ -1,16 +1,20 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Setup.h"
 #include "Saurfang.hpp"
-#include "Management/Faction.h"
-#include "Objects/Units/Creatures/Summons/Summon.h"
-#include <Management/ObjectMgr.h>
-#include <Management/TransporterHandler.h>
-#include <Objects/Transporter.h>
-#include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Raid_IceCrownCitadel.hpp"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Movement/MovementManager.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Misc: Muradin
@@ -86,7 +90,7 @@ void MuradinSaurfangEvent::AIUpdate(unsigned long time_passed)
                 sendDBChatMessage(SAY_INTRO_ALLIANCE_5_SE);
 
                 // Charge
-                getCreature()->getMovementManager()->moveCharge(chargePos[0].getPositionX(), chargePos[0].getPositionY(), chargePos[0].getPositionZ(), 8.5f, POINT_CHARGE); 
+                getCreature()->getMovementManager()->moveCharge(chargePos[0], 8.5f, POINT_CHARGE);
 
                 for (auto itr = _guardList.begin(); itr != _guardList.end(); ++itr)
                     (*itr)->GetScript()->DoAction(ACTION_CHARGE);
@@ -149,7 +153,7 @@ void MuradinSaurfangEvent::AIUpdate(unsigned long time_passed)
                 if (outroNpc && outroNpc->GetScript())
                 {
                     outroNpc->GetScript()->setCanEnterCombat(false);
-                    outroNpc->addUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+                    outroNpc->addUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
                     outroNpc->GetScript()->DoAction(ACTION_START_OUTRO);
                 }
 
@@ -469,7 +473,7 @@ void OverlordSaurfangEvent::AIUpdate(unsigned long time_passed)
                 sendDBChatMessage(SAY_INTRO_HORDE_8_SE);
 
                 // Charge
-                getCreature()->getMovementManager()->moveCharge(chargePos[0].getPositionX(), chargePos[0].getPositionY(), chargePos[0].getPositionZ(), 8.5f, POINT_CHARGE);
+                getCreature()->getMovementManager()->moveCharge(chargePos[0], 8.5f, POINT_CHARGE);
                 break;
             }
             case EVENT_OUTRO_HORDE_2_SE:   // say
@@ -765,7 +769,7 @@ DeathbringerSaurfangAI::DeathbringerSaurfangAI(Creature* pCreature) : CreatureAI
     BerserkSpell->addDBEmote(SAY_DEATHBRINGER_BERSERK);
     BerserkSpell->setAvailableForScriptPhase({ PHASE_COMBAT });
 
-    if (_isHeroic())
+    if (isHeroic())
     {
         BerserkSpell->mCooldown = 480000;
         BerserkSpell->setCooldownTimer(480000);
@@ -848,7 +852,7 @@ void DeathbringerSaurfangAI::Reset()
     _dead = false;
 
     setCanEnterCombat(false);
-    getCreature()->addUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+    getCreature()->addUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
 
     getCreature()->setPower(POWER_TYPE_ENERGY, 0);
     _castAISpell(ZeroPowerSpell);
@@ -895,7 +899,7 @@ void DeathbringerSaurfangAI::AIUpdate(unsigned long time_passed)
                 sendDBChatMessage(SAY_DEATHBRINGER_INTRO_ALLIANCE_7);
                 _castAISpell(GripOfAgonySpell);
                 setCanEnterCombat(true);
-                getCreature()->removeUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+                getCreature()->removeUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
                 break;
             }
             case EVENT_INTRO_HORDE_2_SE:
@@ -915,7 +919,7 @@ void DeathbringerSaurfangAI::AIUpdate(unsigned long time_passed)
                 sendDBChatMessage(SAY_DEATHBRINGER_INTRO_HORDE_9);
                 _castAISpell(GripOfAgonySpell);
                 setCanEnterCombat(true);
-                getCreature()->removeUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+                getCreature()->removeUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
                 break;
             }
             case EVENT_INTRO_FINISH_SE:
@@ -936,7 +940,7 @@ void DeathbringerSaurfangAI::AIUpdate(unsigned long time_passed)
 
                 scriptEvents.addEvent(EVENT_SUMMON_BLOOD_BEAST_SE, 40000,PHASE_COMBAT);
 
-                if (_isHeroic())
+                if (isHeroic())
                     scriptEvents.addEvent(EVENT_SCENT_OF_BLOOD_SE, 10000, PHASE_COMBAT);
                 break;
             }
@@ -987,7 +991,7 @@ void DeathbringerSaurfangAI::DamageTaken(Unit* _attacker, uint32_t* damage)
         getCreature()->addUnitStateFlag(UNIT_STATE_EVADING);
 
         getCreature()->getAIInterface()->eventUnitDied(_attacker, 0);
-        getCreature()->getAIInterface()->engagementOver();
+        getCreature()->getAIInterface()->combatStop();
 
         _castAISpell(AchievementSpell);
         _castAISpell(ReputationBossSpell);
@@ -997,7 +1001,7 @@ void DeathbringerSaurfangAI::DamageTaken(Unit* _attacker, uint32_t* damage)
 
         // Prepare for Outro
         getCreature()->addUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
-        getCreature()->addUnitFlags(UNIT_FLAG_IGNORE_PLAYER_NPC);
+        getCreature()->addUnitFlags(UNIT_FLAG_IGNORE_CREATURE_COMBAT);
 
         Creature* Commander = mInstance->getInstance()->getInterface()->findNearestCreature(getCreature(), mInstance->getInstance()->getTeamIdInInstance() ? NPC_SE_HIGH_OVERLORD_SAURFANG : NPC_SE_MURADIN_BRONZEBEARD, 250.0f);
         if (Commander)
@@ -1022,7 +1026,7 @@ void DeathbringerSaurfangAI::DoAction(int32_t const action)
         case PHASE_INTRO_A:
         case PHASE_INTRO_H:
         {     
-            setScriptPhase(uint32(action));
+            setScriptPhase(uint32_t(action));
 
             // Move
             getCreature()->getMovementManager()->movePoint(POINT_SAURFANG, deathbringerPos.getPositionX(), deathbringerPos.getPositionY(), deathbringerPos.getPositionZ());
@@ -1124,7 +1128,7 @@ void DeathbringerSaurfangAI::OnSpellHitTarget(Object* target, SpellInfo const* i
 uint32_t DeathbringerSaurfangAI::GetCreatureData(uint32_t type) const
 {
     if (type == DATA_MADE_A_MESS && _dead)
-        if (_markedTargetGuids.size() < RAID_MODE<uint32_t>(3, 5, 3, 5))
+        if (_markedTargetGuids.size() < getRaidModeValue(3, 5, 3, 5))
             return 1;
 
     return 0;
@@ -1192,7 +1196,7 @@ void NpcSaurfangEventAI::DoAction(int32_t const action)
         {
             if (_index)
             {
-                getCreature()->getMovementManager()->moveCharge(chargePos[_index].getPositionX(), chargePos[_index].getPositionY(), chargePos[_index].getPositionZ(), 8.5f, POINT_CHARGE);
+                getCreature()->getMovementManager()->moveCharge(chargePos[_index], 8.5f, POINT_CHARGE);
             }
             break;
         }
@@ -1232,7 +1236,6 @@ void GripOfAgony::filterEffectTargets(Spell* spell, uint8_t effectIndex, std::ve
     // Hackfix shouldnt cast on self
     effectTargets->clear();
 
-    std::vector<Player*> players;
     for (const auto& itr : spell->getUnitCaster()->getInRangeObjectsSet())
     {
         float distance = spell->getUnitCaster()->CalcDistance(itr);
@@ -1252,7 +1255,7 @@ SpellScriptCheckDummy GenericBloodLinkTrigger::onDummyOrScriptedEffect(Spell* sp
         return SpellScriptCheckDummy::DUMMY_NOT_HANDLED;
 
     auto* const saurfang = spell->getUnitCaster();
-    auto* const unitTarget = spell->GetUnitTarget();
+    auto* const unitTarget = spell->getUnitTarget();
     const auto spellId = spell->getSpellInfo()->calculateEffectValue(effIndex);
     if (saurfang != nullptr && unitTarget != nullptr)
         unitTarget->castSpell(saurfang, spellId, true);
@@ -1272,7 +1275,7 @@ void BoilingBlood::filterEffectTargets(Spell* spell, uint8_t /*effectIndex*/, st
     // Should be casted on 3 random targets
     if (effectTargets->size() > 3)
     {
-        Util::randomShuffleVector(effectTargets);
+        Util::randomShuffleVector(*effectTargets);
         effectTargets->erase(effectTargets->begin() + 3, effectTargets->end());
     }
 }
@@ -1347,8 +1350,8 @@ void BloodNova::filterEffectTargets(Spell* spell, uint8_t effIndex, std::vector<
 
 SpellScriptCheckDummy BloodNova::onDummyOrScriptedEffect(Spell* spell, uint8_t /*effIndex*/)
 {
-    if (spell->getUnitCaster() != nullptr && spell->GetUnitTarget() != nullptr)
-        spell->getUnitCaster()->castSpell(spell->GetUnitTarget(), SPELL_BLOOD_NOVA_DAMAGE, true);
+    if (spell->getUnitCaster() != nullptr && spell->getUnitTarget() != nullptr)
+        spell->getUnitCaster()->castSpell(spell->getUnitTarget(), SPELL_BLOOD_NOVA_DAMAGE, true);
 
     return SpellScriptCheckDummy::DUMMY_OK;
 }
@@ -1380,7 +1383,7 @@ SpellScriptExecuteState BloodLinkDummy::onDoProcEffect(SpellProc* spellProc, Uni
 
 SpellCastResult BloodLinkDummy::onCanCast(Spell* spell, uint32_t* /*parameter1*/, uint32_t* /*parameter2*/)
 {
-    const auto* const target = spell->GetUnitTarget();
+    const auto* const target = spell->getUnitTarget();
     if (target == nullptr)
         return SPELL_FAILED_BAD_TARGETS;
 
@@ -1394,8 +1397,8 @@ SpellCastResult BloodLinkDummy::onCanCast(Spell* spell, uint32_t* /*parameter1*/
 SpellScriptCheckDummy BloodLinkDummy::onDummyOrScriptedEffect(Spell* spell, uint8_t /*effIndex*/)
 {
     // On dummy effect, cast 72195 on spell target
-    if (spell->GetUnitTarget() != nullptr)
-        spell->GetUnitTarget()->castSpell(spell->GetUnitTarget(), SPELL_BLOOD_LINK_POWER, true);
+    if (spell->getUnitTarget() != nullptr)
+        spell->getUnitTarget()->castSpell(spell->getUnitTarget(), SPELL_BLOOD_LINK_POWER, true);
 
     return SpellScriptCheckDummy::DUMMY_OK;
 }
@@ -1417,10 +1420,10 @@ SpellScriptCheckDummy BloodLinkEnergize::onDummyOrScriptedEffect(Spell* spell, u
 /// Spell: Remove Marks of The Fallen
 SpellScriptCheckDummy RemoveMarksOfTheFallen::onDummyOrScriptedEffect(Spell* spell, uint8_t effIndex)
 {
-    if (spell->GetUnitTarget() != nullptr)
+    if (spell->getUnitTarget() != nullptr)
     {
         const auto spellId = spell->getSpellInfo()->calculateEffectValue(effIndex);
-        spell->GetUnitTarget()->removeAllAurasById(spellId);
+        spell->getUnitTarget()->removeAllAurasById(spellId);
     }
 
     return SpellScriptCheckDummy::DUMMY_OK;

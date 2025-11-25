@@ -1,12 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "CommonTypes.hpp"
 #include <string>
+#include <cstdint>
 
 struct GossipItem
 {
@@ -36,15 +36,15 @@ struct GossipQuestItem
 // used for db loading
 struct GossipMenuItem
 {
-    uint32 Id;
-    uint32 IntId;
-    uint8 Icon;
-    uint8 Extra;
+    uint32_t Id;
+    uint32_t IntId;
+    uint8_t Icon;
+    uint8_t Extra;
     std::string Text;
-    uint32 m_gSender;
-    uint32 m_gAction;
+    uint32_t m_gSender;
+    uint32_t m_gAction;
     std::string m_gBoxMessage;
-    uint32 m_gBoxMoney;
+    uint32_t m_gBoxMoney;
 };
 
 enum GossipIcons

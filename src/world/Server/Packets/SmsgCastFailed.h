@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -44,6 +45,11 @@ namespace AscEmu::Packets
         {
 #if VERSION_STRING == Mop
             packet << spellId << errorMsg << multiCast;
+            packet.writeBit(1);
+            packet.writeBit(1);
+            packet.flushBits();
+
+            packet.writeBits(0, extra2 ? 2 : 1);
             if (extra1 || extra2)
                 packet << extra1;
 

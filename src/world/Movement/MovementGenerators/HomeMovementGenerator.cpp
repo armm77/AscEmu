@@ -1,12 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "HomeMovementGenerator.h"
 #include "Objects/Units/Creatures/Creature.h"
 #include "Objects/Units/Creatures/AIInterface.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Server/Script/CreatureAIScript.hpp"
 #include "Management/G3DPosition.hpp"
 #include "Movement/MovementManager.h"
 #include "Movement/MovementDefines.h"
@@ -49,7 +49,7 @@ void HomeMovementGenerator<Creature>::setTargetLocation(Creature* owner)
     owner->addUnitStateFlag(UNIT_STATE_ROAMING_MOVE);
 
     LocationVector destination = owner->GetSpawnPosition();
-    MovementNew::MoveSplineInit init(owner);
+    MovementMgr::MoveSplineInit init(owner);
 
     owner->updateAllowedPositionZ(destination.x, destination.y, destination.z);
     init.MoveTo(positionToVector3(destination));
@@ -66,8 +66,6 @@ void HomeMovementGenerator<Creature>::doInitialize(Creature* owner)
 {
     removeFlag(MOVEMENTGENERATOR_FLAG_INITIALIZATION_PENDING | MOVEMENTGENERATOR_FLAG_DEACTIVATED);
     addFlag(MOVEMENTGENERATOR_FLAG_INITIALIZED);
-
-    owner->getAIInterface()->setNoSearchAssistance(false);
 
     setTargetLocation(owner);
 }

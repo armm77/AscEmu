@@ -1,12 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Magtheridon.hpp"
-#include "Management/Faction.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Raid_Magtheridons_Lair.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/Spell.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Boss: Magtheridon
@@ -100,8 +102,8 @@ void MagtheridonAI::AIUpdate(unsigned long time_passed)
             break;
         case EVENT_RELEASED:
             getCreature()->getAIInterface()->setAllowedToEnterCombat(true);
-            getCreature()->getAIInterface()->setImmuneToPC(false);
-            getCreature()->getAIInterface()->setImmuneToNPC(false);
+            getCreature()->getAIInterface()->setIgnorePlayerCombat(false);
+            getCreature()->getAIInterface()->setIgnoreCreatureCombat(false);
             getCreature()->removeUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
             setScriptPhase(PHASE_2);
 
@@ -232,7 +234,6 @@ void SoulTransfer::filterEffectTargets(Spell* spell, uint8_t /*effectIndex*/, st
     // Hackfix shouldnt only cast on Channelers
     effectTargets->clear();
 
-    std::vector<Player*> players;
     for (const auto& itr : spell->getUnitCaster()->getInRangeObjectsSet())
     {
         float distance = spell->getUnitCaster()->CalcDistance(itr);

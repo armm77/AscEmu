@@ -1,16 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
-#include "Chat/ChatHandler.hpp"
+#include "Chat/ChatCommandHandler.hpp"
 #include "Management/ArenaTeam.hpp"
-#include "Management/ObjectMgr.h"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Units/Players/Player.hpp"
 
-uint8 ChatHandler::GetArenaTeamInternalType(uint32 type, WorldSession* m_session)
+uint8_t ChatCommandHandler::GetArenaTeamInternalType(uint32_t type, WorldSession* m_session)
 {
-    uint8 internal_type;
+    uint8_t internal_type;
     switch (type)
     {
         case 2:
@@ -25,96 +25,91 @@ uint8 ChatHandler::GetArenaTeamInternalType(uint32 type, WorldSession* m_session
         default:
         {
             internal_type = 10;
-            RedSystemMessage(m_session, "Invalid arena team type specified! Valid types: 2, 3 and 5.");
+            redSystemMessage(m_session, "Invalid arena team type specified! Valid types: 2, 3 and 5.");
         }break;
     }
 
     return internal_type;
 }
 
-bool ChatHandler::HandleArenaCreateTeam(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleArenaCreateTeam(const char* args, WorldSession* m_session)
 {
-    uint32 team_type;
-    char team_name[1000];
+    uint32_t teamType;
+    char teamName[1000];
 
     auto player = GetSelectedPlayer(m_session, true, true);
-    if (sscanf(args, "%u %[^\n]", &team_type, team_name) != 2)
+    if (sscanf(args, "%u %[^\n]", &teamType, teamName) != 2)
     {
-        SystemMessage(m_session, "Invalid syntax. Usage: .arena createteam <type> <name>");
+        systemMessage(m_session, "Invalid syntax. Usage: .arena createteam <type> <name>");
         return true;
     }
 
-    uint8 internal_type = GetArenaTeamInternalType(team_type, m_session);
-    if (internal_type == 10)
+    uint8_t internalType = GetArenaTeamInternalType(teamType, m_session);
+    if (internalType == 10)
         return true;
 
     if (player == nullptr)
     {
-        SystemMessage(m_session, "Selected player not found!");
+        systemMessage(m_session, "Selected player not found!");
         return true;
     }
 
-    if (player->isInArenaTeam(internal_type))
+    if (player->isInArenaTeam(internalType))
     {
-        RedSystemMessage(m_session, "Player: %s is already in an arena team of that type!", player->getName().c_str());
+        redSystemMessage(m_session, "Player: {} is already in an arena team of that type!", player->getName());
         return true;
     }
 
-    auto arena_team = new ArenaTeam(uint32(internal_type), sObjectMgr.GenerateArenaTeamId());
-    arena_team->m_emblem.emblemStyle = 22;
-    arena_team->m_emblem.emblemColour = 4292133532UL;
-    arena_team->m_emblem.borderColour = 4294931722UL;
-    arena_team->m_emblem.borderStyle = 1;
-    arena_team->m_emblem.backgroundColour = 4284906803UL;
-    arena_team->m_leader = player->getGuidLow();
-    arena_team->m_name = std::string(team_name);
-    arena_team->addMember(player->getPlayerInfo());
+    ArenaTeamEmblem emblem{ .emblemStyle = 22, .emblemColour = 4292133532UL, .borderStyle = 1,
+        .borderColour = 4294931722UL, .backgroundColour = 4284906803UL };
 
-    sObjectMgr.AddArenaTeam(arena_team);
-
-    GreenSystemMessage(m_session, "Arena team created for Player: %s Type: %u", player->getName().c_str(), team_type);
+    if (auto* const arenaTeam = sObjectMgr.createArenaTeam(internalType, player, teamName, 1500, emblem))
+    {
+        player->setArenaTeam(arenaTeam->m_type, arenaTeam);
+        greenSystemMessage(m_session, "Arena team created for Player: {} Type: {}", player->getName(), teamType);
+    }
 
     return true;
 }
 
-bool ChatHandler::HandleArenaSetTeamLeader(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleArenaSetTeamLeader(const char* args, WorldSession* m_session)
 {
-    uint32 team_type;
+    uint32_t team_type;
 
     auto player = GetSelectedPlayer(m_session, true, true);
     if (sscanf(args, "%u", &team_type) != 1)
     {
-        SystemMessage(m_session, "Invalid syntax. Usage: .arena setteamleader <type>");
+        systemMessage(m_session, "Invalid syntax. Usage: .arena setteamleader <type>");
         return true;
     }
 
-    uint8 internal_type = GetArenaTeamInternalType(team_type, m_session);
+    uint8_t internal_type = GetArenaTeamInternalType(team_type, m_session);
     if (internal_type == 10)
         return true;
 
     if (player == nullptr)
     {
-        SystemMessage(m_session, "Selected player not found!");
+        systemMessage(m_session, "Selected player not found!");
         return true;
     }
 
     if (!player->isInArenaTeam(internal_type))
     {
-        RedSystemMessage(m_session, "Player: %s is already in an arena team of that type!", player->getName().c_str());
+        redSystemMessage(m_session, "Player: {} is already in an arena team of that type!", player->getName());
         return true;
     }
 
     auto arena_team = player->getArenaTeam(internal_type);
     arena_team->setLeader(player->getPlayerInfo());
 
-    GreenSystemMessage(m_session, "Player: %s is now arena team leader for type: %u", player->getName().c_str(), team_type);
+    greenSystemMessage(m_session, "Player: {} is now arena team leader for type: {}", player->getName(), team_type);
 
     return true;
 }
 
-bool ChatHandler::HandleArenaTeamResetAllRatings(const char* /*args*/, WorldSession* /*m_session*/)
+bool ChatCommandHandler::HandleArenaTeamResetAllRatings(const char* /*args*/, WorldSession* /*m_session*/)
 {
-    sObjectMgr.ResetArenaTeamRatings();
+    sObjectMgr.resetArenaTeamRatings();
 
     return true;
 }

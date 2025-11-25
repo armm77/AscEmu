@@ -1,16 +1,20 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Raid_IceCrownCitadel.hpp"
 #include "LordMarrowgar.hpp"
-#include "Management/Faction.h"
-#include "Objects/Units/Creatures/Summons/Summon.h"
-#include <Management/ObjectMgr.h>
-#include <Management/TransporterHandler.h>
-#include <Objects/Transporter.h>
+
+#include "Movement/MovementManager.h"
 #include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Utilities/Narrow.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Boss: Lord Marrowgar
@@ -19,12 +23,13 @@ LordMarrowgarAI::LordMarrowgarAI(Creature* pCreature) : CreatureAIScript(pCreatu
     // Instance Script
     mInstance = getInstanceScript();
 
-    boneStormDuration = RAID_MODE<uint32_t>(20000, 30000, 20000, 30000);
+    boneStormDuration = getRaidModeValue(20000, 30000, 20000, 30000);
     baseSpeed = pCreature->getSpeedRate(TYPE_RUN, false);
     introDone = false;
     boneSlice = false;
     boneStormtarget = nullptr;
     coldflameLastPos = getCreature()->GetPosition();
+    coldflameTarget = 0;
 
     // Scripted Spells not autocastet
     boneSliceSpell = addAISpell(SPELL_BONE_SLICE, 0.0f, TARGET_ATTACKING);
@@ -38,6 +43,8 @@ LordMarrowgarAI::LordMarrowgarAI(Creature* pCreature) : CreatureAIScript(pCreatu
     berserkSpell = addAISpell(SPELL_BERSERK, 0.0f, TARGET_SELF);
     berserkSpell->addDBEmote(SAY_MARR_BERSERK);                  // THE MASTER'S RAGE COURSES THROUGH ME!
     berserkSpell->mIsTriggered = true;
+
+    _setRangedDisabled(true);
 
     // Messages
     addEmoteForEvent(Event_OnCombatStart, SAY_MARR_AGGRO);     // The Scourge will wash over this world as a swarm of death and destruction!
@@ -97,7 +104,7 @@ void LordMarrowgarAI::AIUpdate(unsigned long time_passed)
         {
             case EVENT_BONE_SPIKE_GRAVEYARD:
             {
-                if (_isHeroic() || !getCreature()->hasAurasWithId(SPELL_BONE_STORM))
+                if (isHeroic() || !getCreature()->hasAurasWithId(SPELL_BONE_STORM))
                     _castAISpell(boneSpikeGraveyardSpell);
 
                 scriptEvents.addEvent(EVENT_BONE_SPIKE_GRAVEYARD, Util::getRandomInt(15000, 20000));
@@ -167,7 +174,7 @@ void LordMarrowgarAI::AIUpdate(unsigned long time_passed)
                 scriptEvents.removeEvent(EVENT_BONE_STORM_MOVE);
                 scriptEvents.addEvent(EVENT_ENABLE_BONE_SLICE, 10000);
 
-                if (!_isHeroic())
+                if (!isHeroic())
                     scriptEvents.addEvent(EVENT_BONE_SPIKE_GRAVEYARD, Util::getRandomInt(15000, 20000));
                 break;
             }
@@ -415,7 +422,7 @@ void BoneStorm::onAuraCreate(Aura* aur)
     // set duration here
     int32_t duration = 20000;
     if (aur->GetUnitCaster()->isCreature())
-        duration = static_cast<Creature*>(aur->GetUnitCaster())->GetScript()->RAID_MODE<uint32_t>(20000, 30000, 20000, 30000);
+        duration = static_cast<Creature*>(aur->GetUnitCaster())->GetScript()->getRaidModeValue(20000, 30000, 20000, 30000);
 
     aur->setNewMaxDuration(duration, false);
 }
@@ -424,15 +431,15 @@ void BoneStorm::onAuraCreate(Aura* aur)
 /// Spell: Bone Storm Damage
 SpellScriptEffectDamage BoneStormDamage::doCalculateEffect(Spell* spell, uint8_t effIndex, int32_t* dmg)
 {
-    if (effIndex != EFF_INDEX_0 || spell->GetUnitTarget() == nullptr)
+    if (effIndex != EFF_INDEX_0 || spell->getUnitTarget() == nullptr)
         return SpellScriptEffectDamage::DAMAGE_DEFAULT;
 
-    auto distance = spell->GetUnitTarget()->GetDistance2dSq(spell->getCaster());
+    auto distance = spell->getUnitTarget()->GetDistance2dSq(spell->getCaster());
     // If target is closer than 5 yards, do full damage
     if (distance <= 5.0f)
         distance = 1.0f;
 
-    *dmg = float2int32(*dmg / distance);
+    *dmg = Util::float2int32(*dmg / distance);
     return SpellScriptEffectDamage::DAMAGE_FULL_RECALCULATION;
 }
 
@@ -560,7 +567,7 @@ SpellScriptExecuteState Coldflame::beforeSpellEffect(Spell* spell, uint8_t effec
     if (effectIndex != EFF_INDEX_0)
         return SpellScriptExecuteState::EXECUTE_NOT_HANDLED;
 
-    spell->getUnitCaster()->castSpell(spell->GetUnitTarget(), spell->damage, true);
+    spell->getUnitCaster()->castSpell(spell->getUnitTarget(), spell->damage, true);
 
     return SpellScriptExecuteState::EXECUTE_PREVENT;
 }
@@ -573,7 +580,7 @@ SpellScriptExecuteState ColdflameBonestorm::beforeSpellEffect(Spell* spell, uint
         return SpellScriptExecuteState::EXECUTE_NOT_HANDLED;
 
     for (uint8_t i = 0; i < 4; ++i)
-        spell->getUnitCaster()->castSpell(spell->GetUnitTarget(), (spell->damage + i), true);
+        spell->getUnitCaster()->castSpell(spell->getUnitTarget(), (spell->damage + i), true);
 
     return SpellScriptExecuteState::EXECUTE_PREVENT;
 }
@@ -587,7 +594,6 @@ void ColdflameDamage::filterEffectTargets(Spell* spell, uint8_t effectIndex, std
 
     effectTargets->clear();
 
-    std::vector<Player*> players;
     for (const auto& itr : spell->getUnitCaster()->getInRangePlayersSet())
     {
         auto target = static_cast<Player*>(itr);
@@ -602,7 +608,7 @@ bool ColdflameDamage::CanBeAppliedOn(Unit* target, Spell* spell)
     if (target->hasAurasWithId(SPELL_IMPALED))
         return false;
 
-    if (target->GetDistance2dSq(spell->getUnitCaster()) > static_cast<float>(spell->getSpellInfo()->getEffectRadiusIndex(EFF_INDEX_0)) )
+    if (target->GetDistance2dSq(spell->getUnitCaster()) > static_cast<float>(spell->getSpellInfo()->getEffectRadiusIndex(EFF_INDEX_0)))
         return false;
 
     return true;
@@ -620,13 +626,13 @@ SpellScriptExecuteState ColdflameDamage::beforeSpellEffect(Spell* /*spell*/, uin
 /// Spell: Bone Slice
 SpellScriptEffectDamage BoneSlice::doCalculateEffect(Spell* spell, uint8_t effIndex, int32_t* dmg)
 {
-    if (effIndex != EFF_INDEX_0 || spell->GetUnitTarget() == nullptr)
+    if (effIndex != EFF_INDEX_0 || spell->getUnitTarget() == nullptr)
         return SpellScriptEffectDamage::DAMAGE_DEFAULT;
 
     if (!targetCount)
         return SpellScriptEffectDamage::DAMAGE_DEFAULT;
     
-    *dmg = float2int32(*dmg / (float)targetCount);
+    *dmg = Util::float2int32(*dmg / (float)targetCount);
     return SpellScriptEffectDamage::DAMAGE_FULL_RECALCULATION;
 }
 
@@ -651,8 +657,8 @@ void BoneSlice::afterSpellEffect(Spell* spell, uint8_t effIndex)
     if (effIndex != EFF_INDEX_0)
         return;
 
-    if (spell->GetUnitTarget())
+    if (spell->getUnitTarget())
     {
-        static_cast<Creature*>(spell->getUnitCaster())->GetScript()->SetCreatureData64(DATA_SPIKE_IMMUNE, spell->GetUnitTarget()->getGuid());
+        static_cast<Creature*>(spell->getUnitCaster())->GetScript()->SetCreatureData64(DATA_SPIKE_IMMUNE, spell->getUnitTarget()->getGuid());
     }
 }

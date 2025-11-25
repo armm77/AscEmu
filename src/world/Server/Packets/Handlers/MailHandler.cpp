@@ -1,8 +1,7 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
-
 
 #include "Server/Packets/SmsgSendMailResult.h"
 #include "Server/Packets/CmsgMailMarkAsRead.h"
@@ -19,8 +18,13 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/World.h"
 #include "Objects/Units/Players/Player.hpp"
 #include "Management/ItemInterface.h"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Item.hpp"
+#include "Server/DatabaseDefinition.hpp"
 #include "Storage/MySQLDataStore.hpp"
 #include "Server/Definitions.h"
+#include "Server/WorldSessionLog.hpp"
+#include "CommonTime.hpp"
 
 using namespace AscEmu::Packets;
 
@@ -30,7 +34,7 @@ void WorldSession::handleMarkAsReadOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    auto mailMessage = _player->m_mailBox.GetMessage(srlPacket.messageId);
+    auto mailMessage = _player->m_mailBox->GetMessageById(srlPacket.messageId);
     if (mailMessage == nullptr)
         return;
 
@@ -49,14 +53,14 @@ void WorldSession::handleMailDeleteOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto mailMessage = _player->m_mailBox.GetMessage(srlPacket.messageId);
+    const auto mailMessage = _player->m_mailBox->GetMessageById(srlPacket.messageId);
     if (mailMessage == nullptr)
     {
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_DELETED, MAIL_ERR_INTERNAL_ERROR).serialise().get());
         return;
     }
 
-    _player->m_mailBox.DeleteMessage(srlPacket.messageId, true);
+    _player->m_mailBox->DeleteMessage(srlPacket.messageId, true);
 
     SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_DELETED, MAIL_OK).serialise().get());
 }
@@ -67,7 +71,7 @@ void WorldSession::handleTakeMoneyOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto mailMessage = _player->m_mailBox.GetMessage(srlPacket.messageId);
+    const auto mailMessage = _player->m_mailBox->GetMessageById(srlPacket.messageId);
     if (mailMessage == nullptr || !mailMessage->money)
     {
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_MONEY_TAKEN, MAIL_ERR_INTERNAL_ERROR).serialise().get());
@@ -97,7 +101,7 @@ void WorldSession::handleReturnToSenderOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto mailMessage = _player->m_mailBox.GetMessage(srlPacket.messageId);
+    const auto mailMessage = _player->m_mailBox->GetMessageById(srlPacket.messageId);
     if (mailMessage == nullptr)
     {
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_RETURNED_TO_SENDER, MAIL_ERR_INTERNAL_ERROR).serialise().get());
@@ -106,7 +110,7 @@ void WorldSession::handleReturnToSenderOpcode(WorldPacket& recvPacket)
 
     auto message = *mailMessage;
 
-    _player->m_mailBox.DeleteMessage(srlPacket.messageId, true);
+    _player->m_mailBox->DeleteMessage(srlPacket.messageId, true);
 
     message.player_guid = message.sender_guid;
     message.sender_guid = _player->getGuid();
@@ -130,7 +134,7 @@ void WorldSession::handleMailCreateTextItemOpcode(WorldPacket& recvPacket)
         return;
 
     const auto itemProperties = sMySQLStore.getItemProperties(8383);
-    auto message = _player->m_mailBox.GetMessage(srlPacket.messageId);
+    auto message = _player->m_mailBox->GetMessageById(srlPacket.messageId);
     if (message == nullptr || !itemProperties)
     {
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_MADE_PERMANENT, MAIL_ERR_INTERNAL_ERROR).serialise().get());
@@ -144,17 +148,17 @@ void WorldSession::handleMailCreateTextItemOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    auto item = sObjectMgr.CreateItem(8383, _player);
+    auto item = sObjectMgr.createItem(8383, _player);
     if (item == nullptr)
         return;
 
     item->setFlags(ITEM_FLAG_WRAP_GIFT);
     item->setText(message->body);
 
-    if (_player->getItemInterface()->AddItemToFreeSlot(item))
+    // TODO: if add fails, should item be sent in mail? now it's destroyed
+    const auto [addResult, _] = _player->getItemInterface()->AddItemToFreeSlot(std::move(item));
+    if (addResult)
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_MADE_PERMANENT, MAIL_OK).serialise().get());
-    else
-        item->deleteMe();
 }
 
 void WorldSession::handleItemTextQueryOpcode(WorldPacket& recvPacket)
@@ -162,11 +166,18 @@ void WorldSession::handleItemTextQueryOpcode(WorldPacket& recvPacket)
     CmsgItemTextQuery srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
-  
+
+#if VERSION_STRING > TBC
     if (const auto item = _player->getItemInterface()->GetItemByGUID(srlPacket.itemGuid))
         SendPacket(SmsgItemTextQueryResponse(0, srlPacket.itemGuid, item->getText()).serialise().get());
     else
         SendPacket(SmsgItemTextQueryResponse(1, 0, "").serialise().get());
+#else
+    if (auto itemPage = sMySQLStore.getItemPage(srlPacket.itemTextId))
+        SendPacket(SmsgItemTextQueryResponse(0, itemPage->id, itemPage->text).serialise().get());
+    else
+        SendPacket(SmsgItemTextQueryResponse(1, 0, "").serialise().get());
+#endif
 }
 
 void WorldSession::handleMailTimeOpcode(WorldPacket& /*recvPacket*/)
@@ -177,7 +188,7 @@ void WorldSession::handleMailTimeOpcode(WorldPacket& /*recvPacket*/)
         data << uint32_t(0);
         data << uint32_t(0);
 
-        for (auto& message : _player->m_mailBox.Messages)
+        for (auto& message : _player->m_mailBox->Messages)
         {
             if (message.second.checked_flag & MAIL_CHECK_MASK_READ)
                 continue;
@@ -208,10 +219,12 @@ void WorldSession::handleGetMailOpcode(WorldPacket& /*recvPacket*/)
     uint32_t realCount = 0;
     uint8_t count = 0;
 
+#if VERSION_STRING > TBC
     data << uint32_t(0);
+#endif
     data << uint8_t(0);
 
-    for (auto& message : _player->m_mailBox.Messages)
+    for (auto& message : _player->m_mailBox->Messages)
     {
         if (message.second.expire_time && static_cast<uint32_t>(UNIXTIME) > message.second.expire_time)
             continue;
@@ -230,8 +243,10 @@ void WorldSession::handleGetMailOpcode(WorldPacket& /*recvPacket*/)
             guidSize = 8;
         else
             guidSize = 4;
-
-#if VERSION_STRING < Cata
+#if VERSION_STRING <= TBC
+        const size_t messageSize = 2 + 4 + 1 + guidSize + 4 * 8 + (message.second.subject.size() + 1)  + 1 + (
+            message.second.items.size() * (1 + 4 + 4 + MAX_INSPECTED_ENCHANTMENT_SLOT * 3 * 4 + 4 + 4 + 1 + 4 + 4 + 4));
+#elif VERSION_STRING < Cata
         const size_t messageSize = 2 + 4 + 1 + guidSize + 4 * 8 + (message.second.subject.size() + 1) + (message.second.body.size() + 1) + 1 + (
             message.second.items.size() * (1 + 4 + 4 + MAX_INSPECTED_ENCHANTMENT_SLOT * 3 * 4 + 4 + 4 + 4 + 4 + 4 + 4 + 1));
 #else
@@ -264,6 +279,20 @@ void WorldSession::handleGetMailOpcode(WorldPacket& /*recvPacket*/)
 #else
         data << uint64_t(message.second.cod);
 #endif
+#if VERSION_STRING < WotLK
+        uint32_t itemPageEntry = 0;
+        if (!message.second.body.empty())
+        {
+            itemPageEntry = sMySQLStore.getItemPageEntryByText(message.second.body);
+            if (itemPageEntry == 0)
+            {
+                itemPageEntry = sObjectMgr.generateItemPageEntry();
+                sMySQLStore.addItemPage(itemPageEntry, message.second.body);
+            }
+        }
+        data << uint32_t(itemPageEntry);
+
+#endif
         data << uint32_t(0);
         data << uint32_t(message.second.stationery);
 #if VERSION_STRING < Cata
@@ -274,8 +303,11 @@ void WorldSession::handleGetMailOpcode(WorldPacket& /*recvPacket*/)
         data << uint32_t(message.second.checked_flag);
         data << float(float((message.second.expire_time - uint32_t(UNIXTIME)) / DAY));
         data << uint32_t(0);
+
         data << message.second.subject;
+#if VERSION_STRING > TBC
         data << message.second.body;
+#endif
 
         data << uint8_t(message.second.items.size());
 
@@ -284,7 +316,7 @@ void WorldSession::handleGetMailOpcode(WorldPacket& /*recvPacket*/)
         {
             for (auto itemEntry : message.second.items)
             {
-                const auto item = sObjectMgr.LoadItem(itemEntry);
+                const auto item = sObjectMgr.loadItem(itemEntry);
                 if (item == nullptr)
                     continue;
 
@@ -306,21 +338,22 @@ void WorldSession::handleGetMailOpcode(WorldPacket& /*recvPacket*/)
                 data << uint32_t(item->getMaxDurability());
                 data << uint32_t(item->getDurability());
                 data << uint8_t(item->m_isLocked ? 1 : 0);
-
-                delete item;
             }
         }
         ++count;
         ++realCount;
     }
-
+#if VERSION_STRING > TBC
     data.put<uint32_t>(0, realCount);
     data.put<uint8_t>(4, count);
+#else
+    data.put<uint8_t>(0, count);
+#endif
 
     SendPacket(&data);
 
     // do cleanup on request mail
-    _player->m_mailBox.CleanupExpiredMessages();
+    _player->m_mailBox->CleanupExpiredMessages();
 }
 
 void WorldSession::handleTakeItemOpcode(WorldPacket& recvPacket)
@@ -329,7 +362,7 @@ void WorldSession::handleTakeItemOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    auto mailMessage = _player->m_mailBox.GetMessage(srlPacket.messageId);
+    auto mailMessage = _player->m_mailBox->GetMessageById(srlPacket.messageId);
     if (mailMessage == nullptr || mailMessage->items.empty())
     {
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_ITEM_TAKEN, MAIL_ERR_INTERNAL_ERROR).serialise().get());
@@ -352,29 +385,30 @@ void WorldSession::handleTakeItemOpcode(WorldPacket& recvPacket)
         }
     }
 
-    auto item = sObjectMgr.LoadItem(srlPacket.lowGuid);
-    if (item == nullptr)
+    auto itemHolder = sObjectMgr.loadItem(srlPacket.lowGuid);
+    if (itemHolder == nullptr)
     {
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_ITEM_TAKEN, MAIL_ERR_INTERNAL_ERROR).serialise().get());
         return;
     }
 
-    const auto slotResult = _player->getItemInterface()->FindFreeInventorySlot(item->getItemProperties());
+    const auto slotResult = _player->getItemInterface()->FindFreeInventorySlot(itemHolder->getItemProperties());
     if (slotResult.Result == 0)
     {
         SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_ITEM_TAKEN, MAIL_ERR_BAG_FULL, INV_ERR_INVENTORY_FULL).serialise().get());
-
-        item->deleteMe();
         return;
     }
-    item->m_isDirty = true;
+    itemHolder->m_isDirty = true;
 
-    if (!_player->getItemInterface()->SafeAddItem(item, slotResult.ContainerSlot, slotResult.Slot))
+    auto* item = itemHolder.get();
+
+    auto [addResult, returnedItem] = _player->getItemInterface()->SafeAddItem(std::move(itemHolder), slotResult.ContainerSlot, slotResult.Slot);
+    if (!addResult)
     {
-        if (!_player->getItemInterface()->AddItemToFreeSlot(item))
+        const auto [addResult2, _] = _player->getItemInterface()->AddItemToFreeSlot(std::move(returnedItem));
+        if (!addResult2)
         {
             SendPacket(SmsgSendMailResult(srlPacket.messageId, MAIL_RES_ITEM_TAKEN, MAIL_ERR_BAG_FULL, INV_ERR_INVENTORY_FULL).serialise().get());
-            item->deleteMe();
             return;
         }
     }
@@ -421,7 +455,7 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    const auto playerReceiverInfo = sObjectMgr.GetPlayerInfoByName(srlPacket.receiverName);
+    const auto playerReceiverInfo = sObjectMgr.getCachedCharacterInfoByName(srlPacket.receiverName);
     if (playerReceiverInfo == nullptr)
     {
         SendPacket(SmsgSendMailResult(0, MAIL_RES_MAIL_SENT, MAIL_ERR_RECIPIENT_NOT_FOUND).serialise().get());
@@ -458,7 +492,7 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (playerReceiverInfo->name == _player->getName() && !GetPermissionCount())
+    if (playerReceiverInfo->name == _player->getName() && !hasPermissions())
     {
         SendPacket(SmsgSendMailResult(0, MAIL_RES_MAIL_SENT, MAIL_ERR_CANNOT_SEND_TO_SELF).serialise().get());
         return;
@@ -473,10 +507,10 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
     // calculate cost
     uint32_t cost = 0;
     if (srlPacket.money > 0)
-        cost += static_cast<uint32_t>(srlPacket.money); // \todo Change gold functions to uint64
+        cost += static_cast<uint32_t>(srlPacket.money); // \todo Change gold functions to uint64_t
 
-    if (!sMailSystem.MailOption(MAIL_FLAG_DISABLE_POSTAGE_COSTS) && !(GetPermissionCount() && sMailSystem.MailOption(MAIL_FLAG_NO_COST_FOR_GM)))
-        cost += srlPacket.itemCount ? 30 * srlPacket.itemCount : 30;;
+    if (!sMailSystem.MailOption(MAIL_FLAG_DISABLE_POSTAGE_COSTS) && !(hasPermissions() && sMailSystem.MailOption(MAIL_FLAG_NO_COST_FOR_GM)))
+        cost += srlPacket.itemCount ? 30 * srlPacket.itemCount : 30;
 
     if (!_player->hasEnoughCoinage(cost))
     {
@@ -491,8 +525,8 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
     {
         for (auto& item : attachedItems)
         {
-            Item* pItem = item;
-            if (_player->getItemInterface()->SafeRemoveAndRetreiveItemByGuid(item->getGuid(), false) != pItem)
+            auto pItem = _player->getItemInterface()->SafeRemoveAndRetreiveItemByGuid(item->getGuid(), false);
+            if (pItem == nullptr || pItem.get() != item)
                 continue;
 
             pItem->removeFromWorld();
@@ -500,10 +534,8 @@ void WorldSession::handleSendMailOpcode(WorldPacket& recvPacket)
             pItem->saveToDB(INVENTORY_SLOT_NOT_SET, 0, true, nullptr);
             msg.items.push_back(pItem->getGuidLow());
 
-            if (GetPermissionCount() > 0)
+            if (hasPermissions())
                 sGMLog.writefromsession(this, "sent mail with item entry %u to %s", pItem->getEntry(), playerReceiverInfo->name.c_str());
-
-            pItem->deleteMe();
         }
     }
 

@@ -1,29 +1,30 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
-
 #include "WorldConfig.h"
-#include <utility>
+#include "AEVersion.hpp"
+#include "ConfigMgr.hpp"
 #include "WorldConf.h"
-#include "Server/MainServerDefines.h"
 #include "Config/Config.h"
 #include "Map/Cells/MapCell.hpp"
-//#include "Server/WorldSocket.h"
 #include "Logging/Logger.hpp"
+#include "Macros/MapsMacros.hpp"
 #include "Macros/PlayerMacros.hpp"
 
+#include <utility>
 
 WorldConfig::WorldConfig(): mFloatRates{}, mIntRates{}
 {
     // world.conf - Mysql Database Section
     worldDb.port = 3306;
     worldDb.connections = 3;
+    worldDb.isLegacyAuth = false;
 
     charDb.port = 3306;
     charDb.connections = 5;
+    charDb.isLegacyAuth = false;
 
     // world.conf - LogonServer Settings
     logonServer.address = "127.0.0.1";
@@ -246,6 +247,7 @@ void WorldConfig::loadWorldConfigValues(bool reload /*false*/)
     Config.MainConfig.tryGetString("WorldDatabase", "Name", &worldDb.dbName);
     Config.MainConfig.tryGetInt("WorldDatabase", "Port", &worldDb.port);
     Config.MainConfig.tryGetInt("WorldDatabase", "Connections", &worldDb.connections);
+    Config.MainConfig.tryGetBool("WorldDatabase", "LegacyAuth", &worldDb.isLegacyAuth);
 
     Config.MainConfig.tryGetString("CharacterDatabase", "Hostname", &charDb.host);
     Config.MainConfig.tryGetString("CharacterDatabase", "Username", &charDb.user);
@@ -253,6 +255,7 @@ void WorldConfig::loadWorldConfigValues(bool reload /*false*/)
     Config.MainConfig.tryGetString("CharacterDatabase", "Name", &charDb.dbName);
     Config.MainConfig.tryGetInt("CharacterDatabase", "Port", &charDb.port);
     Config.MainConfig.tryGetInt("CharacterDatabase", "Connections", &charDb.connections);
+    Config.MainConfig.tryGetBool("CharacterDatabase", "LegacyAuth", &charDb.isLegacyAuth);
 
     // world.conf - LogonServer Settings
     Config.MainConfig.tryGetString("LogonServer", "Address", &logonServer.address);
@@ -308,7 +311,7 @@ void WorldConfig::loadWorldConfigValues(bool reload /*false*/)
     Config.MainConfig.tryGetInt("Server", "MapUnloadTime", &server.mapUnloadTime);
     if (server.mapUnloadTime == 0)
     {
-        sLogger.failure("MapUnloadTime is set to 0. This will NEVER unload MapCells!!! Overriding it to default value of %u", MAP_CELL_DEFAULT_UNLOAD_TIME);
+        sLogger.failure("MapUnloadTime is set to 0. This will NEVER unload MapCells!!! Overriding it to default value of {}", MAP_CELL_DEFAULT_UNLOAD_TIME);
         server.mapUnloadTime = MAP_CELL_DEFAULT_UNLOAD_TIME;
     }
     Config.MainConfig.tryGetInt("Server", "MapCellNumber", &server.mapCellNumber);

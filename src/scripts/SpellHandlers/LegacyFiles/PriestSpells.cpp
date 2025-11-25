@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2011 ArcEmu Team <http://www.ArcEmu.org/>
  *
@@ -18,18 +18,19 @@
  */
 
 #include "Setup.h"
-#include "Management/Faction.h"
-#include "Spell/SpellAuras.h"
-#include "Server/Script/ScriptMgr.h"
-#include "Spell/Definitions/ProcFlags.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
 
 bool Penance(uint8_t /*effectIndex*/, Spell* pSpell)
 {
     if (!pSpell->getPlayerCaster() || !pSpell->getPlayerCaster()->isAlive() ||
-        !pSpell->GetUnitTarget() || !pSpell->GetUnitTarget()->isAlive())
+        !pSpell->getUnitTarget() || !pSpell->getUnitTarget()->isAlive())
         return true;
 
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
     Player* player = pSpell->getPlayerCaster();
 
     // index 0 contains the spell for the first tick, index 1 is the peroidic cast spell.
@@ -68,7 +69,7 @@ bool Penance(uint8_t /*effectIndex*/, Spell* pSpell)
             break;
     }
 
-    if (isAttackable(player, target))   // Do holy damage
+    if (player->isValidAttackableTarget(target))   // Do holy damage
     {
         // First tick is instant.
         player->castSpell(target, hostileSpell[0], true);
@@ -88,7 +89,7 @@ bool PainAndSufferingProc(uint8_t /*effectIndex*/, Spell* pSpell)
     if (caster == NULL)
         return true;
 
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
     if (target == NULL)
         return true;
 

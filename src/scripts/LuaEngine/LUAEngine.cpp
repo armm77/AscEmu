@@ -1,30 +1,40 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
+
+#include "LUAEngine.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Server/Script/ScriptSetup.hpp"
+#include "Server/World.h"
+#include "LuaMacros.h"
+#include "Objects/GameObjectProperties.hpp"
+#include "Server/ServerState.h"
+#include "Server/Script/GameObjectAIScript.hpp"
+#include "Management/Guild/Guild.hpp"
+#include "Server/Master.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Objects/GameObject.h"
+#include "Management/ArenaTeam.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Management/QuestLogEntry.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Management/MapMgr.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Server/Script/QuestScript.hpp"
+#include "Management/QuestProperties.hpp"
+#include "Objects/Item.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "CommonFilesystem.hpp"
 
 #ifdef __APPLE__
 #undef check
 #endif
 
-#include <Objects/GameObject.h>
-#include <Management/Guild/Guild.hpp>
-#include <Spell/Spell.h>
-#include <Objects/Units/Creatures/Creature.h>
-#include "LUAEngine.h"
-#include "Map/Management/MapMgr.hpp"
-#include "Server/Script/ScriptSetup.h"
-#include <WorldConf.h>
-
 #ifndef _WIN32
 #include <dirent.h>
 #endif
-#include "Management/QuestLogEntry.hpp"
-#include "Objects/Item.hpp"
-#include "Management/ArenaTeam.hpp"
-#include "LuaMacros.h"
-#include "LuaHelpers.h"
-#include "Server/Script/CreatureAIScript.h"
 
 ScriptMgr* m_scriptMgr = nullptr;
 
@@ -127,8 +137,7 @@ void LuaEngine::LoadScripts()
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-// FUNCTION CALL METHODS
-
+// Function call methods
 void LuaEngine::BeginCall(uint16_t fReference)
 {
     lua_settop(lu, 0); //stack should be empty
@@ -168,8 +177,84 @@ void LuaEngine::EndCall(uint8_t res)
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-// PUSH METHODS
+// Wrappers
+Unit* LuaEngine::CheckUnit(lua_State* L, int narg)
+{
+    if (L == nullptr)
+        return ArcLuna<Unit>::check(lu, narg);
+    return ArcLuna<Unit>::check(L, narg);
+}
 
+GameObject* LuaEngine::CheckGo(lua_State* L, int narg)
+{
+    if (L == nullptr)
+        return ArcLuna<GameObject>::check(lu, narg);
+    return ArcLuna<GameObject>::check(L, narg);
+}
+
+Item* LuaEngine::CheckItem(lua_State* L, int narg)
+{
+    if (L == nullptr)
+        return ArcLuna<Item>::check(lu, narg);
+    return ArcLuna<Item>::check(L, narg);
+}
+
+WorldPacket* LuaEngine::CheckPacket(lua_State* L, int narg)
+{
+    if (L == nullptr)
+        return ArcLuna<WorldPacket>::check(lu, narg);
+    return ArcLuna<WorldPacket>::check(L, narg);
+}
+
+uint64_t LuaEngine::CheckGuid(lua_State* L, int narg)
+{
+    if (L == nullptr)
+        return GUID_MGR::check(lu, narg);
+    return GUID_MGR::check(L, narg);
+}
+
+Object* LuaEngine::CheckObject(lua_State* L, int narg)
+{
+    if (L == nullptr)
+        return ArcLuna<Object>::check(lu, narg);
+    return ArcLuna<Object>::check(L, narg);
+}
+
+TaxiPath* LuaEngine::CheckTaxiPath(lua_State* L, int narg)
+{
+    if (L == nullptr)
+        return ArcLuna<TaxiPath>::check(lu, narg);
+    return ArcLuna<TaxiPath>::check(L, narg);
+}
+
+Spell* LuaEngine::CheckSpell(lua_State* L, int narg)
+{
+    if (L == nullptr)
+        return ArcLuna<Spell>::check(lu, narg);
+    return ArcLuna<Spell>::check(L, narg);
+}
+
+Aura* LuaEngine::CheckAura(lua_State* L, int narg)
+{
+    if (L == nullptr)
+        return ArcLuna<Aura>::check(lu, narg);
+    return ArcLuna<Aura>::check(L, narg);
+}
+bool LuaEngine::CheckBool(lua_State* L, int narg)
+{
+    // first try with bool type
+    if (lua_isboolean(L, narg))
+        return lua_toboolean(L, narg) > 0;
+
+    // then try with integer type
+    if (lua_isnumber(L, narg))
+        return lua_tonumber(L, narg) > 0;
+    // then return true by default
+    return true;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Push methods
 void LuaEngine::PushUnit(Object* unit, lua_State* L)
 {
     Unit* pUnit = nullptr;
@@ -262,9 +347,119 @@ void LuaEngine::PushAura(Aura* aura, lua_State* L)
         ArcLuna<Aura>::push(L, aura);
 }
 
-/*******************************************************************************
-END PUSH METHODS
-*******************************************************************************/
+void LuaEngine::PUSH_BOOL(bool bewl)
+    {
+        if (bewl)
+            lua_pushboolean(lu, 1);
+        else
+            lua_pushboolean(lu, 0);
+    }
+
+void LuaEngine::PUSH_NIL(lua_State* L)
+{
+    if (L == nullptr)
+        lua_pushnil(lu);
+    else
+        lua_pushnil(L);
+}
+
+void LuaEngine::PUSH_INT(int32_t value)
+{
+    lua_pushinteger(lu, value);
+}
+
+void LuaEngine::PUSH_UINT(uint32_t value)
+{
+    lua_pushnumber(lu, value);
+}
+
+void LuaEngine::PUSH_FLOAT(float value)
+{
+    lua_pushnumber(lu, value);
+}
+
+void LuaEngine::PUSH_STRING(const char* str)
+{
+    lua_pushstring(lu, str);
+}
+
+std::mutex& LuaEngine::getLock() { return call_lock; }
+std::mutex& LuaEngine::getcoLock() { return co_lock; }
+lua_State* LuaEngine::getluState() { return lu; }
+
+LuaObjectBinding* LuaEngine::getUnitBinding(uint32_t Id)
+{
+    auto itr = m_unitBinding.find(Id);
+    return itr == m_unitBinding.end() ? nullptr : &itr->second;
+}
+LuaObjectBinding* LuaEngine::getQuestBinding(uint32_t Id)
+{
+    auto itr = m_questBinding.find(Id);
+    return itr == m_questBinding.end() ? nullptr : &itr->second;
+}
+LuaObjectBinding* LuaEngine::getGameObjectBinding(uint32_t Id)
+{
+    auto itr = m_gameobjectBinding.find(Id);
+    return itr == m_gameobjectBinding.end() ? nullptr : &itr->second;
+}
+LuaObjectBinding* LuaEngine::getInstanceBinding(uint32_t Id)
+{
+    auto itr = m_instanceBinding.find(Id);
+    return itr == m_instanceBinding.end() ? nullptr : &itr->second;
+}
+LuaObjectBinding* LuaEngine::getLuaUnitGossipBinding(uint32_t Id)
+{
+    auto itr = m_unit_gossipBinding.find(Id);
+    return itr == m_unit_gossipBinding.end() ? nullptr : &itr->second;
+}
+LuaObjectBinding* LuaEngine::getLuaItemGossipBinding(uint32_t Id)
+{
+    auto itr = m_item_gossipBinding.find(Id);
+    return itr == m_item_gossipBinding.end() ? nullptr : &itr->second;
+}
+LuaObjectBinding* LuaEngine::getLuaGOGossipBinding(uint32_t Id)
+{
+    auto itr = m_go_gossipBinding.find(Id);
+    return itr == m_go_gossipBinding.end() ? nullptr : &itr->second;
+}
+LuaQuest* LuaEngine::getLuaQuest(uint32_t id)
+{
+    const auto itr = m_qAIScripts.find(id);
+    return itr == m_qAIScripts.end() ? nullptr : itr->second;
+}
+/*int LuaEngine::getPendingThread(lua_State * threadtosearch) {
+    set<lua_State*>::iterator itr = m_pendingThreads.find(threadtosearch);
+    return (itr == m_pendingThreads.end())? nullptr : (*itr);
+}*/
+LuaGossip* LuaEngine::getUnitGossipInterface(uint32_t id)
+{
+    const auto itr = m_unitgAIScripts.find(id);
+    return itr == m_unitgAIScripts.end() ? nullptr : itr->second;
+}
+LuaGossip* LuaEngine::getItemGossipInterface(uint32_t id)
+{
+    const auto itr = m_itemgAIScripts.find(id);
+    return itr == m_itemgAIScripts.end() ? nullptr : itr->second;
+}
+LuaGossip* LuaEngine::getGameObjectGossipInterface(uint32_t id)
+{
+    const auto itr = m_gogAIScripts.find(id);
+    return itr == m_gogAIScripts.end() ? nullptr : itr->second;
+}
+
+std::multimap<uint32_t, LuaCreature*>& LuaEngine::getLuCreatureMap() { return m_cAIScripts; }
+std::multimap<uint32_t, LuaGameObjectScript*>& LuaEngine::getLuGameObjectMap() { return m_gAIScripts; }
+std::unordered_map<uint32_t, LuaQuest*>& LuaEngine::getLuQuestMap() { return m_qAIScripts; }
+std::unordered_map<uint32_t, LuaInstance*>& LuaEngine::getLuInstanceMap() { return m_iAIScripts; }
+std::unordered_map<uint32_t, LuaGossip*>& LuaEngine::getUnitGossipInterfaceMap() { return m_unitgAIScripts; }
+std::unordered_map<uint32_t, LuaGossip*>& LuaEngine::getItemGossipInterfaceMap() { return m_itemgAIScripts; }
+std::unordered_map<uint32_t, LuaGossip*>& LuaEngine::getGameObjectGossipInterfaceMap() { return m_gogAIScripts; }
+std::set<int>& LuaEngine::getThreadRefs() { return m_pendingThreads; }
+std::set<int>& LuaEngine::getFunctionRefs() { return m_functionRefs; }
+std::map<uint64_t, std::set<int>>& LuaEngine::getObjectFunctionRefs() { return m_objectFunctionRefs; }
+
+// End push methods
+//////////////////////////////////////////////////////////////////////////////////////////
 
 void LuaEngine::HyperCallFunction(const char* FuncName, int ref)  //hyper as in hypersniper :3
 {
@@ -366,9 +561,9 @@ static int CreateLuaEvent(lua_State* L)
     {
         lua_settop(L, 1);
         int functionRef = luaL_ref(L, LUA_REGISTRYINDEX);
-        TimedEvent* ev = TimedEvent::Allocate(&sWorld, new CallbackP1<LuaEngine, int>(LuaGlobal::instance()->luaEngine().get(), &LuaEngine::CallFunctionByReference, functionRef), 0, delay, repeats);
+        auto ev = TimedEvent::Allocate(&sWorld, std::make_unique<CallbackP1<LuaEngine, int>>(LuaGlobal::instance()->luaEngine().get(), &LuaEngine::CallFunctionByReference, functionRef), 0, delay, repeats);
         ev->eventType = LUA_EVENTS_END + functionRef; //Create custom reference by adding the ref number to the max lua event type to get a unique reference for every function.
-        sWorld.event_AddEvent(ev);
+        sWorld.event_AddEvent(std::move(ev));
         LuaGlobal::instance()->luaEngine()->getFunctionRefs().insert(functionRef);
         lua_pushinteger(L, functionRef);
     }
@@ -712,8 +907,8 @@ static int SuspendLuaThread(lua_State* L)
     if (ref == LUA_REFNIL || ref == LUA_NOREF)
         return luaL_error(L, "Error in SuspendLuaThread! Failed to create a valid reference.");
 
-    TimedEvent* evt = TimedEvent::Allocate(thread, new CallbackP1<LuaEngine, int>(LuaGlobal::instance()->luaEngine().get(), &LuaEngine::ResumeLuaThread, ref), 0, waitime, 1);
-    sWorld.event_AddEvent(evt);
+    auto evt = TimedEvent::Allocate(thread, std::make_unique<CallbackP1<LuaEngine, int>>(LuaGlobal::instance()->luaEngine().get(), &LuaEngine::ResumeLuaThread, ref), 0, waitime, 1);
+    sWorld.event_AddEvent(std::move(evt));
     lua_remove(L, 1); // remove thread object
     lua_remove(L, 1); // remove timer.
                       //All that remains now are the extra arguments passed to this function.
@@ -748,16 +943,14 @@ static int RegisterTimedEvent(lua_State* L)  //in this case, L == lu
         return luaL_error(L, "Error in RegisterTimedEvent! Failed to create a valid reference.");
     }
 
-    TimedEvent* te = TimedEvent::Allocate(LuaGlobal::instance()->luaEngine().get(), new CallbackP2<LuaEngine, const char*, int>(LuaGlobal::instance()->luaEngine().get(), &LuaEngine::HyperCallFunction, funcName, ref), EVENT_LUA_TIMED, delay, repeats);
-    EventInfoHolder* ek = new EventInfoHolder;
+    auto te = TimedEvent::Allocate(LuaGlobal::instance()->luaEngine().get(), std::make_unique<CallbackP2<LuaEngine, const char*, int>>(LuaGlobal::instance()->luaEngine().get(), &LuaEngine::HyperCallFunction, funcName, ref), EVENT_LUA_TIMED, delay, repeats);
+    auto ek = std::make_unique<EventInfoHolder>();
     ek->funcName = funcName;
     ek->te = te;
-    LuaGlobal::instance()->luaEngine()->m_registeredTimedEvents.insert(std::pair<int, EventInfoHolder*>(ref, ek));
-    LuaGlobal::instance()->luaEngine()->LuaEventMgr.event_AddEvent(te);
+    LuaGlobal::instance()->luaEngine()->m_registeredTimedEvents.try_emplace(ref, std::move(ek));
+    LuaGlobal::instance()->luaEngine()->LuaEventMgr.event_AddEvent(std::move(te));
     lua_settop(L, 0);
     lua_pushnumber(L, ref);
-    delete ek;
-    free((void*)funcName);
     return 1;
 }
 
@@ -1630,11 +1823,11 @@ public:
 
         RELEASE_LOCK
         uint32_t iid = getCreature()->GetInstanceID();
-        if (getCreature()->getWorldMap() == nullptr || getCreature()->getWorldMap()->getBaseMap()->getMapInfo()->isNonInstanceMap())
+        if (getCreature()->getWorldMap() == nullptr || getCreature()->getWorldMap()->getBaseMap()->isWorldMap())
             iid = 0;
 
         WoWGuid wowGuid;
-        wowGuid.Init(getCreature()->getGuid());
+        wowGuid.init(getCreature()->getGuid());
 
         LuaGlobal::instance()->m_onLoadInfo.push_back(getCreature()->GetMapId());
         LuaGlobal::instance()->m_onLoadInfo.push_back(iid);
@@ -2962,7 +3155,7 @@ void LuaEngine::Restart()
 {
     DLLLogDetail("LuaEngineMgr : Restarting Engine.");
     GET_LOCK
-    getcoLock().Acquire();
+    getcoLock().lock();
     Unload();
     lu = luaL_newstate();
     LoadScripts();
@@ -3151,7 +3344,7 @@ void LuaEngine::Restart()
         }
     }
     RELEASE_LOCK
-    getcoLock().Release();
+    getcoLock().unlock();
 
     //hyper: do OnSpawns for spawned creatures.
     std::vector<uint32_t> temp = LuaGlobal::instance()->m_onLoadInfo;
@@ -3185,7 +3378,7 @@ void LuaEngine::Restart()
 
 void LuaEngine::ResumeLuaThread(int ref)
 {
-    getcoLock().Acquire();
+    getcoLock().lock();
     lua_State* expectedThread = nullptr;
     lua_rawgeti(lu, LUA_REGISTRYINDEX, ref);
     if (lua_isthread(lu, -1))
@@ -3210,10 +3403,5 @@ void LuaEngine::ResumeLuaThread(int ref)
         }
         luaL_unref(lu, LUA_REGISTRYINDEX, ref);
     }
-    getcoLock().Release();
+    getcoLock().unlock();
 }
-
-//I know its not a good idea to do it like that BUT it is the easiest way. I will make it better in steps:
-#include "LUAFunctions.h"
-#include "FunctionTables.h"
-

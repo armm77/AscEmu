@@ -1,14 +1,19 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Management/WeatherMgr.hpp"
-#include "Server/MainServerDefines.h"
+
+#include "Logging/Logger.hpp"
 #include "Server/WorldSession.h"
 #include "Server/World.h"
 #include "Objects/Units/Players/Player.hpp"
+#include "Server/DatabaseDefinition.hpp"
+#include "Server/EventMgr.h"
 #include "Server/Packets/SmsgWeather.h"
+#include "Utilities/Random.hpp"
+#include "Utilities/Util.hpp"
 
 enum WeatherTypes
 {
@@ -86,43 +91,38 @@ WeatherMgr& WeatherMgr::getInstance()
 
 void WeatherMgr::finalize()
 {
-    for (auto& m_zoneWeather : m_zoneWeathers)
-        delete m_zoneWeather.second;
-
     m_zoneWeathers.clear();
 }
 
 void WeatherMgr::loadFromDB()
 {
     sLogger.info("Loading Weather...");
-    QueryResult* result = WorldDatabase.Query("SELECT zoneId,high_chance,high_type,med_chance,med_type,low_chance,low_type FROM weather");
+    auto result = WorldDatabase.Query("SELECT zoneId,high_chance,high_type,med_chance,med_type,low_chance,low_type FROM weather");
     if (!result)
         return;
 
     do
     {
         Field* fields = result->Fetch();
-        WeatherInfo* weatherInfo = new WeatherInfo;
-        weatherInfo->m_zoneId = fields[0].GetUInt32();
-        weatherInfo->m_effectValues[0] = fields[1].GetUInt32();  // high_chance
-        weatherInfo->m_effectValues[1] = fields[2].GetUInt32();  // high_type
-        weatherInfo->m_effectValues[2] = fields[3].GetUInt32();  // med_chance
-        weatherInfo->m_effectValues[3] = fields[4].GetUInt32();  // med_type
-        weatherInfo->m_effectValues[4] = fields[5].GetUInt32();  // low_chance
-        weatherInfo->m_effectValues[5] = fields[6].GetUInt32();  // low_type
-        m_zoneWeathers[weatherInfo->m_zoneId] = weatherInfo;
+        auto weatherInfo = std::make_unique<WeatherInfo>();
+        weatherInfo->m_zoneId = fields[0].asUint32();
+        weatherInfo->m_effectValues[0] = fields[1].asUint32();  // high_chance
+        weatherInfo->m_effectValues[1] = fields[2].asUint32();  // high_type
+        weatherInfo->m_effectValues[2] = fields[3].asUint32();  // med_chance
+        weatherInfo->m_effectValues[3] = fields[4].asUint32();  // med_type
+        weatherInfo->m_effectValues[4] = fields[5].asUint32();  // low_chance
+        weatherInfo->m_effectValues[5] = fields[6].asUint32();  // low_type
+        const auto [itr, _] = m_zoneWeathers.try_emplace(fields[0].asUint32(), std::move(weatherInfo));
 
-        weatherInfo->_generateWeather();
+        itr->second->_generateWeather();
     }
     while (result->NextRow());
-    sLogger.info("WeatherMgr : Loaded weather information for %u zones.", result->GetRowCount());
-
-    delete result;
+    sLogger.info("WeatherMgr : Loaded weather information for {} zones.", result->GetRowCount());
 }
 
 void WeatherMgr::sendWeather(Player* plr)
 {
-    auto zoneWeatherItr = m_zoneWeathers.find(plr->GetZoneId());
+    auto zoneWeatherItr = m_zoneWeathers.find(plr->getZoneId());
     if (zoneWeatherItr == m_zoneWeathers.end())
     {
         plr->getSession()->SendPacket(AscEmu::Packets::SmsgWeather(0, 0, 0).serialise().get());
@@ -186,7 +186,7 @@ void WeatherInfo::_generateWeather()
     sendUpdate();
 
     sEventMgr.AddEvent(this, &WeatherInfo::buildUp, EVENT_WEATHER_UPDATE, static_cast<uint32_t>(m_totalTime / ceil(m_maxDensity / m_densityUpdate) * 2), 0, 0);
-    sLogger.debugFlag(AscEmu::Logging::LF_MAP, "Forecast for zone:%d new type:%d new interval:%d ms", m_zoneId, m_currentEffect, static_cast<uint32_t>(m_totalTime / ceil(m_maxDensity / m_densityUpdate) * 2));
+    sLogger.debugFlag(AscEmu::Logging::LF_MAP, "Forecast for zone:{} new type:{} new interval:{} ms", m_zoneId, m_currentEffect, static_cast<uint32_t>(m_totalTime / ceil(m_maxDensity / m_densityUpdate) * 2));
 }
 
 void WeatherInfo::buildUp()

@@ -1,12 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Instance_Arcatraz.h"
-#include "Management/Faction.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Utilities/Random.hpp"
 
 class ArcatrazInstanceScript : public InstanceScript
 {
@@ -30,7 +34,7 @@ public:
         SpeechTimer = 0;
         VoidTimer = 0;
 
-        if (!_isHeroic())
+        if (!isHeroic())
             addAISpell(SHADOW_NOVA, 15.0f, TARGET_SELF, 2, 15);
         else
             addAISpell(SHADOW_NOVA_H, 15.0f, TARGET_SELF, 2, 15);
@@ -93,7 +97,7 @@ public:
                 continue;
 
             Player* RandomTarget = static_cast<Player*>(itr);
-            if (RandomTarget->isAlive() && isHostile(itr, getCreature()))
+            if (RandomTarget->isAlive() && itr->isHostileTo(getCreature()))
                 TargetTable.push_back(RandomTarget);
         }
 
@@ -152,7 +156,7 @@ public:
     {
         // M4ksiu: I'm not sure if it should be cast once, on start
         uint32_t SpellId = CONSUMPTION;
-        if (_isHeroic())
+        if (isHeroic())
             SpellId = CONSUMPTION_H;
 
         getCreature()->castSpell(getCreature(), SpellId, true);
@@ -178,7 +182,7 @@ public:
         healTemp->addEmote("That is much better.", CHAT_MSG_MONSTER_YELL, 11091);
         healTemp->addEmote("Ah, just what I needed.", CHAT_MSG_MONSTER_YELL, 11092);
 
-        if (_isHeroic())
+        if (isHeroic())
             addAISpell(SHADOW_WAVE, 8.0f, TARGET_ATTACKING);
 
         addEmoteForEvent(Event_OnCombatStart, 7368);    // It is unwise to anger me!

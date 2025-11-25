@@ -1,11 +1,12 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
 #include <memory>
+
 #include "Threading/AEThread.h"
 
 class BroadcastMgr
@@ -14,6 +15,7 @@ class BroadcastMgr
     void threadRunner(AscEmu::Threading::AEThread& thread);
     void threadInit();
     void sendBroadcast();
+
 public:
     BroadcastMgr();
     ~BroadcastMgr();

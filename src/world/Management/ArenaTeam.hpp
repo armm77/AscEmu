@@ -1,17 +1,26 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
+#include <string>
+#include <vector>
+#include <memory>
+
+#include "CommonTypes.hpp"
+#include <Utilities/utf8.hpp>
+
 class CachedCharacterInfo;
+class Field;
+class WorldPacket;
 
 struct ArenaTeamPacketList
 {
     uint64_t guid;
     uint8_t isLoggedIn;
-    std::string name;
+    utf8_string name;
     uint32_t isLeader;
     uint8_t lastLevel;
     uint8_t cl;
@@ -25,7 +34,7 @@ struct ArenaTeamPacketList
 
 struct ArenaTeamMember
 {
-    CachedCharacterInfo* Info;
+    CachedCharacterInfo const* Info;
     uint32_t Played_ThisWeek;
     uint32_t Won_ThisWeek;
     uint32_t Played_ThisSeason;
@@ -64,16 +73,16 @@ public:
     void destroy();
     void sendPacket(WorldPacket* data) const;
 
-    ArenaTeamMember* getMember(CachedCharacterInfo* cachedCharInfo) const;
+    ArenaTeamMember* getMember(CachedCharacterInfo const* cachedCharInfo) const;
     ArenaTeamMember* getMemberByGuid(uint32_t lowGuid) const;
-    bool addMember(CachedCharacterInfo* cachedCharInfo);
-    bool removeMember(CachedCharacterInfo* cachedCharInfo);
+    bool addMember(CachedCharacterInfo const* cachedCharInfo);
+    bool removeMember(CachedCharacterInfo const* cachedCharInfo);
 
     uint32_t getPlayersPerTeam() const;
 
     bool isMember(uint32_t lowGuid) const;
 
-    void setLeader(CachedCharacterInfo* cachedCharInfo);
+    void setLeader(CachedCharacterInfo const* cachedCharInfo);
 
     std::vector<ArenaTeamPacketList> getRoosterMembers() const;
 
@@ -84,7 +93,7 @@ public:
     std::string m_name;
     uint32_t m_memberCount;
 
-    ArenaTeamMember* m_members;
+    std::unique_ptr<ArenaTeamMember[]> m_members;
     ArenaTeamEmblem m_emblem;
     ArenaTeamStats m_stats;
 

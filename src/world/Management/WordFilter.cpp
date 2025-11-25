@@ -1,14 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Management/WordFilter.h"
-
+#include "Management/WordFilter.hpp"
 #include "Storage/MySQLDataStore.hpp"
 #include "Storage/MySQLStructures.h"
 
-WordFilter* g_chatFilter;
+std::unique_ptr<WordFilter> g_chatFilter;
 
 WordFilter::WordFilter() {}
 

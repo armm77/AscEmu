@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,12 +16,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+
 #pragma once
 
 #include <array>
 #include <map>
+#include <memory>
 #include <string>
 
+#include "Objects/ItemDefines.hpp"
+
+class Field;
 class WorldPacket;
 class QueryBuffer;
 class QueryResult;
@@ -34,24 +39,16 @@ namespace Arcemu
     //////////////////////////////////////////////////////////////////////////////////////////
     struct EquipmentSet
     {
-        uint32_t SetGUID;
-        uint32_t SetID;
+        uint32_t SetGUID = 0;
+        uint32_t SetID = 0;
         std::string SetName;
         std::string IconName;
-        std::array<uint32_t, 19> ItemGUID;
+        std::array<uint32_t, EQUIPMENT_SLOT_END> ItemGUID = {};
 
-        EquipmentSet()
-        {
-            SetGUID = 0;
-            SetID = 0;
-            SetName = "";
-            IconName = "";
+        EquipmentSet() = default;
 
-            for (uint32_t i = 0; i < ItemGUID.size(); ++i)
-                ItemGUID[i] = 0;
-        }
+        EquipmentSet(Field const* fields);
     };
-
 
     //////////////////////////////////////////////////////////////////////////////////////////
     /// \note EquipmentSetStorage   - Storage for world of warcraft equipment set structures
@@ -60,7 +57,7 @@ namespace Arcemu
     /// Value   - EquipmentSet*  - pointer to an EquipmentSet structure
     ///
     //////////////////////////////////////////////////////////////////////////////////////////
-    typedef std::map<uint32_t, EquipmentSet*> EquipmentSetStorage;
+    typedef std::map<uint32_t, std::unique_ptr<EquipmentSet>> EquipmentSetStorage;
 
 
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +69,6 @@ namespace Arcemu
     class EquipmentSetMgr
     {
         public:
-
             EquipmentSetMgr() { ownerGUID = 1; }
             EquipmentSetMgr(uint32_t ownerGUID) { this->ownerGUID = ownerGUID; }
             ~EquipmentSetMgr();
@@ -97,7 +93,7 @@ namespace Arcemu
             /// \returns true on success, false on failure.
             ///
             //////////////////////////////////////////////////////////////////////////////////////////
-            bool AddEquipmentSet(uint32_t setGUID, EquipmentSet* set);
+            bool AddEquipmentSet(uint32_t setGUID, std::unique_ptr<EquipmentSet> set);
 
 
             //////////////////////////////////////////////////////////////////////////////////////////
@@ -144,7 +140,6 @@ namespace Arcemu
             void FillEquipmentSetListPacket(WorldPacket & data);
 
         private:
-
             EquipmentSetMgr(EquipmentSetMgr & /*other*/) {}
             EquipmentSetMgr & operator=(EquipmentSetMgr & /*other*/) { return *this; }
 

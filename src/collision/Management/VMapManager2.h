@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,11 +20,11 @@
 #ifndef _VMAPMANAGER2_H
 #define _VMAPMANAGER2_H
 
+#include "IVMapManager.h"
 #include <mutex>
 #include <unordered_map>
 #include <vector>
-#include "Common.hpp"
-#include "IVMapManager.h"
+#include <memory>
 
 //===========================================================
 
@@ -55,17 +55,17 @@ namespace VMAP
     class ManagedModel
     {
         public:
-            ManagedModel() : iModel(nullptr), iRefCount(0) { }
-            void setModel(WorldModel* model) { iModel = model; }
-            WorldModel* getModel() { return iModel; }
+            ManagedModel();
+            void setModel(std::unique_ptr<WorldModel> model);
+            WorldModel* getModel() { return iModel.get(); }
             void incRefCount() { ++iRefCount; }
             int decRefCount() { return --iRefCount; }
         protected:
-            WorldModel* iModel;
+            std::unique_ptr<WorldModel> iModel;
             int iRefCount;
     };
 
-    typedef std::unordered_map<uint32, StaticMapTree*> InstanceTreeMap;
+    typedef std::unordered_map<uint32_t, std::unique_ptr<StaticMapTree>> InstanceTreeMap;
     typedef std::unordered_map<std::string, ManagedModel> ModelFileMap;
 
     enum DisableTypes
@@ -86,13 +86,13 @@ namespace VMAP
             // Mutex for iLoadedModelFiles
             std::mutex LoadedModelFilesLock;
 
-            bool _loadMap(uint32 mapId, const std::string& basePath, uint32 tileX, uint32 tileY);
-            /* void _unloadMap(uint32 pMapId, uint32 x, uint32 y); */
+            bool _loadMap(uint32_t mapId, const std::string& basePath, uint32_t tileX, uint32_t tileY);
+            /* void _unloadMap(uint32_t pMapId, uint32_t x, uint32_t y); */
 
-            static uint32 GetLiquidFlagsDummy(uint32) { return 0; }
-            static bool IsVMAPDisabledForDummy(uint32 /*entry*/, uint8 /*flags*/) { return false; }
+            static uint32_t GetLiquidFlagsDummy(uint32_t) { return 0; }
+            static bool IsVMAPDisabledForDummy(uint32_t /*entry*/, uint8_t /*flags*/) { return false; }
 
-            InstanceTreeMap::const_iterator GetMapTree(uint32 mapId) const;
+            InstanceTreeMap::const_iterator GetMapTree(uint32_t mapId) const;
 
         public:
             // public for debug
@@ -102,7 +102,7 @@ namespace VMAP
             VMapManager2();
             ~VMapManager2(void);
 
-            void InitializeThreadUnsafe(const std::vector<uint32>& mapIds);
+            void InitializeThreadUnsafe(const std::vector<uint32_t>& mapIds);
             int loadMap(const char* pBasePath, unsigned int mapId, int x, int y) override;
 
             void unloadMap(unsigned int mapId, int x, int y) override;
@@ -117,7 +117,7 @@ namespace VMAP
 
             bool processCommand(char* /*command*/) override { return false; } // for debug and extensions
 
-            bool getAreaInfo(unsigned int pMapId, float x, float y, float& z, uint32& flags, int32& adtId, int32& rootId, int32& groupId) const override;
+            bool getAreaInfo(unsigned int pMapId, float x, float y, float& z, uint32_t& flags, int32_t& adtId, int32_t& rootId, int32_t& groupId) const override;
             bool getLiquidLevel(uint32_t pMapId, float x, float y, float z, uint8_t reqLiquidType, float& level, float& floor, uint32_t& type, uint32_t& mogpFlags) const override;
             void getAreaAndLiquidData(uint32_t mapId, float x, float y, float z, uint8_t reqLiquidType, AreaAndLiquidData& data) const override;
 
@@ -131,12 +131,12 @@ namespace VMAP
             }
             virtual bool existsMap(const char* basePath, unsigned int mapId, int x, int y) override;
 
-            void getInstanceMapTree(InstanceTreeMap &instanceMapTree);
+            InstanceTreeMap const& getInstanceMapTree() const;
 
-            typedef uint32(*GetLiquidFlagsFn)(uint32 liquidType);
+            typedef uint32_t(*GetLiquidFlagsFn)(uint32_t liquidType);
             GetLiquidFlagsFn GetLiquidFlagsPtr;
 
-            typedef bool(*IsVMAPDisabledForFn)(uint32 entry, uint8 flags);
+            typedef bool(*IsVMAPDisabledForFn)(uint32_t entry, uint8_t flags);
             IsVMAPDisabledForFn IsVMAPDisabledForPtr;
     };
 }

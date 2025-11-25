@@ -1,4 +1,5 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
+include_guard(GLOBAL)
 
 # get architecture type and set architecture identifier
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -7,7 +8,7 @@ if (CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(STATUS "Detected system: ${CMAKE_SYSTEM_NAME} ${CMAKE_GENERATOR_PLATFORM} (${CMAKE_SYSTEM_PROCESSOR})")
 else ()
     set(IS_64BIT FALSE)
-    set(AE_ARCHITECTURE "x84 (${CMAKE_SYSTEM_PROCESSOR})")
+    set(AE_ARCHITECTURE "x86 (${CMAKE_SYSTEM_PROCESSOR})")
     message(STATUS "Detected system: ${CMAKE_SYSTEM_NAME} ${CMAKE_GENERATOR_PLATFORM} (${CMAKE_SYSTEM_PROCESSOR})")
 endif ()
 

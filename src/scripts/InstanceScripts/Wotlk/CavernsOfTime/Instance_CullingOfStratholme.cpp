@@ -1,11 +1,20 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Setup.h"
 #include "Instance_CullingOfStratholme.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Setup.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Map/Maps/MapScriptInterface.h"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Server/Script/QuestScript.hpp"
+#include "Storage/MySQLDataStore.hpp"
 
 class CullingOfStratholmeInstanceScript : public InstanceScript
 {
@@ -20,7 +29,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new MeathookAI(c); }
     explicit MeathookAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
         {
             // ConstrictingChains
             addAISpell(58823, 100.0f, TARGET_RANDOM_SINGLE, 0, 8);
@@ -59,7 +68,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new SalramTheFleshcrafterAI(c); }
     explicit SalramTheFleshcrafterAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
         {
             // shadowBolt
             addAISpell(58827, 50.0f, TARGET_RANDOM_SINGLE, 0, 4);
@@ -107,7 +116,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new ChronoLordEpochAI(c); }
     explicit ChronoLordEpochAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
         {
             // WoundingStrike
             addAISpell(58830, 50.0f, TARGET_ATTACKING, 0, 3);
@@ -166,7 +175,7 @@ public:
     static CreatureAIScript* Create(Creature* c) { return new MalganisAI(c); }
     explicit MalganisAI(Creature* pCreature) : CreatureAIScript(pCreature)
     {
-        if (_isHeroic())
+        if (isHeroic())
         {
             // CarrionSwarm
             addAISpell(58852, 60.0f, TARGET_ATTACKING, 0, 10);

@@ -1,14 +1,16 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
-#include "Spell/SpellAuras.h"
+#include "Spell/SpellAura.hpp"
 #include "Objects/Units/Creatures/Pet.h"
+#include "Objects/Units/Players/Player.hpp"
 
 namespace AscEmu::Packets
 {
@@ -44,7 +46,7 @@ namespace AscEmu::Packets
             {
                 packet << player->getGuid();
 
-                auto playerPet = player->getFirstPetFromSummons();
+                auto playerPet = player->getPet();
                 if (playerPet)
                     packet << uint32_t(0x7FFFFFFF);
                 else
@@ -57,7 +59,7 @@ namespace AscEmu::Packets
                 packet << uint16_t(player->getPower(player->getPowerType()));
                 packet << uint16_t(player->getMaxPower(player->getPowerType()));
                 packet << uint16_t(player->getLevel());
-                packet << uint16_t(player->GetZoneId());
+                packet << uint16_t(player->getZoneId());
                 packet << uint16_t(player->GetPositionX());
                 packet << uint16_t(player->GetPositionY());
 
@@ -79,7 +81,7 @@ namespace AscEmu::Packets
                 {
                     const auto petPowerType = playerPet->getPowerType();
                     packet << uint64_t(playerPet->getGuid());
-                    packet << playerPet->GetName();
+                    packet << playerPet->getName();
                     packet << uint16_t(playerPet->getDisplayId());
                     packet << uint32_t(playerPet->getHealth());
                     packet << uint32_t(playerPet->getMaxHealth());

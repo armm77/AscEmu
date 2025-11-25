@@ -1,17 +1,18 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "MovementTypedefs.h"
-#include "Errors.h"
-#include <G3D/Vector3.h>
 #include <limits>
 #include <vector>
 
-namespace MovementNew {
+#include "MovementTypedefs.h"
+#include "Debugging/Errors.h"
+#include <G3D/Vector3.h>
+
+namespace MovementMgr {
 
 class SplineBase
 {
@@ -198,6 +199,6 @@ public:
     void set_length(index_type i, length_type length) { lengths[i] = length;}
     void clear();
 };
-} // namespace MovementNew
+} // namespace MovementMgr
 
 #include "SplineImpl.h"

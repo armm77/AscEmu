@@ -1,20 +1,18 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
 #include "Omor.hpp"
-
 #include "Map/AreaBoundary.hpp"
-#include "Server/Script/CreatureAIScript.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Boss: Omor The Unscarred
 OmorTheUnscarredAI::OmorTheUnscarredAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
     // Boundarys
-    getCreature()->getAIInterface()->addBoundary(new CircleBoundary(getCreature()->GetPosition(), 50.0), true);
+    getCreature()->getAIInterface()->addBoundary(std::make_unique<CircleBoundary>(getCreature()->GetPosition(), 50.0), true);
 
     // All
     m_ShieldSpell = addAISpell(SPELL_DEMONIC_SHIELD, 30.0f, TARGET_SELF, 0, 25);
@@ -24,7 +22,7 @@ OmorTheUnscarredAI::OmorTheUnscarredAI(Creature* pCreature) : CreatureAIScript(p
     m_SummonSpell->addDBEmote(SPELL_SUMMON_FIENDISH_HOUND);
 
     // Normal
-    if (!_isHeroic())
+    if (!isHeroic())
     {
         m_ShadowBoltSpell = addAISpell(SPELL_SHADOW_BOLT, 8.0f, TARGET_RANDOM_SINGLE, 3, 15, false, true);
         m_ShadowBoltSpell->setMinMaxDistance(10.0f, 60.0f);
@@ -35,7 +33,7 @@ OmorTheUnscarredAI::OmorTheUnscarredAI(Creature* pCreature) : CreatureAIScript(p
     }
 
     // Heroic
-    if (_isHeroic())
+    if (isHeroic())
     {
         m_ShadowBoltSpell = addAISpell(SPELL_SHADOW_BOLT_H, 8.0f, TARGET_RANDOM_SINGLE, 3, 15, false, true);
         m_ShadowBoltSpell->setMinMaxDistance(10.0f, 60.0f);

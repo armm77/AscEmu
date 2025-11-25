@@ -1,14 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Movement/Spline/SplineChain.h"
-#include "Movement/MovementGenerator.h"
 #include <vector>
 
+#include "Movement/Spline/SplineChain.h"
+#include "Movement/MovementGenerator.h"
 #include "Movement/MovementDefines.h"
 
 class Unit;
@@ -35,7 +35,7 @@ public:
 
 private:
     void sendSplineFor(Unit* owner, uint32_t index, uint32_t& duration);
-    uint32_t sendPathSpline(Unit* owner, float velocity, MovementNew::PointsArray const& path) const;
+    uint32_t sendPathSpline(Unit* owner, float velocity, MovementMgr::PointsArray const& path) const;
 
     uint32_t const _id;
     std::vector<SplineChainLink> const& _chain;

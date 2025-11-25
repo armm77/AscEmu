@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  * Copyright (C) 2009 WhyScripts Team <http://www.whydb.org/>
@@ -20,6 +20,15 @@
  */
 
 #include "Setup.h"
+#include "Management/QuestMgr.h"
+#include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/WorldSession.h"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Objects/Units/Creatures/Creature.h"
 
 enum
 {

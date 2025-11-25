@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -52,6 +52,6 @@ This file is released under the MIT license. See README-MIT for more information
 #define REGTYPE_GO_GOSSIP (REGTYPE_GO | REGTYPE_GOSSIP)
 #define REGTYPE_ITEM_GOSSIP (REGTYPE_ITEM | REGTYPE_GOSSIP)
 
-#define GET_LOCK LuaGlobal::instance()->luaEngine()->getLock().Acquire();
-#define RELEASE_LOCK LuaGlobal::instance()->luaEngine()->getLock().Release();
+#define GET_LOCK LuaGlobal::instance()->luaEngine()->getLock().lock();
+#define RELEASE_LOCK LuaGlobal::instance()->luaEngine()->getLock().unlock();
 #define CHECK_BINDING_ACQUIRELOCK GET_LOCK if(m_binding == NULL) { RELEASE_LOCK return; }

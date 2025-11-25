@@ -1,18 +1,21 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
-
 
 #include "AddonMgr.h"
 
 #include <zlib.h>
 
 #include "Server/LogonCommClient/LogonCommHandler.h"
-#include "Server/MainServerDefines.h"
-#include "Auth/MD5.h"
-#include <Database/Field.hpp>
-#include <Database/Database.h>
+#include "Cryptography/MD5.hpp"
+#include "Database/Field.hpp"
+#include "Database/Database.h"
+#include "Logging/Logger.hpp"
+#include "Server/DatabaseDefinition.hpp"
+#include "Server/Opcodes.hpp"
+#include "Server/WorldSession.h"
+#include "Storage/WDB/WDBStores.hpp"
 
 //#define DEBUG_PRINT_ADDON_PACKET            // Prints out Received addon packet when char logging in
 
@@ -30,43 +33,38 @@ void AddonMgr::initialize()
 #if VERSION_STRING < Cata
 void AddonMgr::finalize()
 {
-    KnownAddonsItr itr;
-    for (itr = mKnownAddons.begin(); itr != mKnownAddons.end(); ++itr)
-    {
-        delete itr->second;
-    }
     mKnownAddons.clear();
 }
 
-bool AddonMgr::IsAddonBanned(uint64 /*crc*/, std::string name)
+bool AddonMgr::IsAddonBanned(uint64_t /*crc*/, std::string name)
 {
     return false;    // bleh needs work
 }
 
-bool AddonMgr::IsAddonBanned(std::string name, uint64 crc)
+bool AddonMgr::IsAddonBanned(std::string name, uint64_t crc)
 {
     KnownAddonsItr itr = mKnownAddons.find(name);
     if (itr != mKnownAddons.end())
     {
         if (itr->second->banned)
         {
-            sLogger.debug("Addon %s is banned.", name.c_str());
+            sLogger.debug("Addon {} is banned.", name);
             return true;
         }
     }
     else
     {
         // New addon. It'll be saved to db at server shutdown.
-        AddonEntry* ent = new AddonEntry;
+        auto ent = std::make_unique<AddonEntry>();
         ent->name = name;
         ent->crc = crc;
         ent->banned = false;    // by default.. we can change this I guess..
         ent->isNew = true;
         ent->showinlist = true;
 
-        sLogger.debug("Discovered new addon %s sent by client.", name.c_str());
+        sLogger.debug("Discovered new addon {} sent by client.", name);
 
-        mKnownAddons[ent->name] = ent;
+        mKnownAddons.try_emplace(ent->name, std::move(ent));
     }
 
     return false;
@@ -86,26 +84,26 @@ bool AddonMgr::ShouldShowInList(std::string name)
     else
     {
         // New addon. It'll be saved to db at server shutdown.
-        AddonEntry* ent = new AddonEntry;
+        auto ent = std::make_unique<AddonEntry>();
         ent->name = name;
         ent->crc = 0;
         ent->banned = false;    // by default.. we can change this I guess..
         ent->isNew = true;
         ent->showinlist = true;
 
-        sLogger.debug("Discovered new addon %s sent by client.", name.c_str());
+        sLogger.debug("Discovered new addon {} sent by client.", name);
 
-        mKnownAddons[ent->name] = ent;
+        mKnownAddons.try_emplace(ent->name, std::move(ent));
     }
     return true;
 }
 
-void AddonMgr::SendAddonInfoPacket(WorldPacket* source, uint32 /*pos*/, WorldSession* m_session)
+void AddonMgr::SendAddonInfoPacket(WorldPacket* source, uint32_t /*pos*/, WorldSession* m_session)
 {
     WorldPacket returnpacket;
     returnpacket.Initialize(SMSG_ADDON_INFO);    // SMSG_ADDON_INFO
 
-    uint32 realsize;
+    uint32_t realsize;
     uLongf rsize;
 
     try
@@ -131,7 +129,7 @@ void AddonMgr::SendAddonInfoPacket(WorldPacket* source, uint32 /*pos*/, WorldSes
         return;
     }
 
-    int32 result = uncompress(unpacked.contents(), &rsize, (*source).contents() + position, (uLong)((*source).size() - position));
+    int32_t result = uncompress(unpacked.contents(), &rsize, (*source).contents() + position, (uLong)((*source).size() - position));
 
     if (result != Z_OK)
     {
@@ -141,16 +139,16 @@ void AddonMgr::SendAddonInfoPacket(WorldPacket* source, uint32 /*pos*/, WorldSes
 
     sLogger.info("Decompression of addon section of CMSG_AUTH_SESSION succeeded.");
 
-    uint8 Enable; // based on the parsed files from retool
-    uint32 crc;
-    uint32 unknown;
+    uint8_t Enable; // based on the parsed files from retool
+    uint32_t crc;
+    uint32_t unknown;
 
     std::string name;
 
-    uint32 addoncount;
+    uint32_t addoncount;
     unpacked >> addoncount;
 
-    for (uint32 i = 0; i < addoncount; ++i)
+    for (uint32_t i = 0; i < addoncount; ++i)
     {
         if (unpacked.rpos() >= unpacked.size())
             break;
@@ -166,13 +164,13 @@ void AddonMgr::SendAddonInfoPacket(WorldPacket* source, uint32 /*pos*/, WorldSes
         }
         else
         {
-            returnpacket << uint8(2) << uint8_t(1) << uint8_t(0) << uint32_t(0) << uint8_t(0);
+            returnpacket << uint8_t(2) << uint8_t(1) << uint8_t(0) << uint32_t(0) << uint8_t(0);
         }
 
 #if VERSION_STRING == WotLK
-        uint8 unk;
-        uint8 unk1;
-        uint8 unk2;
+        uint8_t unk;
+        uint8_t unk1;
+        uint8_t unk2;
 
         unk = (Enable ? 2 : 1);
         returnpacket << unk;
@@ -182,31 +180,31 @@ void AddonMgr::SendAddonInfoPacket(WorldPacket* source, uint32 /*pos*/, WorldSes
         {
             if (crc != STANDARD_ADDON_CRC)
             {
-                returnpacket << uint8(1);
+                returnpacket << uint8_t(1);
                 returnpacket.append(PublicKey, 264);
             }
             else
-                returnpacket << uint8(0);
+                returnpacket << uint8_t(0);
 
-            returnpacket << uint32(0);
+            returnpacket << uint32_t(0);
         }
 
         unk2 = (Enable ? 0 : 1);
         returnpacket << unk2;
         if (unk2)
-            returnpacket << uint8(0);
+            returnpacket << uint8_t(0);
 #endif
     }
 
     //unknown 4 bytes at the end of the packet. Stays 0 for me. Tried custom addons, deleting, faulty etc. It stays 0.
 #ifndef AE_TBC
-    returnpacket << uint32(0);  //Some additional count for additional records, but we won't send them.
+    returnpacket << uint32_t(0);  //Some additional count for additional records, but we won't send them.
 #endif
 
     m_session->SendPacket(&returnpacket);
 }
 
-bool AddonMgr::AppendPublicKey(WorldPacket & data, std::string & AddonName, uint32 CRC)
+bool AddonMgr::AppendPublicKey(WorldPacket & data, std::string & AddonName, uint32_t CRC)
 {
     if (CRC == STANDARD_ADDON_CRC)
     {
@@ -226,7 +224,7 @@ bool AddonMgr::AppendPublicKey(WorldPacket & data, std::string & AddonName, uint
                 // read the file into a bytebuffer
                 ByteBuffer buf;
                 fseek(f, 0, SEEK_END);
-                uint32 length = 264/*ftell(f)*/;
+                uint32_t length = 264/*ftell(f)*/;
                 fseek(f, 0, SEEK_SET);
                 buf.resize(length);
                 if (fread(buf.contents(), length, 1, f) != 1)
@@ -257,10 +255,10 @@ void AddonMgr::LoadFromDB()
 {
     const char* loadClientAddons = "SELECT id, name, crc, banned, showinlist FROM clientaddons";
     bool success = false;
-    QueryResult* result = CharacterDatabase.Query(&success, loadClientAddons);
+    auto result = CharacterDatabase.Query(&success, loadClientAddons);
     if (!success)
     {
-        sLogger.failure("Query failed: %s", loadClientAddons);
+        sLogger.failure("Query failed: {}", loadClientAddons);
         return;
     }
     if (!result)
@@ -270,28 +268,25 @@ void AddonMgr::LoadFromDB()
     }
 
     Field* field;
-    AddonEntry* ent;
 
     do
     {
         field = result->Fetch();
-        ent = new AddonEntry;
+        auto ent = std::make_unique<AddonEntry>();
 
-        ent->name = field[1].GetString();
-        ent->crc = field[2].GetUInt64();
-        ent->banned = (field[3].GetUInt32() > 0 ? true : false);
+        ent->name = field[1].asCString();
+        ent->crc = field[2].asUint64();
+        ent->banned = (field[3].asUint32() > 0 ? true : false);
         ent->isNew = false;
 
         // To avoid crashes for stilly nubs who don't update table :P
         if (result->GetFieldCount() == 5)
-            ent->showinlist = (field[4].GetUInt32() > 0 ? true : false);
+            ent->showinlist = (field[4].asUint32() > 0 ? true : false);
 
-        mKnownAddons[ent->name] = ent;
+        mKnownAddons.try_emplace(ent->name, std::move(ent));
 
     }
     while(result->NextRow());
-
-    delete result;
 }
 
 void AddonMgr::SaveToDB()
@@ -304,7 +299,7 @@ void AddonMgr::SaveToDB()
     {
         if (itr->second->isNew)
         {
-            sLogger.info("Saving new addon %s", itr->second->name.c_str());
+            sLogger.info("Saving new addon {}", itr->second->name);
             std::stringstream ss;
             ss << "INSERT INTO clientaddons (name, crc, banned, showinlist) VALUES(\""
                << CharacterDatabase.EscapeString(itr->second->name) << "\",\""
@@ -324,7 +319,7 @@ void AddonMgr::LoadFromDB()
 {
     auto startTime = Util::TimeNow();
 
-    QueryResult* clientAddonsResult = CharacterDatabase.Query("SELECT name, crc FROM clientaddons");
+    auto clientAddonsResult = CharacterDatabase.Query("SELECT name, crc FROM clientaddons");
     if (clientAddonsResult)
     {
         uint32_t knownAddonsCount = 0;
@@ -333,17 +328,15 @@ void AddonMgr::LoadFromDB()
         {
             Field* fields = clientAddonsResult->Fetch();
 
-            std::string name = fields[0].GetString();
-            uint32_t crc = fields[1].GetUInt32();
+            std::string name = fields[0].asCString();
+            uint32_t crc = fields[1].asUint32();
 
             mKnownAddons.emplace_back(SavedAddon(name, crc));
 
             ++knownAddonsCount;
         } while (clientAddonsResult->NextRow());
 
-        delete clientAddonsResult;
-
-        sLogger.debug("Loaded %u known addons from table `clientaddons` in %u ms", knownAddonsCount, static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)) );
+        sLogger.debug("Loaded {} known addons from table `clientaddons` in {} ms", knownAddonsCount, static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)) );
     }
     else
     {
@@ -356,30 +349,28 @@ void AddonMgr::LoadFromDB()
     if (clientAddonsResult)
     {
         uint32_t bannedAddonsCount = 0;
-        uint32_t dbcMaxBannedAddon = sBannedAddOnsStore.GetNumRows();
+        uint32_t dbcMaxBannedAddon = sBannedAddOnsStore.getNumRows();
 
         do
         {
             Field* fields = clientAddonsResult->Fetch();
 
             BannedAddon addon;
-            addon.id = fields[0].GetUInt32() + dbcMaxBannedAddon;
-            addon.timestamp = uint32_t(fields[2].GetUInt64());
+            addon.id = fields[0].asUint32() + dbcMaxBannedAddon;
+            addon.timestamp = uint32_t(fields[2].asUint64());
 
-            std::string name = fields[1].GetString();
-            std::string version = fields[3].GetString();
+            std::string name = fields[1].asCString();
+            std::string version = fields[3].asCString();
 
-            MD5(reinterpret_cast<uint8_t const*>(name.c_str()), name.length(), addon.nameMD5);
-            MD5(reinterpret_cast<uint8_t const*>(version.c_str()), version.length(), addon.versionMD5);
+            MD5(reinterpret_cast<uint8_t const*>(name.c_str()), name.length(), addon.nameMD5);//
+            MD5(reinterpret_cast<uint8_t const*>(version.c_str()), version.length(), addon.versionMD5);//
 
             mBannedAddons.push_back(addon);
 
             ++bannedAddonsCount;
         } while (clientAddonsResult->NextRow());
 
-        delete clientAddonsResult;
-
-        sLogger.debug("Loaded %u banned addons from table `clientaddons` in %u ms", bannedAddonsCount, static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
+        sLogger.debug("Loaded {} banned addons from table `clientaddons` in {} ms", bannedAddonsCount, static_cast<uint32_t>(Util::GetTimeDifferenceToNow(startTime)));
     }
 }
 

@@ -1,19 +1,18 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
+#include <cstdint>
+#include <string>
+
 #include "Macros/CreatureMacros.hpp"
 #include "Map/Maps/InstanceDefines.hpp"
 #include "Map/SpawnGroups.hpp"
-#include "Objects/ObjectDefines.h"
-#include <cstdint>
-#include <string>
+#include "Objects/ObjectDefines.hpp"
 #include "LocationVector.h"
-#include <G3D/Box.h>
-#include <G3D/CoordinateFrame.h>
 #include <G3D/Quat.h>
 
 // related to table areatriggers
@@ -144,34 +143,31 @@ namespace MySQLStructure
         uint32_t displayid;
         uint32_t factionid;
         uint32_t flags;
+        uint8_t pvp_flagged;
         uint32_t bytes0;
-        uint32_t bytes1;
-        uint32_t bytes2;
         uint32_t emote_state;
         //uint32_t respawnNpcLink;
-        uint16_t channel_spell;
+        uint32_t channel_spell;
         uint32_t channel_target_go;
         uint32_t channel_target_creature;
-        uint16_t stand_state;
+        uint8_t stand_state;
         uint32_t death_state;
         uint32_t MountedDisplayID;
+        uint8_t sheath_state;
 
         // store item entry
         uint32_t Item1SlotEntry;
         uint32_t Item2SlotEntry;
         uint32_t Item3SlotEntry;
 
-        uint32_t Item1SlotDisplay;
-        uint32_t Item2SlotDisplay;
-        uint32_t Item3SlotDisplay;
-
         uint32_t CanFly;
         uint32_t phase;
         //event_entry
         uint32_t wander_distance;
         uint32_t waypoint_id;
+        std::string origine;
 
-        // sets one of the bytes of an uint32
+        // sets one of the bytes of an uint32_t
         uint32_t setbyte(uint32_t buffer, uint8_t index, uint32_t byte)
         {
             // We don't want a segfault, now do we?
@@ -226,6 +222,7 @@ namespace MySQLStructure
         QuaternionData rotation = { 0,0,0, 0 };
         uint32_t spawntimesecs = 0;
         GameObject_State state = GO_STATE_OPEN;
+        std::string origine;
         //uint32_t event_entry
     };
 
@@ -339,6 +336,16 @@ namespace MySQLStructure
 
     //lfg_dungeon_rewards
 
+    //locales_achievement_reward
+    struct LocalesAchievementReward
+    {
+        uint32_t entry;
+        uint32_t languageCode;
+        uint32_t gender;
+        char* subject;
+        char* text;
+    };
+
     //locales_creature
     struct LocalesCreature
     {
@@ -395,6 +402,14 @@ namespace MySQLStructure
         uint32_t entry;
         uint32_t languageCode;
         char* texts[8][2];
+    };
+
+    //locales_points_of_interest
+    struct LocalesPointsOfInterest
+    {
+        uint32_t entry;
+        uint32_t languageCode;
+        char* iconName;
     };
 
     //locales_quest
@@ -566,7 +581,6 @@ namespace MySQLStructure
         uint32_t race_specific_id;
     };
 
-    //trainer_defs
     //trainer_spells
 
     //transport_data
@@ -671,12 +685,12 @@ namespace MySQLStructure
 
         bool isDungeon() const { return type == INSTANCE_DUNGEON; }
         bool isRaid() const { return type == INSTANCE_RAID; }
-        bool isBattleground() const { return type == INSTANCE_BATTLEGROUND; }
+        bool isBattlegroundOrArena() const { return type == INSTANCE_BATTLEGROUND; }
         bool isMultimodeDungeon() const { return type == INSTANCE_MULTIMODE; }
 
-        bool isDungeonMap() const { return isDungeon() || isMultimodeDungeon(); }
-        bool isInstanceMap() const { return isDungeonMap() || isRaid(); }
-        bool isNonInstanceMap() const { return type == INSTANCE_NULL; }
+        bool isInstanceMap() const { return isDungeon() || isMultimodeDungeon() || isRaid(); }
+        bool isInstanceableMap() const { return isInstanceMap() || isBattlegroundOrArena(); }
+        bool isWorldMap() const { return type == INSTANCE_NULL; }
     };
 
     //worldstate_templates

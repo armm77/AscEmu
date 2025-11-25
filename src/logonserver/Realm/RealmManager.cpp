@@ -1,11 +1,11 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Server/Logon.h"
 #include "RealmManager.hpp"
-#include "Util.hpp"
+#include "Utilities/Util.hpp"
 #include <Threading/AEThreadPool.h>
 #include "Realm/RealmFlag.hpp"
 #include <Logging/Logger.hpp>
@@ -13,6 +13,7 @@ This file is released under the MIT license. See README-MIT for more information
 #include <WorldPacket.h>
 #include <LogonCommServer/LogonCommServer.h>
 #include "Auth/AuthSocket.h"
+#include "Database/Database.h"
 
 namespace AscEmu::Realm
 {
@@ -52,26 +53,24 @@ namespace AscEmu::Realm
                 const uint32_t realmCount = result->GetRowCount();
                 this->realms.reserve(realmCount);
 
-                auto realm = std::make_shared<Realm>();
-                realm->id = field[0].GetUInt32();
-                realm->password = field[1].GetString();
-                realm->status = field[2].GetUInt8();
+                auto realm = std::make_unique<Realm>();
+                realm->id = field[0].asUint32();
+                realm->password = field[1].asCString();
+                realm->status = field[2].asUint8();
                 realm->lastPing = ::Util::TimeNow();
 
                 this->realms.emplace_back(std::move(realm));
             } while (result->NextRow());
-
-            delete result;
         }
-        sLogger.info("[RealmManager] Loaded %u realms.", static_cast<uint32_t>(this->realms.size()));
+        sLogger.info("[RealmManager] Loaded {} realms.", static_cast<uint32_t>(this->realms.size()));
     }
 
-    std::shared_ptr<Realm> RealmManager::getRealmById(uint32_t id) const
+    Realm* RealmManager::getRealmById(uint32_t id) const
     {
         for (const auto& realm : this->realms)
         {
             if (realm->id == id)
-                return realm;
+                return realm.get();
         }
 
         return nullptr;
@@ -81,7 +80,7 @@ namespace AscEmu::Realm
     {
         if (this->realms.empty())
         {
-            auto realm = std::make_shared<Realm>();
+            auto realm = std::make_unique<Realm>();
             realm->id = realm_id;
             realm->status = status;
             realm->lastPing = ::Util::TimeNow();
@@ -123,7 +122,7 @@ namespace AscEmu::Realm
             if (::Util::GetTimeDifferenceToNow(realm->lastPing) > 2 * 60 * 1000 && realm->status != 0)
             {
                 realm->status = 0;
-                sLogger.info("Realm %u status gets set to 0 (offline) since there was no ping the last 2 minutes (%u).", uint32_t(realm->id), ::Util::GetTimeDifferenceToNow(realm->lastPing));
+                sLogger.info("Realm {} status gets set to 0 (offline) since there was no ping the last 2 minutes ({}).", uint32_t(realm->id), ::Util::GetTimeDifferenceToNow(realm->lastPing));
                 sLogonSQL->Query("UPDATE realms SET status = 0 WHERE id = %u", uint32_t(realm->id));
             }
         }
@@ -132,7 +131,7 @@ namespace AscEmu::Realm
     void RealmManager::sendRealms(AuthSocket* authSocket)
     {
         sLogger.trace("[RealmManager] Sending realms to a socket.");
-        this->realmLock.Acquire();
+        realmLock.lock();
 
         ByteBuffer data(this->realms.size() * 150 + 20);
         data << uint8_t(0x10);
@@ -145,7 +144,7 @@ namespace AscEmu::Realm
             data << uint16_t(this->realms.size());
 
         std::unordered_map<uint32_t, uint8_t>::iterator it;
-        for (const auto realm : this->realms)
+        for (const auto& realm : this->realms)
         {
             if (realm->gameBuild == authSocket->GetChallenge()->build)
             {
@@ -205,26 +204,26 @@ namespace AscEmu::Realm
         data << uint8_t(0x17);
         data << uint8_t(0);
 
-        this->realmLock.Release();
+        realmLock.unlock();
 
         *reinterpret_cast<uint16_t*>(&data.contents()[1]) = uint16_t(data.size() - 3);
 
-        authSocket->Send(static_cast<const uint8*>(data.contents()), uint32_t(data.size()));
+        authSocket->Send(static_cast<const uint8_t*>(data.contents()), uint32_t(data.size()));
 
         std::list<LogonCommServerSocket*> server_sockets;
 
-        this->serverSocketLock.Acquire();
+        serverSocketLock.lock();
 
         if (this->serverSockets.empty())
         {
-            this->serverSocketLock.Release();
+            serverSocketLock.unlock();
             return;
         }
 
         for (const auto& serverSocket : this->serverSockets)
             server_sockets.push_back(serverSocket);
 
-        this->serverSocketLock.Release();
+        serverSocketLock.unlock();
 
         for (const auto& serverSocket : server_sockets)
             serverSocket->RefreshRealmsPop();
@@ -237,7 +236,7 @@ namespace AscEmu::Realm
 
         const auto now = uint32_t(time(nullptr));
 
-        this->serverSocketLock.Acquire();
+        std::lock_guard lock(serverSocketLock);
 
         for (auto logonCommServerSocket = this->serverSockets.begin(); logonCommServerSocket != this->serverSockets.end();)
         {
@@ -255,13 +254,11 @@ namespace AscEmu::Realm
                 commServerSocket->Disconnect();
             }
         }
-
-        this->serverSocketLock.Release();
     }
 
     void RealmManager::checkServers()
     {
-        this->serverSocketLock.Acquire();
+        std::lock_guard lock(serverSocketLock);
 
         for (auto logonCommServerSocket = this->serverSockets.begin(); logonCommServerSocket != this->serverSockets.end();)
         {
@@ -271,33 +268,29 @@ namespace AscEmu::Realm
 
             if (!sMasterLogon.IsServerAllowed(commServerSocket->GetRemoteAddress().s_addr))
             {
-                sLogger.log(Logging::Severity::INFO, Logging::MessageType::MAJOR, "[RealmManager] Disconnecting socket: %s due to it no longer being on an allowed IP.", commServerSocket->GetRemoteIP().c_str());
+                sLogger.log(Logging::Severity::INFO, Logging::MessageType::MAJOR, "[RealmManager] Disconnecting socket: {} due to it no longer being on an allowed IP.", commServerSocket->GetRemoteIP());
                 commServerSocket->Disconnect();
             }
         }
-
-        this->serverSocketLock.Release();
     }
 
     void RealmManager::setRealmOffline(uint32_t realm_id)
     {
-        this->realmLock.Acquire();
+        std::lock_guard lock(realmLock);
 
         auto realm = getRealmById(realm_id);
         if (realm != nullptr)
         {
             realm->flags = RealmFlag::OFFLINE | RealmFlag::INVALID;
             realm->_characterMap.clear();
-            sLogger.info("[RealmManager] Realm %u is now offline (socket close).", realm_id);
+            sLogger.info("[RealmManager] Realm {} is now offline (socket close).", realm_id);
             sLogonSQL->Query("UPDATE realms SET status = 0 WHERE id = %u", uint32_t(realm->id));
         }
-
-        this->realmLock.Release();
     }
 
     void RealmManager::setRealmPopulation(uint32_t realm_id, float population)
     {
-        this->realmLock.Acquire();
+        std::lock_guard lock(realmLock);
 
         auto realm = getRealmById(realm_id);
         if (realm != nullptr)
@@ -317,21 +310,17 @@ namespace AscEmu::Realm
             realm->population = (population > 0) ? (population >= 1) ? (population >= 2) ? 2.0f : 1.0f : 0.0f : 0.0f;
             realm->flags = flags;
         }
-
-        this->realmLock.Release();
     }
 
     void RealmManager::addServerSocket(::LogonCommServerSocket* sock)
     {
-        this->serverSocketLock.Acquire();
+        std::lock_guard lock(serverSocketLock);
         this->serverSockets.insert(sock);
-        this->serverSocketLock.Release();
     }
 
     void RealmManager::removeServerSocket(::LogonCommServerSocket* sock)
     {
-        this->serverSocketLock.Acquire();
+        std::lock_guard lock(serverSocketLock);
         this->serverSockets.erase(sock);
-        this->serverSocketLock.Release();
     }
 }

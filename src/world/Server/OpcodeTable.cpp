@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,6 +7,8 @@ This file is released under the MIT license. See README-MIT for more information
 //          It works with internal indexes and maps version hex values to them. Do not
 //          use or work with this file unless you are able to understand what is
 //          happening here ;)
+
+#include <iostream>
 
 #include "OpcodeTable.hpp"
 
@@ -30,7 +32,6 @@ void OpcodeTables::initialize()
             ++valueCount;
         }
     }
-
     std::cout << "OpcodeTables prepared " << valueCount << " hexvalues for 5 version" << "\n";
 }
 

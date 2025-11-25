@@ -1,12 +1,11 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Cyangosa.hpp"
-#include "Objects/Units/Creatures/Summons/Summon.h"
-#include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
+
+#include "Server/Script/InstanceScript.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //  Moragg AI

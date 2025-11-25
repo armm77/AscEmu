@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -32,16 +33,18 @@ namespace AscEmu::Packets
         }
 
         MsgInspectArenaTeams(uint64_t guid, std::vector<ArenaTeamsList> arenaTeams) :
-            ManagedPacket(MSG_INSPECT_ARENA_TEAMS, 65),
+            ManagedPacket(MSG_INSPECT_ARENA_TEAMS, 8),
             guid(guid),
             arenaTeams(arenaTeams)
         {
         }
 
     protected:
+        size_t expectedSize() const override { return static_cast<size_t>(8 + 2 + 4 + 4 + 4 + 4 + 4) * arenaTeams.size(); }
+
         bool internalSerialise(WorldPacket& packet) override
         {
-            for (const auto teamMembers : arenaTeams)
+            for (const auto& teamMembers : arenaTeams)
             {
                 packet << teamMembers.playerGuid << teamMembers.teamType << teamMembers.teamId << 
                     teamMembers.teamRating << teamMembers.playedWeek << teamMembers.wonWeek << teamMembers.playedSeason;
@@ -53,7 +56,7 @@ namespace AscEmu::Packets
         {
             uint64_t unpackedGuid;
             packet >> unpackedGuid;
-            guid.Init(unpackedGuid);
+            guid.init(unpackedGuid);
             return true;
         }
     };

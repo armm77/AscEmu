@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -17,7 +17,7 @@ namespace AscEmu::Packets
     {
     public:
         uint8_t flag;
-        std::string channelName;
+        utf8_string channelName;
         uint64_t guid;
 
         uint8_t extraFlag;
@@ -71,7 +71,7 @@ namespace AscEmu::Packets
                     packet << playerName;
                 break;
                 case CHANNEL_NOTIFY_FLAG_YOUJOINED:
-#if VERSION_STRING == Classic
+#if VERSION_STRING >= Classic
                     packet << extraFlag << uint32_t(0);
 #else
                     packet << extraFlag << channelId << uint32_t(0);

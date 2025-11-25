@@ -1,16 +1,29 @@
-# Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+# Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 
-# set up our project name
-project(loadlib CXX)
-file(GLOB loadlib_source *cpp *.h)
+# set up our project name.
+set(LIBRARY_NAME loadlib)
 
-include_directories(
+file(GLOB SRC_LOADLIB *cpp *.h)
+
+set(LOADLIB_SRCS
+    ${SRC_LOADLIB}
+)
+
+# source group.
+ascemu_source_group(${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(${LIBRARY_NAME} STATIC ${LOADLIB_SRCS})
+
+target_include_directories(${LIBRARY_NAME} PUBLIC
     ${CMAKE_SOURCE_DIR}/dep/libmpq/libmpq
     ${CMAKE_SOURCE_DIR}/dep/libmpq/win
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_library(${PROJECT_NAME} STATIC ${loadlib_source})
-target_link_libraries(${PROJECT_NAME} libmpq)
+# include library dependencies.
+target_link_libraries(${LIBRARY_NAME}
+  PUBLIC
+    libmpq
+)
 
-unset(loadlib_source)
+unset(LOADLIB_SRCS)

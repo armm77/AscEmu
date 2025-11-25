@@ -1,13 +1,26 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
 #include "InstanceMap.hpp"
-#include "InstanceDefines.hpp"
+
+#include "InstanceMgr.hpp"
+#include "Logging/Logger.hpp"
+#include "Management/Group.h"
+#include "Management/ObjectMgr.hpp"
+#include "Storage/WDB/WDBStores.hpp"
+#include "Storage/MySQLDataStore.hpp"
+#include "Map/Management/MapMgr.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/DatabaseDefinition.hpp"
 #include "Server/Definitions.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Server/Opcodes.hpp"
+#include "Server/World.h"
+#include "Server/WorldSession.h"
+#include "Server/Script/InstanceScript.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
 
 InstanceMap::InstanceMap(BaseMap* baseMap, uint32_t id, uint32_t expiry, uint32_t InstanceId, uint8_t SpawnMode, PlayerTeam InstanceTeam)
     : WorldMap(baseMap, id, expiry, InstanceId, SpawnMode), instanceTeam(InstanceTeam)
@@ -56,13 +69,13 @@ void InstanceMap::initVisibilityDistance()
 
 void InstanceMap::permBindAllPlayers()
 {
-    if (!getBaseMap()->isDungeon())
+    if (!getBaseMap()->isInstanceMap())
         return;
 
     InstanceSaved* save = sInstanceMgr.getInstanceSave(getInstanceId());
     if (!save)
     {
-        sLogger.failure("Cannot bind players to instance map (Name: %s, Entry: %u, Difficulty: %u, ID: %u) because no instance save is available!", getBaseMap()->getMapName().c_str(), getBaseMap()->getMapId(), getDifficulty(), getInstanceId());
+        sLogger.failure("Cannot bind players to instance map (Name: {}, Entry: {}, Difficulty: {}, ID: {}) because no instance save is available!", getBaseMap()->getMapName(), getBaseMap()->getMapId(), getDifficulty(), getInstanceId());
         return;
     }
 
@@ -79,11 +92,11 @@ void InstanceMap::permBindAllPlayers()
         {
             if (bind->save && bind->save->getInstanceId() != save->getInstanceId())
             {
-                sLogger.failure("Player (%s, Name: %s) is in instance map (Name: %s, Entry: %u, Difficulty: %u, ID: %u) that is being bound, but already has a save for the map on ID %u!", player->getGuidLow(), player->getName().c_str(), getBaseMap()->getMapName().c_str() , save->getMapId(), save->getDifficulty(), save->getInstanceId(), bind->save->getInstanceId());
+                sLogger.failure("Player ({}, Name: {}) is in instance map (Name: {}, Entry: {}, Difficulty: {}, ID: {}) that is being bound, but already has a save for the map on ID {}!", player->getGuidLow(), player->getName(), getBaseMap()->getMapName() , save->getMapId(), save->getDifficulty(), save->getInstanceId(), bind->save->getInstanceId());
             }
             else if (!bind->save)
             {
-                sLogger.failure("Player (%s, Name: %s) is in instance map (Name: %s, Entry: %u, Difficulty: %u, ID: %u) that is being bound, but already has a bind (without associated save) for the map!", player->getGuidLow(), player->getName().c_str(), getBaseMap()->getMapName().c_str(), save->getMapId(), save->getDifficulty(), save->getInstanceId());
+                sLogger.failure("Player ({}, Name: {}) is in instance map (Name: {}, Entry: {}, Difficulty: {}, ID: {}) that is being bound, but already has a bind (without associated save) for the map!", player->getGuidLow(), player->getName(), getBaseMap()->getMapName(), save->getMapId(), save->getDifficulty(), save->getInstanceId());
             }
         }
         else
@@ -97,7 +110,7 @@ void InstanceMap::permBindAllPlayers()
 #endif
 
             // if group leader is in instance, group also gets bound
-            if (Group* group = player->getGroup())
+            if (const auto group = player->getGroup())
                 if (group->GetLeader()->guid == player->getGuidLow())
                     group->bindToInstance(save, true);
         }
@@ -109,9 +122,9 @@ bool InstanceMap::addPlayerToMap(Player* player)
     // disable unload Timer
     m_unloadTimer = 0;
 
-    if (getBaseMap()->isDungeon())
+    if (getBaseMap()->isInstanceMap())
     {
-        Group* group = player->getGroup();
+        const auto group = player->getGroup();
 
         // increase Instance Hourly Limit
         if (!group || !group->isLFGGroup())
@@ -121,7 +134,7 @@ bool InstanceMap::addPlayerToMap(Player* player)
         InstanceSaved* mapSave = sInstanceMgr.getInstanceSave(getInstanceId());
         if (!mapSave)
         {
-            sLogger.debug("creating instance save for map %d spawnmode %d with instance id %d", getBaseMap()->getMapId(), getSpawnMode(), getInstanceId());
+            sLogger.debug("creating instance save for map {} spawnmode {} with instance id {}", getBaseMap()->getMapId(), getSpawnMode(), getInstanceId());
             mapSave = sInstanceMgr.addInstanceSave(getBaseMap()->getMapId(), getInstanceId(), InstanceDifficulty::Difficulties(getSpawnMode()), 0, true);
         }
 
@@ -134,7 +147,7 @@ bool InstanceMap::addPlayerToMap(Player* player)
                 // cannot enter other instances if bound permanently
                 if (playerBind->save != mapSave)
                 {
-                    sLogger.debug("player % s % s is permanently bound to instance % s % d, % d, % d, % d, % d, % d but he is being put into instance % s % d, % d, % d, % d, % d, % d", player->getName().c_str(), player->getGuid(), getBaseMap()->getMapName().c_str(), playerBind->save->getMapId(), playerBind->save->getInstanceId(), playerBind->save->getDifficulty(), playerBind->save->getPlayerCount(), playerBind->save->getGroupCount(), playerBind->save->canReset(), getBaseMap()->getMapName().c_str(), mapSave->getMapId(), mapSave->getInstanceId(), mapSave->getDifficulty(), mapSave->getPlayerCount(), mapSave->getGroupCount(), mapSave->canReset());
+                    sLogger.debug("player % s % s is permanently bound to instance % s % d, % d, % d, % d, % d, % d but he is being put into instance % s % d, % d, % d, % d, % d, % d", player->getName(), player->getGuid(), getBaseMap()->getMapName(), playerBind->save->getMapId(), playerBind->save->getInstanceId(), playerBind->save->getDifficulty(), playerBind->save->getPlayerCount(), playerBind->save->getGroupCount(), playerBind->save->canReset(), getBaseMap()->getMapName(), mapSave->getMapId(), mapSave->getInstanceId(), mapSave->getDifficulty(), mapSave->getPlayerCount(), mapSave->getGroupCount(), mapSave->canReset());
                     return false;
                 }
             }
@@ -146,9 +159,9 @@ bool InstanceMap::addPlayerToMap(Player* player)
                     InstanceGroupBind* groupBind = group->getBoundInstance(getBaseMap());
                     if (playerBind && playerBind->save != mapSave)
                     {
-                        sLogger.debug("player %s %s is being put into instance %s %d, %d, %d, %d, %d, %d but he is in group %s and is bound to instance %d, %d, %d, %d, %d, %d!", player->getName().c_str(), player->getGuid(), getBaseMap()->getMapName().c_str(), mapSave->getMapId(), mapSave->getInstanceId(), mapSave->getDifficulty(), mapSave->getPlayerCount(), mapSave->getGroupCount(), mapSave->canReset(), group->GetLeader()->guid, playerBind->save->getMapId(), playerBind->save->getInstanceId(), playerBind->save->getDifficulty(), playerBind->save->getPlayerCount(), playerBind->save->getGroupCount(), playerBind->save->canReset());
+                        sLogger.debug("player {} {} is being put into instance {} {}, {}, {}, {}, {}, {} but he is in group {} and is bound to instance {}, {}, {}, {}, {}, {}!", player->getName(), player->getGuid(), getBaseMap()->getMapName(), mapSave->getMapId(), mapSave->getInstanceId(), mapSave->getDifficulty(), mapSave->getPlayerCount(), mapSave->getGroupCount(), mapSave->canReset(), group->GetLeader()->guid, playerBind->save->getMapId(), playerBind->save->getInstanceId(), playerBind->save->getDifficulty(), playerBind->save->getPlayerCount(), playerBind->save->getGroupCount(), playerBind->save->canReset());
                         if (groupBind)
-                            sLogger.debug("the group is bound to the instance %s %d, %d, %d, %d, %d, %d", getBaseMap()->getMapName().c_str(), groupBind->save->getMapId(), groupBind->save->getInstanceId(), groupBind->save->getDifficulty(), groupBind->save->getPlayerCount(), groupBind->save->getGroupCount(), groupBind->save->canReset());
+                            sLogger.debug("the group is bound to the instance {} {}, {}, {}, {}, {}, {}", getBaseMap()->getMapName(), groupBind->save->getMapId(), groupBind->save->getInstanceId(), groupBind->save->getDifficulty(), groupBind->save->getPlayerCount(), groupBind->save->getGroupCount(), groupBind->save->canReset());
                         return false;
                     }
                     // bind to the group or keep using the group save
@@ -161,10 +174,10 @@ bool InstanceMap::addPlayerToMap(Player* player)
                         // cannot jump to a different instance without resetting it
                         if (groupBind->save != mapSave)
                         {
-                            sLogger.debug("player %s %s is being put into instance %d, %d, %d but he is in group %s which is bound to instance %d, %d, %d! \n", player->getName().c_str(), player->getGuid(), mapSave->getMapId(), mapSave->getInstanceId(), mapSave->getDifficulty(), group->GetLeader()->guid, groupBind->save->getMapId(), groupBind->save->getInstanceId(), groupBind->save->getDifficulty());
-                            sLogger.debug("MapSave players: %d, group count: %d \n", mapSave->getPlayerCount(), mapSave->getGroupCount());
+                            sLogger.debug("player {} {} is being put into instance {}, {}, {} but he is in group {} which is bound to instance {}, {}, {}! \n", player->getName(), player->getGuid(), mapSave->getMapId(), mapSave->getInstanceId(), mapSave->getDifficulty(), group->GetLeader()->guid, groupBind->save->getMapId(), groupBind->save->getInstanceId(), groupBind->save->getDifficulty());
+                            sLogger.debug("MapSave players: {}, group count: {} \n", mapSave->getPlayerCount(), mapSave->getGroupCount());
                             if (groupBind->save)
-                                sLogger.debug("GroupBind save players: %d, group count: %d", groupBind->save->getPlayerCount(), groupBind->save->getGroupCount());
+                                sLogger.debug("GroupBind save players: {}, group count: {}", groupBind->save->getPlayerCount(), groupBind->save->getGroupCount());
                             else
                                 sLogger.debug("GroupBind save NULL");
                             return false;
@@ -198,7 +211,7 @@ bool InstanceMap::addPlayerToMap(Player* player)
         // first player enters (no players yet)
         setResetSchedule(false);
 
-        sLogger.info("Player '%s' entered instance '%u' of map '%s' \n", player->getName().c_str(), getInstanceId(), getBaseMap()->getMapName().c_str());
+        sLogger.info("Player '{}' entered instance '{}' of map '{}' \n", player->getName(), getInstanceId(), getBaseMap()->getMapName());
     }
 
     return true;
@@ -267,7 +280,9 @@ void InstanceMap::createInstanceData(bool load)
     if (getScript() == nullptr)
         return;
 
-    auto const& encounters = sObjectMgr.GetDungeonEncounterList(getBaseMap()->getMapId(), getDifficulty());
+    auto const& encounters = sObjectMgr.getDungeonEncounterList(getBaseMap()->getMapId(), getDifficulty());
+    if (!encounters)
+        return;
 
     uint32_t bossNumber = static_cast<uint32_t>(encounters->size());
 
@@ -281,12 +296,12 @@ void InstanceMap::createInstanceData(bool load)
         if (result)
         {
             Field* fields = result->Fetch();
-            std::string data = fields[0].GetString();
+            std::string data = fields[0].asCString();
 
-            getScript()->setCompletedEncountersMask(fields[1].GetUInt32());
+            getScript()->setCompletedEncountersMask(fields[1].asUint32());
             if (!data.empty())
             {
-                sLogger.debug("Loading instance data for `%s` with id %u", getBaseMap()->getMapName().c_str(), getInstanceId());
+                sLogger.debug("Loading instance data for `{}` with id {}", getBaseMap()->getMapName(), getInstanceId());
                 getScript()->loadSavedInstanceData(data.c_str());
             }
         }
@@ -355,7 +370,7 @@ bool InstanceMap::hasPermBoundPlayers()
 
 uint32_t InstanceMap::getMaxPlayers()
 {
-    DBC::Structures::MapDifficulty const* mapDiff = getMapDifficulty();
+    WDB::Structures::MapDifficulty const* mapDiff = getMapDifficulty();
     if (mapDiff && mapDiff->maxPlayers)
         return mapDiff->maxPlayers;
 
@@ -365,3 +380,6 @@ uint32_t InstanceMap::getMaxPlayers()
     return getBaseMap()->getMapInfo()->playerlimit;
 #endif
 }
+
+PlayerTeam InstanceMap::getTeamIdInInstance() { return instanceTeam; }
+uint32_t InstanceMap::getTeamInInstance() { return instanceTeam == TEAM_ALLIANCE ? ALLIANCE : HORDE; }

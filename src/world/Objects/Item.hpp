@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,18 +7,29 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "ItemDefines.hpp"
 #include "Management/ItemProperties.hpp"
-#include "Objects/Object.h"
-#include "WorldConf.h"
-#include "Management/LootMgr.h"
+#include "Objects/Object.hpp"
+#include "Management/Loot/LootDefines.hpp"
 #include "Data/WoWItem.hpp"
 #include "Server/UpdateFieldInclude.h"
+
+class QueryBuffer;
+class Field;
+struct Loot;
+
+namespace WDB::Structures
+{
+    struct SpellItemEnchantmentEntry;
+}
 
 class Container;
 
 struct EnchantmentInstance
 {
     // Durations for temporary enchantments are stored in ItemInterface and WoWItem data
-    DBC::Structures::SpellItemEnchantmentEntry const* Enchantment;
+    WDB::Structures::SpellItemEnchantmentEntry const* Enchantment;
+#if VERSION_STRING >= Cata
+    std::unique_ptr<WDB::Structures::SpellItemEnchantmentEntry> customEnchantmentHolder;
+#endif
     bool BonusApplied;
     EnchantmentSlot Slot;
     bool RemoveAtLogout;
@@ -100,6 +111,18 @@ public:
 #endif
 
     //////////////////////////////////////////////////////////////////////////////////////////
+    // Override Object functions
+
+    // Returns unit owner
+    Unit* getUnitOwner() override;
+    // Returns unit owner
+    Unit const* getUnitOwner() const override;
+    // Returns player owner
+    Player* getPlayerOwner() override;
+    // Returns player owner
+    Player const* getPlayerOwner() const override;
+
+    //////////////////////////////////////////////////////////////////////////////////////////
     // m_enchantments
     EnchantmentInstance* getEnchantment(EnchantmentSlot slot);
     EnchantmentInstance const* getEnchantment(EnchantmentSlot slot) const;
@@ -119,7 +142,7 @@ public:
     void removeAllEnchantments(bool onlyTemporary);
     void removeSocketBonusEnchant();
 
-    void removeRelatedEnchants(DBC::Structures::SpellItemEnchantmentEntry const* newEnchant);
+    void removeRelatedEnchants(WDB::Structures::SpellItemEnchantmentEntry const* newEnchant);
     void applyEnchantmentBonus(EnchantmentSlot slot, bool apply);
     void sendEnchantTimeUpdate(uint32_t slot, uint32_t duration);
 
@@ -150,7 +173,7 @@ public:
 #endif
 
     uint32_t countGemsWithLimitId(uint32_t Limit);
-    bool isGemRelated(DBC::Structures::SpellItemEnchantmentEntry const* enchantment);
+    bool isGemRelated(WDB::Structures::SpellItemEnchantmentEntry const* enchantment);
 
 public:
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -170,6 +193,7 @@ protected:
 public:
     //////////////////////////////////////////////////////////////////////////////////////////
     // Misc
+    // TODO: remove this and replace it with virtual Object::getPlayerOwner()
     Player* getOwner() const;
     void setOwner(Player* owner);
 
@@ -207,6 +231,7 @@ public:
     bool isInBag() const;
     bool isEquipped() const;
     bool isTradeableWith(Player* player);
+    uint8_t getCharterTypeForEntry() const;
 
     int32_t getReforgableStat(ItemModType statType) const;
     static bool canTransmogrifyItemWithItem(Item const* transmogrified, Item const* transmogrifier);
@@ -219,7 +244,6 @@ public:
     void saveToDB(int8_t containerslot, int8_t slot, bool firstsave, QueryBuffer* buf);
     bool loadAuctionItemFromDB(uint64_t guid);
     void deleteFromDB();
-    void deleteMe();
     bool isEligibleForRefund();
 
     uint32_t getChargesLeft() const;
@@ -229,7 +253,7 @@ public:
     uint32_t getSellPrice(uint32_t count);
     void removeFromWorld();
 
-    Loot* m_loot = nullptr;
+    std::unique_ptr<Loot> m_loot;
     bool m_isLocked = false;
     bool m_isDirty = false;
 

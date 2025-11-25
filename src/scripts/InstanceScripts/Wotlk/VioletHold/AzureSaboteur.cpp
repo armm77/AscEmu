@@ -1,12 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "AzureSaboteur.hpp"
-#include "Objects/Units/Creatures/Summons/Summon.h"
+#include "Objects/Units/Creatures/Summons/Summon.hpp"
 #include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "CommonTime.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // AzureSaboteur AI
@@ -15,8 +17,10 @@ AzureSaboteurAI::AzureSaboteurAI(Creature* pCreature) : CreatureAIScript(pCreatu
     // Instance Script
     mInstance = getInstanceScript();
 
-    getCreature()->getAIInterface()->setImmuneToNPC(true);
-    getCreature()->getAIInterface()->setImmuneToPC(true);
+    getCreature()->getAIInterface()->setIgnoreCreatureCombat(true);
+    getCreature()->getAIInterface()->setIgnorePlayerCombat(true);
+
+    mbossId = 0;
 }
 
 CreatureAIScript* AzureSaboteurAI::Create(Creature* pCreature) { return new AzureSaboteurAI(pCreature); }

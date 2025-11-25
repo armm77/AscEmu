@@ -1,15 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
-#include "Management/TaxiMgr.h"
-#include "Server/WorldSession.h"
-#include "Objects/Units/Creatures/Creature.h"
-#include "Management/Gossip/GossipScript.hpp"
-#include "Server/Script/ScriptMgr.h"
 #include "Management/Gossip/GossipMenu.hpp"
+#include "Management/Gossip/GossipScript.hpp"
+#include "Objects/Object.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Objects/Units/Players/PlayerDefines.hpp"
+#include "Objects/Units/Creatures/Creature.h"
 
 class SilvaFilnaveth_Gossip : public GossipScript
 {
@@ -35,7 +35,7 @@ public:
         Creature* pCreature = pObject->isCreature() ? static_cast<Creature*>(pObject) : NULL;
         if (pCreature == NULL)
             return;
-        plr->startTaxiPath(sTaxiMgr.GetTaxiPath(315), 479, 0);     // Hippogryph
+        plr->activateTaxiPathTo(315, pCreature);     // Hippogryph
     }
 
     void destroy() override { delete this; }
@@ -65,7 +65,7 @@ public:
         Creature* pCreature = pObject->isCreature() ? static_cast<Creature*>(pObject) : NULL;
         if (pCreature == NULL)
             return;
-        plr->startTaxiPath(sTaxiMgr.GetTaxiPath(316), 295, 0);     // Wyvern
+        plr->activateTaxiPathTo(316, pCreature);     // Wyvern
     }
 
     void destroy() override { delete this; }

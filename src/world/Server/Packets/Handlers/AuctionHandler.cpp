@@ -1,9 +1,9 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
+#include "Logging/Logger.hpp"
 #include "Server/Packets/CmsgAuctionListOwnerItems.h"
 #include "Server/Packets/CmsgAuctionListItems.h"
 #include "Server/Packets/CmsgAuctionRemoveItem.h"
@@ -16,8 +16,10 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Objects/Units/Players/Player.hpp"
 #include "Map/Management/MapMgr.hpp"
 #include "Objects/Units/Creatures/Creature.h"
-#include "Management/AuctionMgr.h"
+#include "Management/AuctionMgr.hpp"
 #include "Management/ItemInterface.h"
+#include "Management/MailMgr.h"
+#include "Map/Maps/WorldMap.hpp"
 #include "Server/Definitions.h"
 
 using namespace AscEmu::Packets;
@@ -28,7 +30,7 @@ void WorldSession::handleAuctionListOwnerItems(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_LIST_OWNER_ITEMS %u (guidLow)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_LIST_OWNER_ITEMS {} (guidLow)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr || creature->auctionHouse == nullptr)
@@ -43,7 +45,7 @@ void WorldSession::handleAuctionListItems(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_LIST_OWNER_ITEMS %u (guidLow)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_LIST_ITEMS {} (guidLow)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr || creature->auctionHouse == nullptr)
@@ -58,7 +60,7 @@ void WorldSession::handleCancelAuction(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_REMOVE_ITEM %u (auctionId)", srlPacket.auctionId);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_REMOVE_ITEM {} (auctionId)", srlPacket.auctionId);
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr || creature->auctionHouse == nullptr)
@@ -81,7 +83,7 @@ void WorldSession::handleAuctionListBidderItems(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_LIST_BIDDER_ITEMS %u (lowguid)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_LIST_BIDDER_ITEMS {} (lowguid)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr || creature->auctionHouse == nullptr)
@@ -97,7 +99,7 @@ void WorldSession::handleAuctionListPendingSales(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_LIST_PRENDING_SALES %u (lowguid)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_LIST_PRENDING_SALES {} (lowguid)", srlPacket.guid.getGuidLowPart());
 
     //\todo SMSG_AUCTION_LIST_PENDING_SALES needs to be researched!
 #endif
@@ -119,9 +121,8 @@ void WorldSession::handleAuctionSellItem(WorldPacket& recvPacket)
         return;
 
     const auto auctionHouse = creature->auctionHouse;
-    srlPacket.expireTime *= MINUTE;
 
-    switch (srlPacket.expireTime)
+    switch (srlPacket.expireTime * MINUTE)
     {
         case 1 * MIN_AUCTION_TIME:
         case 2 * MIN_AUCTION_TIME:
@@ -180,9 +181,9 @@ void WorldSession::handleAuctionSellItem(WorldPacket& recvPacket)
             return;
         }
 
-        _player->modCoinage(-int32(item_deposit));
+        _player->modCoinage(-int32_t(item_deposit));
 
-        const auto item = _player->getItemInterface()->SafeRemoveAndRetreiveItemByGuid(srlPacket.itemGuids[i], false);
+        auto item = _player->getItemInterface()->SafeRemoveAndRetreiveItemByGuid(srlPacket.itemGuids[i], false);
         if (!item)
         {
             _player->sendAuctionCommandResult(nullptr, AUCTION_ACTION_CREATE, AUCTION_ERROR_ITEM);
@@ -196,21 +197,21 @@ void WorldSession::handleAuctionSellItem(WorldPacket& recvPacket)
         item->m_isDirty = true;
         item->saveToDB(INVENTORY_SLOT_NOT_SET, 0, true, nullptr);
 
-        const auto auction = new Auction;
+        auto auction = std::make_unique<Auction>();
         auction->buyoutPrice = srlPacket.buyoutPrice;
         auction->expireTime = static_cast<uint32_t>(UNIXTIME) + srlPacket.expireTime * MINUTE;
         auction->startPrice = srlPacket.bidMoney;
         auction->highestBid = 0;
         auction->highestBidderGuid = 0;
-        auction->Id = sAuctionMgr.GenerateAuctionId();
+        auction->Id = sAuctionMgr.generateAuctionId();
         auction->ownerGuid = _player->getGuidLow();
-        auction->auctionItem = item;
+        auction->auctionItem = std::move(item);
         auction->isRemoved = false;
         auction->removedType = AUCTION_REMOVE_EXPIRED;
         auction->depositAmount = item_deposit;
 
-        auctionHouse->addAuction(auction);
         auction->saveToDB(auctionHouse->getId());
+        auctionHouse->addAuction(std::move(auction));
 
         _player->sendAuctionCommandResult(nullptr, AUCTION_ACTION_CREATE, AUCTION_ERROR_NONE);
     }
@@ -224,7 +225,7 @@ void WorldSession::handleAuctionPlaceBid(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_PLACE_BID: %u (auctionId), %u (price)", srlPacket.auctionId, srlPacket.price);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AUCTION_PLACE_BID: {} (auctionId), {} (price)", srlPacket.auctionId, srlPacket.price);
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr || creature->auctionHouse == nullptr)

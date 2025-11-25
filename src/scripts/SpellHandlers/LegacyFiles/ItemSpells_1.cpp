@@ -16,13 +16,23 @@
  */
 
 #include "Setup.h"
+#include "Chat/ChatDefines.hpp"
+#include "Management/Group.h"
 #include "Management/QuestLogEntry.hpp"
 #include "Management/Skill.hpp"
 #include "Management/ItemInterface.h"
 #include "Map/Maps/MapScriptInterface.h"
-#include "Management/Faction.h"
-#include "Spell/SpellAuras.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
 #include "Spell/SpellMgr.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
+#include "Utilities/Random.hpp"
+#include "Utilities/Util.hpp"
 
 /*
      How to add a new item spell to the dummy spell handler:
@@ -151,7 +161,7 @@ bool HolidayCheer(uint8_t effectIndex, Spell* pSpell)
         else
             continue;
 
-        if (pSpell->getCaster()->CalcDistance(target) > dist || isAttackable(pSpell->getCaster(), target))
+        if (pSpell->getCaster()->CalcDistance(target) > dist || pSpell->getCaster()->isValidAttackableTarget(target))
             continue;
 
         target->emote(EMOTE_ONESHOT_LAUGH);
@@ -161,7 +171,7 @@ bool HolidayCheer(uint8_t effectIndex, Spell* pSpell)
 
 bool NetOMatic(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
     if (!pSpell->getPlayerCaster() || !target)
         return true;
 
@@ -187,45 +197,11 @@ bool NetOMatic(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool BanishExile(uint8_t effectIndex, Spell* pSpell)
 {
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
     if (!pSpell->getPlayerCaster() || !target)
         return true;
 
     pSpell->getPlayerCaster()->doSpellDamage(target, pSpell->getSpellInfo()->getId(), static_cast<float_t>(target->getHealth()), effectIndex);
-    return true;
-}
-
-bool ForemansBlackjack(uint8_t /*effectIndex*/, Spell* pSpell)
-{
-    Unit* target = pSpell->GetUnitTarget();
-    if (!pSpell->getPlayerCaster() || !target || !target->isCreature())
-        return true;
-
-    // check to see that we have the correct creature
-    Creature* c_target = static_cast<Creature*>(target);
-    if (c_target->getEntry() != 10556 || !c_target->hasAurasWithId(17743))
-        return true;
-
-    // Start moving again
-    if (target->getAIInterface())
-        target->stopMoving();
-
-    // Remove Zzz aura
-    c_target->removeAllAuras();
-
-    pSpell->getPlayerCaster()->sendPlayObjectSoundPacket(c_target->getGuid(), 6197);
-
-    // send chat message
-    char msg[100];
-    sprintf(msg, "Ow! Ok, I'll get back to work, %s", pSpell->getPlayerCaster()->getName().c_str());
-    target->sendChatMessage(CHAT_MSG_MONSTER_SAY, LANG_UNIVERSAL, msg);
-
-    c_target->emote(EMOTE_STATE_WORK_CHOPWOOD);
-
-    // Add timed event to return lazy peon to Zzz after 5-10 minutes (spell 17743)
-    SpellInfo const* pSpellEntry = sSpellMgr.getSpellInfo(17743);
-    sEventMgr.AddEvent(target, &Unit::eventCastSpell, target, pSpellEntry, EVENT_UNK, 300000 + Util::getRandomUInt(300000), 1, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
-
     return true;
 }
 
@@ -276,7 +252,7 @@ bool ReindeerTransformation(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool WinterWondervolt(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
 
     if (target == NULL || !target->isPlayer())
         return true;
@@ -323,7 +299,7 @@ bool ScryingCrystal(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool MinionsOfGurok(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    Unit* target = pSpell->GetUnitTarget();
+    Unit* target = pSpell->getUnitTarget();
     if (!pSpell->getPlayerCaster() || !target || !target->isCreature() || target->getEntry() != 17157)
         return true;
 
@@ -401,7 +377,7 @@ bool ScalingMountDummyAura(uint32_t /*i*/, Aura* pAura, bool /*apply*/)
 
 bool BigBlizzardBear(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    if (Player* plr = pSpell->GetPlayerTarget())
+    if (Player* plr = pSpell->getPlayerTarget())
     {
         uint32_t newspell = 58997;
         if (plr->getSkillLineCurrent(SKILL_RIDING, true) >= 150)
@@ -413,7 +389,7 @@ bool BigBlizzardBear(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool WingedSteed(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    if (Player* plr = pSpell->GetPlayerTarget())
+    if (Player* plr = pSpell->getPlayerTarget())
     {
         uint32_t newspell = 54726;
         if (plr->getSkillLineCurrent(SKILL_RIDING, true) == 300)
@@ -426,7 +402,7 @@ bool WingedSteed(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool HeadlessHorsemanMount(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    if (Player* plr = pSpell->GetPlayerTarget())
+    if (Player* plr = pSpell->getPlayerTarget())
     {
         uint32_t newspell = 51621;
         auto pArea = plr->GetArea();
@@ -449,7 +425,7 @@ bool HeadlessHorsemanMount(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool MagicBroomMount(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    if (Player* plr = pSpell->GetPlayerTarget())
+    if (Player* plr = pSpell->getPlayerTarget())
     {
         uint32_t newspell = 42680;
         auto pArea = plr->GetArea();
@@ -472,7 +448,7 @@ bool MagicBroomMount(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool MagicRoosterMount(uint8_t /*effectIndex*/, Spell* pSpell)
 {
-    if (Player* plr = pSpell->GetPlayerTarget())
+    if (Player* plr = pSpell->getPlayerTarget())
         plr->castSpell(plr, 66122, true);
 
     return true;
@@ -481,7 +457,7 @@ bool MagicRoosterMount(uint8_t /*effectIndex*/, Spell* pSpell)
 bool Invincible(uint8_t /*effectIndex*/, Spell* pSpell)
 {
     // Apply the new aura in the 3rd effect call
-    if (Player* plr = pSpell->GetPlayerTarget())
+    if (Player* plr = pSpell->getPlayerTarget())
     {
         uint32_t newspell = 72281;
         auto pArea = plr->GetArea();
@@ -504,7 +480,7 @@ bool Invincible(uint8_t /*effectIndex*/, Spell* pSpell)
 
 bool Poultryizer(uint8_t /*effectIndex*/, Spell* s)
 {
-    Unit* unitTarget = s->GetUnitTarget();
+    Unit* unitTarget = s->getUnitTarget();
 
     if (!unitTarget || !unitTarget->isAlive())
         return false;
@@ -516,7 +492,7 @@ bool Poultryizer(uint8_t /*effectIndex*/, Spell* s)
 
 bool SixDemonBag(uint8_t /*effectIndex*/, Spell* s)
 {
-    Unit* unitTarget = s->GetUnitTarget();
+    Unit* unitTarget = s->getUnitTarget();
 
     if (!unitTarget || !unitTarget->isAlive())
         return false;
@@ -660,7 +636,7 @@ bool ShrinkRay(uint8_t /*effectIndex*/, Spell* s)
     if (!malfunction)
     {
 
-        s->getPlayerCaster()->castSpell(s->GetUnitTarget(), spellids[1], true);
+        s->getPlayerCaster()->castSpell(s->getUnitTarget(), spellids[1], true);
 
     }
     else
@@ -680,7 +656,7 @@ bool ShrinkRay(uint8_t /*effectIndex*/, Spell* s)
             case 1:  // them
             {
                 // if it's a malfunction it will only grow the target, since shrinking is normal
-                s->getPlayerCaster()->castSpell(s->GetUnitTarget(), spellids[0], true);
+                s->getPlayerCaster()->castSpell(s->getUnitTarget(), spellids[0], true);
             }
             break;
 
@@ -723,7 +699,7 @@ bool ShrinkRay(uint8_t /*effectIndex*/, Spell* s)
                     if (u->getTargetGuid() != s->getPlayerCaster()->getGuid())
                         continue;
 
-                    if (!isAttackable(s->getPlayerCaster(), u))
+                    if (!s->getPlayerCaster()->isValidAttackableTarget(u))
                         continue;
 
                     s->getPlayerCaster()->castSpell(u, spellids[spellindex], true);
@@ -900,7 +876,7 @@ bool X53Mount(uint8_t /*effectIndex*/, Aura *a, bool apply)
 
 bool SchoolsOfArcaneMagicMastery(uint8_t /*effectIndex*/, Spell* s)
 {
-    if (auto player = s->GetPlayerTarget())
+    if (auto player = s->getPlayerTarget())
     {
         uint32_t spell = player->getAreaId() == 4637 ? 59316 : 59314;
         player->castSpell(player, spell, true);
@@ -922,7 +898,6 @@ void SetupLegacyItemSpells_1(ScriptMgr* mgr)
     mgr->register_dummy_spell(13120, &NetOMatic);                   // Net-o-Matic
     uint32_t BanishExileIds[] = { 4130, 4131, 4132, 0 };
     mgr->register_dummy_spell(BanishExileIds, &BanishExile);        // Essence of the Exile Quest
-    mgr->register_dummy_spell(19938, &ForemansBlackjack);           // Lazy Peons Quest
     mgr->register_dummy_spell(39105, &NetherWraithBeacon);          // Spellfire Tailor Quest
     mgr->register_dummy_spell(30458, &NighInvulnBelt);              // Nigh Invulnerability Belt
 

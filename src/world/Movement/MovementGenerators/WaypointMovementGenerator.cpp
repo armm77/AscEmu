@@ -1,20 +1,23 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "WaypointMovementGenerator.h"
 #include "Objects/Units/Creatures/Creature.h"
-#include "Errors.h"
+#include "Debugging/Errors.h"
+#include "Logging/Logger.hpp"
 #include "Map/Management/MapMgr.hpp"
 #include "Movement/MovementDefines.h"
 #include "Movement/Spline/MoveSpline.h"
 #include "Movement/Spline/MoveSplineInit.h"
-#include "Management/ObjectMgr.h"
-#include "Objects/Transporter.h"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Transporter.hpp"
 #include "Movement/WaypointManager.h"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Utilities/Random.hpp"
 
-WaypointMovementGenerator<Creature>::WaypointMovementGenerator(uint32_t pathId, bool repeating) : _nextMoveTime(0), _pathId(pathId), _repeating(repeating), _loadedFromDB(true)
+WaypointMovementGenerator<Creature>::WaypointMovementGenerator(uint32_t pathId, bool repeating) : _nextMoveTime(std::make_unique<Util::SmallTimeTracker>(0)), _pathId(pathId), _repeating(repeating), _loadedFromDB(true)
 {
     Mode = MOTION_MODE_DEFAULT;
     Priority = MOTION_PRIORITY_NORMAL;
@@ -22,7 +25,7 @@ WaypointMovementGenerator<Creature>::WaypointMovementGenerator(uint32_t pathId, 
     BaseUnitState = UNIT_STATE_ROAMING;
 }
 
-WaypointMovementGenerator<Creature>::WaypointMovementGenerator(WaypointPath& path, bool repeating) : _nextMoveTime(0), _pathId(0), _repeating(repeating), _loadedFromDB(false)
+WaypointMovementGenerator<Creature>::WaypointMovementGenerator(WaypointPath& path, bool repeating) : _nextMoveTime(std::make_unique<Util::SmallTimeTracker>(0)), _pathId(0), _repeating(repeating), _loadedFromDB(false)
 {
     _path = &path;
 
@@ -46,13 +49,13 @@ void WaypointMovementGenerator<Creature>::pause(uint32_t timer/* = 0*/)
             return;
 
         addFlag(MOVEMENTGENERATOR_FLAG_TIMED_PAUSED);
-        _nextMoveTime.resetInterval(timer);
+        _nextMoveTime->resetInterval(timer);
         removeFlag(MOVEMENTGENERATOR_FLAG_PAUSED);
     }
     else
     {
         addFlag(MOVEMENTGENERATOR_FLAG_PAUSED);
-        _nextMoveTime.resetInterval(1); // Needed so that Update does not behave as if node was reached
+        _nextMoveTime->resetInterval(1); // Needed so that Update does not behave as if node was reached
         removeFlag(MOVEMENTGENERATOR_FLAG_TIMED_PAUSED);
     }
 }
@@ -60,10 +63,10 @@ void WaypointMovementGenerator<Creature>::pause(uint32_t timer/* = 0*/)
 void WaypointMovementGenerator<Creature>::resume(uint32_t overrideTimer/* = 0*/)
 {
     if (overrideTimer)
-        _nextMoveTime.resetInterval(overrideTimer);
+        _nextMoveTime->resetInterval(overrideTimer);
 
-    if (_nextMoveTime.isTimePassed())
-        _nextMoveTime.resetInterval(1); // Needed so that Update does not behave as if node was reached
+    if (_nextMoveTime->isTimePassed())
+        _nextMoveTime->resetInterval(1); // Needed so that Update does not behave as if node was reached
 
     removeFlag(MOVEMENTGENERATOR_FLAG_PAUSED);
 }
@@ -97,13 +100,13 @@ void WaypointMovementGenerator<Creature>::doInitialize(Creature* owner)
 
     if (!_path)
     {
-        sLogger.failure("WaypointMovementGenerator::DoInitialize: couldn't load path for creature (%u) (_pathId: %u)", owner->getGuid(), _pathId);
+        sLogger.failure("WaypointMovementGenerator::DoInitialize: couldn't load path for creature ({}) (_pathId: {})", owner->getGuid(), _pathId);
         return;
     }
 
     owner->stopMoving();
 
-    _nextMoveTime.resetInterval(1000);
+    _nextMoveTime->resetInterval(1000);
 }
 
 void WaypointMovementGenerator<Creature>::doReset(Creature* owner)
@@ -112,8 +115,8 @@ void WaypointMovementGenerator<Creature>::doReset(Creature* owner)
 
     owner->stopMoving();
 
-    if (!hasFlag(MOVEMENTGENERATOR_FLAG_FINALIZED) && _nextMoveTime.isTimePassed())
-        _nextMoveTime.resetInterval(1); // Needed so that Update does not behave as if node was reached
+    if (!hasFlag(MOVEMENTGENERATOR_FLAG_FINALIZED) && _nextMoveTime->isTimePassed())
+        _nextMoveTime->resetInterval(1); // Needed so that Update does not behave as if node was reached
 }
 
 bool WaypointMovementGenerator<Creature>::doUpdate(Creature* owner, uint32_t diff)
@@ -133,7 +136,7 @@ bool WaypointMovementGenerator<Creature>::doUpdate(Creature* owner, uint32_t dif
 
     if (hasFlag(MOVEMENTGENERATOR_FLAG_INTERRUPTED))
     {
-        if (hasFlag(MOVEMENTGENERATOR_FLAG_INITIALIZED) && (_nextMoveTime.isTimePassed() || !hasFlag(MOVEMENTGENERATOR_FLAG_INFORM_ENABLED)))
+        if (hasFlag(MOVEMENTGENERATOR_FLAG_INITIALIZED) && (_nextMoveTime->isTimePassed() || !hasFlag(MOVEMENTGENERATOR_FLAG_INFORM_ENABLED)))
         {
             startMove(owner, true);
             return true;
@@ -146,14 +149,19 @@ bool WaypointMovementGenerator<Creature>::doUpdate(Creature* owner, uint32_t dif
     if (!owner->movespline->Finalized())
     {
         // set home position at place (every MotionMaster::UpdateMotion)
+#if VERSION_STRING <= WotLK
         if (!owner->hasUnitMovementFlag(MOVEFLAG_TRANSPORT) || owner->getTransGuid())
             owner->SetSpawnLocation(owner->GetPosition());
+#else
+        if (owner->getTransGuid())
+            owner->SetSpawnLocation(owner->GetPosition());
+#endif
 
         // relaunch movement if its speed has changed
         if (hasFlag(MOVEMENTGENERATOR_FLAG_SPEED_UPDATE_PENDING))
             startMove(owner, true);
     }
-    else if (!_nextMoveTime.isTimePassed()) // it's not moving, is there a timer?
+    else if (!_nextMoveTime->isTimePassed()) // it's not moving, is there a timer?
     {
         if (updateTimer(diff))
         {
@@ -179,7 +187,7 @@ bool WaypointMovementGenerator<Creature>::doUpdate(Creature* owner, uint32_t dif
             addFlag(MOVEMENTGENERATOR_FLAG_INFORM_ENABLED); // signals to future startMove that it reached a node
         }
 
-        if (_nextMoveTime.isTimePassed()) // OnArrived might have set a timer
+        if (_nextMoveTime->isTimePassed()) // OnArrived might have set a timer
             startMove(owner); // check path status, get next point and move if necessary & can
     }
 
@@ -220,12 +228,12 @@ void WaypointMovementGenerator<Creature>::onArrived(Creature* owner)
     if (waypoint.delay)
     {
         owner->removeUnitStateFlag(UNIT_STATE_ROAMING_MOVE);
-        _nextMoveTime.resetInterval(waypoint.delay);
+        _nextMoveTime->resetInterval(waypoint.delay);
     }
 
     if (waypoint.eventId && Util::getRandomUInt(0, 99) < waypoint.eventChance)
     {
-        sLogger.debug("Creature movement start script %u at point %u for %u.", waypoint.eventId, _currentNode, owner->getGuid());
+        sLogger.debug("Creature movement start script {} at point {} for {}.", waypoint.eventId, _currentNode, owner->getGuid());
         owner->removeUnitStateFlag(UNIT_STATE_ROAMING_MOVE);
         // add waypoint scripts
     }
@@ -248,11 +256,15 @@ void WaypointMovementGenerator<Creature>::startMove(Creature* owner, bool relaun
 
     if (owner->hasUnitStateFlag(UNIT_STATE_NOT_MOVE) || owner->isCastingSpell() || (owner->isFormationLeader() && !owner->isFormationLeaderMoveAllowed())) // if cannot move OR cannot move because of formation
     {
-        _nextMoveTime.resetInterval(1000); // delay 1s
+        _nextMoveTime->resetInterval(1000); // delay 1s
         return;
     }
 
+#if VERSION_STRING <= WotLK
     bool const transportPath = owner->hasUnitMovementFlag(MOVEFLAG_TRANSPORT) && owner->getTransGuid();
+#else
+    bool const transportPath = owner->GetTransport() != nullptr;
+#endif
 
     if (hasFlag(MOVEMENTGENERATOR_FLAG_INFORM_ENABLED) && hasFlag(MOVEMENTGENERATOR_FLAG_INITIALIZED))
     {
@@ -280,7 +292,7 @@ void WaypointMovementGenerator<Creature>::startMove(Creature* owner, bool relaun
                 {
                     o -= trans->GetOrientation();
                     owner->SetTransportHomePosition(x, y, z, o);
-                    trans->CalculatePassengerPosition(x, y, z, &o);
+                    trans->calculatePassengerPosition(x, y, z, &o);
                     owner->SetSpawnLocation(x, y, z, o);
                 }
                 // else if (vehicle) - this should never happen, vehicle offsets are const
@@ -310,7 +322,7 @@ void WaypointMovementGenerator<Creature>::startMove(Creature* owner, bool relaun
 
     owner->addUnitStateFlag(UNIT_STATE_ROAMING_MOVE);
 
-    MovementNew::MoveSplineInit init(owner);
+    MovementMgr::MoveSplineInit init(owner);
 
     //! If creature is on transport, we assume waypoints set in DB are already transport offsets
     if (transportPath)
@@ -326,12 +338,14 @@ void WaypointMovementGenerator<Creature>::startMove(Creature* owner, bool relaun
 
     switch (waypoint.moveType)
     {
+#if VERSION_STRING >= WotLK
         case WAYPOINT_MOVE_TYPE_LAND:
-            init.SetAnimation(AnimationTier::Ground);
+            init.SetAnimation(ANIMATION_FLAG_GROUND);
             break;
         case WAYPOINT_MOVE_TYPE_TAKEOFF:
-            init.SetAnimation(AnimationTier::Hover);
+            init.SetAnimation(ANIMATION_FLAG_HOVER);
             break;
+#endif
         case WAYPOINT_MOVE_TYPE_RUN:
             init.SetWalk(false);
             break;
@@ -355,6 +369,17 @@ bool WaypointMovementGenerator<Creature>::computeNextNode()
 
     _currentNode = (_currentNode + 1) % _path->nodes.size();
     return true;
+}
+
+bool WaypointMovementGenerator<Creature>::updateTimer(uint32_t diff)
+{
+    _nextMoveTime->updateTimer(diff);
+    if (_nextMoveTime->isTimePassed())
+    {
+        _nextMoveTime->resetInterval(0);
+        return true;
+    }
+    return false;
 }
 
 std::string WaypointMovementGenerator<Creature>::getDebugInfo() const

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (c) 2008-2015 Sun++ Team <http://www.sunplusplus.info>
  * Copyright (c) 2007-2015 Moon++ Team <http://www.moonplusplus.info>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
@@ -20,6 +20,15 @@
  */
 
 #include "Setup.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/Units/Creatures/AIInterface.h"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Server/Script/QuestScript.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Storage/MySQLDataStore.hpp"
 
 class Quest_JourneytoUndercity : public QuestScript
 {
@@ -39,7 +48,12 @@ public:
             creat->setNpcFlags(UNIT_NPC_FLAG_NONE);
 
             // Players can't interact with Sylvanas for 180000 ms.
+#if VERSION_STRING < Mop
             sEventMgr.AddEvent(static_cast<Unit*>(creat), &Unit::setNpcFlags, static_cast<uint32_t>(2), EVENT_SCRIPT_UPDATE_EVENT, 180000, 0, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+#else
+            sEventMgr.AddEvent(static_cast<Unit*>(creat), &Unit::setNpcFlags, static_cast<uint64_t>(2), EVENT_SCRIPT_UPDATE_EVENT, 180000, 0, EVENT_FLAG_DO_NOT_EXECUTE_IN_WORLD_CONTEXT);
+
+#endif
         }
     }
 

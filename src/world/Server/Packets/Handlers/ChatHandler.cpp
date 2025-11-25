@@ -1,21 +1,23 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-#include "Macros/ScriptMacros.hpp"
-#include "Management/WordFilter.h"
+#include "Management/WordFilter.hpp"
 #include "Chat/Channel.hpp"
 #include "Chat/ChannelMgr.hpp"
 #include "Management/Battleground/Battleground.hpp"
 #include "Map/Management/MapMgr.hpp"
 #include "Objects/Units/Creatures/Pet.h"
 #include "Chat/ChatDefines.hpp"
-#include "Server/Script/ScriptMgr.h"
-#include "Chat/ChatHandler.hpp"
+#include "Server/Script/ScriptMgr.hpp"
+#include "Chat/ChatCommandHandler.hpp"
 
+#include "Logging/Logger.hpp"
+#include "Management/Group.h"
 #include "Objects/Units/Players/Player.hpp"
-#include "Management/ObjectMgr.h"
+#include "Management/ObjectMgr.hpp"
+#include "Management/QuestMgr.h"
 #include "Server/Packets/CmsgMessageChat.h"
 #include "Server/Packets/SmsgMessageChat.h"
 #include "Server/Packets/SmsgChatPlayerNotFound.h"
@@ -28,16 +30,18 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Server/Packets/CmsgChatIgnored.h"
 #include "Server/Packets/CmsgSetChannelWatch.h"
 #include "Management/Guild/GuildMgr.hpp"
-#include "Server/Script/CreatureAIScript.h"
+#include "Server/World.h"
+#include "Server/WorldSession.h"
+#include "Server/Script/CreatureAIScript.hpp"
+#include "Server/Script/HookInterface.hpp"
+#include "Storage/WDB/WDBStores.hpp"
+#include "Storage/WDB/WDBStructures.hpp"
 
 #if VERSION_STRING >= Cata
-#include "Spell/SpellAuras.h"
+#include "Spell/SpellAura.hpp"
 #endif
 
 using namespace AscEmu::Packets;
-
-extern std::string LogFileName;
-extern bool bLogChat;
 
 bool WorldSession::isSessionMuted()
 {
@@ -52,7 +56,7 @@ bool WorldSession::isSessionMuted()
 
 bool WorldSession::isFloodProtectionTriggered()
 {
-    if (!GetPermissionCount() && worldConfig.chat.linesBeforeProtection)
+    if (!hasPermissions() && worldConfig.chat.linesBeforeProtection)
     {
         if (UNIXTIME >= floodTime)
         {
@@ -148,7 +152,7 @@ void WorldSession::handleMessageChatOpcode(WorldPacket& recvPacket)
         }
 
         // GMs speak universal language
-        if (GetPermissionCount() > 0)
+        if (hasPermissions())
         {
             messageLanguage = LANG_UNIVERSAL;
             player_can_speak_language = true;
@@ -216,7 +220,7 @@ void WorldSession::handleMessageChatOpcode(WorldPacket& recvPacket)
         {
             // TODO Verify "strange gestures" for xfaction
             _player->sendMessageToSet(SmsgMessageChat(CHAT_MSG_EMOTE, messageLanguage, gmFlag, srlPacket.message, _player->getGuid()).serialise().get(), true, true);
-            sLogger.info("[emote] %s: %s", _player->getName().c_str(), srlPacket.message.c_str());
+            sLogger.info("[emote] {}: {}", _player->getName(), srlPacket.message);
         } break;
         case CHAT_MSG_SAY:
         {
@@ -238,7 +242,7 @@ void WorldSession::handleMessageChatOpcode(WorldPacket& recvPacket)
             // Use correct type for group/raid leader
             if (srlPacket.type == CHAT_MSG_PARTY || srlPacket.type == CHAT_MSG_RAID)
             {
-                if (auto* const group = _player->getGroup())
+                if (auto const group = _player->getGroup())
                     if (group->GetLeader() == _player->getPlayerInfo())
                         srlPacket.type = srlPacket.type == CHAT_MSG_PARTY ? CHAT_MSG_PARTY_LEADER : CHAT_MSG_RAID_LEADER;
             }
@@ -246,15 +250,15 @@ void WorldSession::handleMessageChatOpcode(WorldPacket& recvPacket)
 
             const auto send_packet = SmsgMessageChat(static_cast<uint8_t>(srlPacket.type), messageLanguage, gmFlag, srlPacket.message, _player->getGuid()).serialise();
 
-            if (auto* const group = _player->getGroup())
+            if (auto const group = _player->getGroup())
             {
                 if (srlPacket.type == CHAT_MSG_PARTY || srlPacket.type == CHAT_MSG_PARTY_LEADER && group->isRaid())
                 {
                     if (auto* const subgroup = group->GetSubGroup(_player->getSubGroupSlot()))
                     {
                         group->Lock();
-                        for (auto* group_member : subgroup->getGroupMembers())
-                            if (Player* loggedInPlayer = sObjectMgr.GetPlayer(group_member->guid))
+                        for (auto group_member : subgroup->getGroupMembers())
+                            if (Player* loggedInPlayer = sObjectMgr.getPlayer(group_member->guid))
                                 loggedInPlayer->sendPacket(send_packet.get());
                         group->Unlock();
                     }
@@ -266,14 +270,14 @@ void WorldSession::handleMessageChatOpcode(WorldPacket& recvPacket)
                         if (auto* const sub_group = group->GetSubGroup(i))
                         {
                             group->Lock();
-                            for (auto* group_member : sub_group->getGroupMembers())
-                                if (Player* loggedInPlayer = sObjectMgr.GetPlayer(group_member->guid))
+                            for (auto group_member : sub_group->getGroupMembers())
+                                if (Player* loggedInPlayer = sObjectMgr.getPlayer(group_member->guid))
                                     loggedInPlayer->sendPacket(send_packet.get());
                             group->Unlock();
                         }
                     }
                 }
-                sLogger.info("[party] %s: %s", _player->getName().c_str(), srlPacket.message.c_str());
+                sLogger.info("[party] {}: {}", _player->getName(), srlPacket.message);
             }
         } break;
         case CHAT_MSG_GUILD:
@@ -296,7 +300,7 @@ void WorldSession::handleMessageChatOpcode(WorldPacket& recvPacket)
         } break;
         case CHAT_MSG_WHISPER:
         {
-            if (auto* const playerTarget = sObjectMgr.GetPlayer(srlPacket.destination.c_str(), false))
+            if (auto* const playerTarget = sObjectMgr.getPlayer(srlPacket.destination.c_str(), false))
             {
                 const auto target_is_our_faction = _player->getInitialTeam() == playerTarget->getInitialTeam();
                 const auto target_is_gm_flagged = playerTarget->hasPlayerFlags(PLAYER_FLAG_GM);
@@ -343,8 +347,8 @@ void WorldSession::handleMessageChatOpcode(WorldPacket& recvPacket)
         } break;
         case CHAT_MSG_CHANNEL:
         {
-            if (auto* const channel = sChannelMgr.getChannel(srlPacket.destination, _player))
-                channel->say(_player, srlPacket.message.c_str(), nullptr, false);
+            if (auto channel = sChannelMgr.getChannel(srlPacket.destination, _player))
+                channel->say(_player, srlPacket.message, nullptr, false);
 
         } break;
         case CHAT_MSG_AFK:
@@ -365,7 +369,7 @@ void WorldSession::handleMessageChatOpcode(WorldPacket& recvPacket)
 
 #if VERSION_STRING >= Cata
             // Use correct type for group leader
-            if (auto* const group = _player->getGroup())
+            if (auto const group = _player->getGroup())
                 if (group->GetLeader() == _player->getPlayerInfo())
                     srlPacket.type = CHAT_MSG_BATTLEGROUND_LEADER;
 #endif
@@ -393,7 +397,7 @@ void WorldSession::handleTextEmoteOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (!GetPermissionCount() && worldConfig.chat.linesBeforeProtection)
+    if (!hasPermissions() && worldConfig.chat.linesBeforeProtection)
     {
         if (UNIXTIME >= floodTime)
         {
@@ -414,14 +418,14 @@ void WorldSession::handleTextEmoteOpcode(WorldPacket& recvPacket)
         if (unit->isPlayer())
             unitName = dynamic_cast<Player*>(unit)->getName();
         else if (unit->isPet())
-            unitName = dynamic_cast<Pet*>(unit)->GetName();
+            unitName = dynamic_cast<Pet*>(unit)->getName();
         else
             unitName = dynamic_cast<Creature*>(unit)->GetCreatureProperties()->Name;
 
         nameLength = static_cast<uint32_t>(unitName.length() + 1);
     }
 
-    if (const auto emoteTextEntry = sEmotesTextStore.LookupEntry(srlPacket.text_emote))
+    if (const auto emoteTextEntry = sEmotesTextStore.lookupEntry(srlPacket.text_emote))
     {
         sHookInterface.OnEmote(_player, emoteTextEntry->textid, unit);
         if (unit)
@@ -448,7 +452,7 @@ void WorldSession::handleTextEmoteOpcode(WorldPacket& recvPacket)
         _player->sendMessageToSet(SmsgTextEmote(nameLength, unitName, srlPacket.text_emote, _player->getGuid(), srlPacket.unk).serialise().get(), true);
 
 #if VERSION_STRING > TBC
-        _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, srlPacket.text_emote, 0, 0);
+        _player->updateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, srlPacket.text_emote, 0, 0);
 #endif
         sQuestMgr.OnPlayerEmote(_player, srlPacket.text_emote, srlPacket.guid);
     }
@@ -479,7 +483,7 @@ void WorldSession::handleTextEmoteOpcode(WorldPacket& recvPacket)
         }
         else if (unit->isPet())
         {
-            unitName = dynamic_cast<Pet*>(unit)->GetName().c_str();
+            unitName = dynamic_cast<Pet*>(unit)->getName().c_str();
             nameLength = static_cast<uint32_t>(strlen(unitName)) + 1;
         }
         else
@@ -490,7 +494,7 @@ void WorldSession::handleTextEmoteOpcode(WorldPacket& recvPacket)
         }
     }
 
-    DBC::Structures::EmotesTextEntry const* emoteTextEntry = sEmotesTextStore.LookupEntry(srlPacket.text_emote);
+    WDB::Structures::EmotesTextEntry const* emoteTextEntry = sEmotesTextStore.lookupEntry(srlPacket.text_emote);
     if (emoteTextEntry == nullptr)
         return;
 
@@ -521,7 +525,7 @@ void WorldSession::handleTextEmoteOpcode(WorldPacket& recvPacket)
 
     _player->sendMessageToSet(SmsgTextEmote(nameLength, unitName, srlPacket.text_emote, _player->getGuid(), srlPacket.unk).serialise().get(), true);
 
-    _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, srlPacket.text_emote, 0, 0);
+    _player->getAchievementMgr()->updateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, srlPacket.text_emote, 0, 0);
 
     sQuestMgr.OnPlayerEmote(_player, srlPacket.text_emote, srlPacket.guid);
 }
@@ -539,26 +543,26 @@ void WorldSession::handleEmoteOpcode(WorldPacket& recvPacket)
     _player->emote(static_cast<EmoteType>(srlPacket.emote));
 
 #if VERSION_STRING > TBC
-    _player->getAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, srlPacket.emote, 0, 0);
+    _player->updateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, srlPacket.emote, 0, 0);
 #endif
 
     uint64_t guid = _player->getGuid();
     sQuestMgr.OnPlayerEmote(_player, srlPacket.emote, guid);
 }
 
-#if VERSION_STRING < Cata
 void WorldSession::handleReportSpamOpcode(WorldPacket& recvPacket)
 {
+#if VERSION_STRING < Cata
     CmsgComplaint srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("REPORT SPAM: type %u, guid %u, unk1 %u, unk2 %u, unk3 %u, unk4 %u, message %s", srlPacket.spam_type, srlPacket.spammer_guid.getGuidLow(),
-        srlPacket.unk1, srlPacket.unk2, srlPacket.unk3, srlPacket.unk4, srlPacket.description.c_str());
+    sLogger.debug("REPORT SPAM: type {}, guid {}, unk1 {}, unk2 {}, unk3 {}, unk4 {}, message {}", srlPacket.spam_type, srlPacket.spammer_guid.getGuidLow(),
+        srlPacket.unk1, srlPacket.unk2, srlPacket.unk3, srlPacket.unk4, srlPacket.description);
 
     SendPacket(SmsgComplainResult(0).serialise().get());
-}
 #endif
+}
 
 void WorldSession::handleChatIgnoredOpcode(WorldPacket& recvPacket)
 {
@@ -566,7 +570,7 @@ void WorldSession::handleChatIgnoredOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    const auto player = sObjectMgr.GetPlayer(srlPacket.guid.getGuidLow());
+    const auto player = sObjectMgr.getPlayer(srlPacket.guid.getGuidLow());
     if (player == nullptr || player->getSession() == nullptr)
         return;
 
@@ -579,5 +583,5 @@ void WorldSession::handleChatChannelWatchOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debug("Unhandled... Player %s watch channel: %s", _player->getName().c_str(), srlPacket.name.c_str());
+    sLogger.debug("Unhandled... Player {} watch channel: {}", _player->getName(), srlPacket.name);
 }

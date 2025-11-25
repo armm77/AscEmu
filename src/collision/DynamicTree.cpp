@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,9 @@
 
 #include "DynamicTree.h"
 #include "BoundingIntervalHierarchyWrapper.h"
-
 #include "Logging/Logger.hpp"
 #include "RegularGrid.h"
-#include "Util.hpp"
+#include "Utilities/Util.hpp"
 #include "GameObjectModel.h"
 #include "MapTree.h"
 #include "ModelInstance.h"
@@ -32,6 +31,9 @@
 #include <G3D/AABox.h>
 #include <G3D/Ray.h>
 #include <G3D/Vector3.h>
+
+#include "Utilities/TimeTracker.hpp"
+#include <memory>
 
 using VMAP::ModelInstance;
 
@@ -68,7 +70,7 @@ struct DynTreeImpl : public ParentTree/*, public Intersectable*/
     typedef ParentTree base;
 
     DynTreeImpl() :
-        rebalance_timer(CHECK_TREE_PERIOD),
+        rebalance_timer(std::make_unique<Util::SmallTimeTracker>(CHECK_TREE_PERIOD)),
         unbalanced_times(0)
     {
     }
@@ -96,25 +98,22 @@ struct DynTreeImpl : public ParentTree/*, public Intersectable*/
         if (!size())
             return;
 
-        rebalance_timer.updateTimer(difftime);
-        if (rebalance_timer.isTimePassed())
+        rebalance_timer->updateTimer(difftime);
+        if (rebalance_timer->isTimePassed())
         {
-            rebalance_timer.resetInterval(CHECK_TREE_PERIOD);
+            rebalance_timer->resetInterval(CHECK_TREE_PERIOD);
             if (unbalanced_times > 0)
                 balance();
         }
     }
 
-    SmallTimeTracker rebalance_timer;
+    std::unique_ptr<Util::SmallTimeTracker> rebalance_timer;
     int unbalanced_times;
 };
 
-DynamicMapTree::DynamicMapTree() : impl(new DynTreeImpl()) { }
+DynamicMapTree::DynamicMapTree() : impl(std::make_unique<DynTreeImpl>()) { }
 
-DynamicMapTree::~DynamicMapTree()
-{
-    delete impl;
-}
+DynamicMapTree::~DynamicMapTree() = default;
 
 void DynamicMapTree::insert(const GameObjectModel& mdl)
 {
@@ -169,7 +168,7 @@ struct DynamicTreeIntersectionCallback_WithLogger
     }
     bool operator()(const G3D::Ray& r, const GameObjectModel& obj, float& distance)
     {
-        sLogger.debug("DynamicTreeIntersectionCallback_WithLogger : testing intersection with %s", obj.name.c_str());
+        sLogger.debug("DynamicTreeIntersectionCallback_WithLogger : testing intersection with {}", obj.name);
         bool hit = obj.intersectRay(r, distance, true, phase_mask);
         if (hit)
         {

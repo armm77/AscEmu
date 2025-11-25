@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2008-2012 ArcEmu Team <http://www.ArcEmu.org/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,11 +20,12 @@
 #ifndef _LOCATIONVECTOR_H
 #define _LOCATIONVECTOR_H
 
+#include "CommonTypes.hpp"
+#include "CommonDefines.hpp"
+
 #include <math.h>
 #include <string>
 #include <cmath>
-#include "CommonTypes.hpp"
-#include "CommonDefines.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Location vector class (X, Y, Z, O)

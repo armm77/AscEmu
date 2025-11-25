@@ -1,12 +1,9 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
-
-#include "Chat/ChatDefines.hpp"
-#include "Server/WorldSession.h"
 
 #include "Management/Guild/GuildDefinitions.hpp"
 #include "GuildEmblemInfo.hpp"
@@ -14,12 +11,14 @@ This file is released under the MIT license. See README-MIT for more information
 #include "GuildLogHolder.hpp"
 #include "GuildRankInfo.hpp"
 #include "GuildBankTab.hpp"
-
-#include <string>
-
 #include "Macros/GuildMacros.hpp"
 
+#include <Utilities/utf8.hpp>
 
+#include <string>
+#include <set>
+
+class WorldSession;
 class Player;
 class EmblemInfo;
 
@@ -30,9 +29,8 @@ typedef std::set<uint8_t> SlotIds;
 class SERVER_DECL Guild
 {
 protected:
-
     uint32_t m_id;
-    std::string m_name;
+    utf8_string m_name;
     uint64_t m_leaderGuid;
     std::string m_motd;
     std::string m_info;
@@ -44,7 +42,6 @@ protected:
     uint64_t m_todayExperience;
 
 public:
-
     uint32_t getId() const { return m_id; }
 
     uint64_t getGUID() const { return WoWGuid(m_id, 0, HIGHGUID_TYPE_GUILD).getRawGuid(); }
@@ -70,7 +67,6 @@ public:
     class GuildMember
     {
     public:
-
         GuildMember(uint32_t guildId, uint64_t guid, uint8_t rankId);
 
         void setStats(Player* player);
@@ -133,7 +129,6 @@ public:
         Player* getPlayerByGuid(uint64_t guid);
 
     private:
-
         uint32_t mGuildId;
 
         uint64_t mGuid;
@@ -158,27 +153,23 @@ public:
     };
 
 private:
-
     typedef std::vector<GuildRankInfo> GuildRankInfoStore;
-    typedef std::vector<GuildBankTab*> GuildBankTabsStore;  //done
-    typedef std::map<uint32_t, class GuildMember*> GuildMembersStore;
+    typedef std::vector<std::unique_ptr<GuildBankTab>> GuildBankTabsStore;
+    typedef std::map<uint32_t, std::unique_ptr<GuildMember>> GuildMembersStore;
 
 protected:
-
     EmblemInfo m_emblemInfo;
     uint32_t mAccountsNumber;
 
-
     GuildRankInfoStore _guildRankInfoStore;
     GuildMembersStore _guildMembersStore;
-    GuildBankTabsStore _guildBankTabsStore; //done
+    GuildBankTabsStore _guildBankTabsStore;
 
-    GuildLogHolder* mEventLog;
-    GuildLogHolder* mBankEventLog[MAX_GUILD_BANK_TABS + 1];
-    GuildLogHolder* mNewsLog;
+    std::unique_ptr<GuildLogHolder> mEventLog;
+    std::array<std::unique_ptr<GuildLogHolder>, MAX_GUILD_BANK_TABS + 1> mBankEventLog;
+    std::unique_ptr<GuildLogHolder> mNewsLog;
 
 public:
-
     Guild();
     ~Guild();
 
@@ -248,7 +239,7 @@ public:
     bool loadBankItemFromDB(Field* fields);
     bool validate();
 
-    void broadcastToGuild(WorldSession* session, bool officerOnly, std::string const& msg, uint32_t language = LANG_UNIVERSAL) const;
+    void broadcastToGuild(WorldSession* session, bool officerOnly, std::string const& msg, uint32_t language = 0) const;
     void broadcastAddonToGuild(WorldSession* session, bool officerOnly, std::string const& msg, std::string const& prefix) const;
     void broadcastPacketToRank(WorldPacket* packet, uint8_t rankId) const;
     void broadcastPacket(WorldPacket* packet) const;
@@ -298,10 +289,10 @@ public:
     bool hasAchieved(uint32_t achievementId) const;
 
 private:
-
     inline uint8_t _getRanksSize() const { return uint8_t(_guildRankInfoStore.size()); }
     inline const GuildRankInfo* getRankInfo(uint8_t rankId) const { return rankId < _getRanksSize() ? &_guildRankInfoStore[rankId] : nullptr; }
     inline GuildRankInfo* getRankInfo(uint8_t rankId) { return rankId < _getRanksSize() ? &_guildRankInfoStore[rankId] : nullptr; }
+
 public:
     inline bool _hasRankRight(uint64_t playerGuid, uint32_t right) const
     {
@@ -316,22 +307,24 @@ public:
 private:
     inline uint8_t _getLowestRankId() const { return uint8_t(_guildRankInfoStore.size() - 1); }
 
-    inline uint8_t _getPurchasedTabsSize() const { return uint8_t(_guildBankTabsStore.size()); }    //done
+    inline uint8_t _getPurchasedTabsSize() const { return uint8_t(_guildBankTabsStore.size()); }
+
 public:
-    inline GuildBankTab* getBankTab(uint8_t tabId) { return tabId < _guildBankTabsStore.size() ? _guildBankTabsStore[tabId] : nullptr; }    //done
+    inline GuildBankTab* getBankTab(uint8_t tabId) { return tabId < _guildBankTabsStore.size() ? _guildBankTabsStore[tabId].get() : nullptr; }
+
 private:
-    inline const GuildBankTab* getBankTab(uint8_t tabId) const { return tabId < _guildBankTabsStore.size() ? _guildBankTabsStore[tabId] : nullptr; }    //done
+    inline const GuildBankTab* getBankTab(uint8_t tabId) const { return tabId < _guildBankTabsStore.size() ? _guildBankTabsStore[tabId].get() : nullptr; }
 
     inline const GuildMember* getMember(uint64_t guid) const
     {
         GuildMembersStore::const_iterator itr = _guildMembersStore.find(WoWGuid::getGuidLowPartFromUInt64(guid));
-        return itr != _guildMembersStore.end() ? itr->second : nullptr;
+        return itr != _guildMembersStore.end() ? itr->second.get() : nullptr;
     }
 
     inline GuildMember* getMember(uint64_t guid)
     {
         GuildMembersStore::iterator itr = _guildMembersStore.find(WoWGuid::getGuidLowPartFromUInt64(guid));
-        return itr != _guildMembersStore.end() ? itr->second : nullptr;
+        return itr != _guildMembersStore.end() ? itr->second.get() : nullptr;
     }
 
     inline GuildMember* getMember(std::string const& name)
@@ -340,17 +333,18 @@ private:
         {
             if (itr->second->getName() == name)
             {
-                return itr->second;
+                return itr->second.get();
             }
         }
 
         return nullptr;
     }
+
 public:
     std::vector<std::string> getMemberNameList() const
     {
         std::vector<std::string> memberNames;
-        for (const auto members : _guildMembersStore)
+        for (const auto& members : _guildMembersStore)
             memberNames.push_back(members.second->getName());
 
         return memberNames;
@@ -379,6 +373,7 @@ public:
     int32_t getMemberRemainingMoney(GuildMember const* member) const;
     void updateMemberWithdrawSlots(uint64_t guid, uint8_t tabId);
     bool memberHasTabRights(uint64_t guid, uint8_t tabId, uint32_t rights) const;
+
 public:
     void logEvent(GuildEventLogTypes eventType, uint32_t playerGuid1, uint32_t playerGuid2 = 0, uint8_t newRank = 0);
     void logBankEvent(GuildBankEventLogTypes eventType, uint8_t tabId, uint32_t playerGuid, uint32_t itemOrMoney, uint16_t itemStackCount = 0, uint8_t destTabId = 0);

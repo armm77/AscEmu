@@ -1,9 +1,15 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #include "Setup.h"
+#include "Objects/Units/Unit.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
+#include "Spell/SpellMgr.hpp"
+#include "Spell/SpellScript.hpp"
 
 #if VERSION_STRING >= WotLK
 enum DeathknightSpells
@@ -16,11 +22,8 @@ enum DeathknightSpells
     SPELL_BLOOD_PRESENCE_HEAL               = 50475,
     SPELL_BUTCHERY_ENERGIZE                 = 50163,
     SPELL_BUTCHERY_R1                       = 48979,
-    SPELL_BUTCHERY_R2                       = 49483,
     SPELL_DEATH_RUNE_MASTERY_BLOOD          = 50806,
     SPELL_DEATH_RUNE_MASTERY_R1             = 49467,
-    SPELL_DEATH_RUNE_MASTERY_R2             = 50033,
-    SPELL_DEATH_RUNE_MASTERY_R3             = 50034,
 #if VERSION_STRING == WotLK
     SPELL_FROST_PRESENCE                    = 48263,
 #else
@@ -189,7 +192,7 @@ public:
 
     SpellScriptExecuteState onCastProcSpell(SpellProc* /*spellProc*/, Unit* /*caster*/, Unit* /*victim*/, Spell* spell) override
     {
-        spell->forced_basepoints.set(EFF_INDEX_0, heal);
+        spell->forced_basepoints->set(EFF_INDEX_0, heal);
         heal = 0;
         return SpellScriptExecuteState::EXECUTE_OK;
     }
@@ -327,24 +330,11 @@ void setupDeathKnightSpells(ScriptMgr* mgr)
 #endif
 
 #if VERSION_STRING < Mop
-    uint32_t butcheryIds[] =
-    {
-        SPELL_BUTCHERY_R1,
-        SPELL_BUTCHERY_R2,
-        0
-    };
-    mgr->register_spell_script(butcheryIds, new Butchery);
+    mgr->register_spell_script(SPELL_BUTCHERY_R1, new Butchery);
 #endif
 
 #if VERSION_STRING == WotLK
-    uint32_t deathRuneMasteryIds[] =
-    {
-        SPELL_DEATH_RUNE_MASTERY_R1,
-        SPELL_DEATH_RUNE_MASTERY_R2,
-        SPELL_DEATH_RUNE_MASTERY_R3,
-        0
-    };
-    mgr->register_spell_script(deathRuneMasteryIds, new DeathRuneMastery);
+    mgr->register_spell_script(SPELL_DEATH_RUNE_MASTERY_R1, new DeathRuneMastery);
 #endif
 
 #if VERSION_STRING < Mop

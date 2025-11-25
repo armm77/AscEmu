@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
+#include "Logging/Logger.hpp"
+#include "Management/Group.h"
 #include "Server/Packets/MsgQuestPushResult.h"
 #include "Server/Packets/CmsgQuestgiverAcceptQuest.h"
 #include "Server/Packets/CmsgQuestQuery.h"
@@ -21,19 +22,28 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Storage/MySQLDataStore.hpp"
 #include "Map/Management/MapMgr.hpp"
 #include "Management/ItemInterface.h"
+#include "Management/ObjectMgr.hpp"
 #include "Management/QuestLogEntry.hpp"
+#include "Management/QuestMgr.h"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Item.hpp"
+#include "Objects/Units/Creatures/Creature.h"
+#include "Objects/Units/Players/Player.hpp"
 #include "Server/Packets/SmsgGossipComplete.h"
-#include "Server/Script/ScriptMgr.h"
+#include "Server/Script/HookInterface.hpp"
+#include "Server/Script/QuestScript.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 
 using namespace AscEmu::Packets;
 
 #if VERSION_STRING < Cata
-WorldPacket* WorldSession::buildQuestQueryResponse(QuestProperties const* qst)
+std::unique_ptr<WorldPacket> WorldSession::buildQuestQueryResponse(QuestProperties const* qst)
 {
     // 2048 bytes should be more than enough. The fields cost ~200 bytes.
     // better to allocate more at startup than have to realloc the buffer later on.
 
-    WorldPacket* data = new WorldPacket(SMSG_QUEST_QUERY_RESPONSE, 248);
+    auto data = std::make_unique<WorldPacket>(SMSG_QUEST_QUERY_RESPONSE, 248);
     MySQLStructure::LocalesQuest const* lci = (language > 0) ? sMySQLStore.getLocalizedQuest(qst->id, language) : nullptr;
     uint32_t i;
 
@@ -185,9 +195,9 @@ WorldPacket* WorldSession::buildQuestQueryResponse(QuestProperties const* qst)
     return data;
 }
 #else
-WorldPacket* WorldSession::buildQuestQueryResponse(QuestProperties const* qst)
+std::unique_ptr<WorldPacket> WorldSession::buildQuestQueryResponse(QuestProperties const* qst)
 {
-    WorldPacket* data = new WorldPacket(SMSG_QUEST_QUERY_RESPONSE, 100);
+    auto data = std::make_unique<WorldPacket>(SMSG_QUEST_QUERY_RESPONSE, 100);
     MySQLStructure::LocalesQuest const* lci = (language > 0) ? sMySQLStore.getLocalizedQuest(qst->id, language) : nullptr;
 
     *data << uint32_t(qst->id);                                        // Quest ID
@@ -331,7 +341,7 @@ void WorldSession::handleQuestPushResultOpcode(WorldPacket& recvPacket)
 
     if (_player->getQuestSharerByDbId())
     {
-        const auto questSharerPlayer = sObjectMgr.GetPlayer(_player->getQuestSharerByDbId());
+        const auto questSharerPlayer = sObjectMgr.getPlayer(_player->getQuestSharerByDbId());
         if (questSharerPlayer)
         {
             const uint64_t guid = recvPacket.size() >= 13 ? _player->getGuid() : srlPacket.giverGuid;
@@ -358,19 +368,19 @@ void WorldSession::handleQuestQueryOpcode(WorldPacket& recvPacket)
 
     if (const auto questProperties = sMySQLStore.getQuestProperties(srlPacket.questId))
     {
-        WorldPacket* worldPacket = buildQuestQueryResponse(questProperties);
-        SendPacket(worldPacket);
-        delete worldPacket;
+        auto worldPacket = buildQuestQueryResponse(questProperties);
+        SendPacket(worldPacket.get());
     }
     else
     {
-        sLogger.debug("Invalid quest Id %u.", srlPacket.questId);
+        sLogger.debug("Invalid quest Id {}.", srlPacket.questId);
     }
 }
 
-#if VERSION_STRING > TBC
+
 void WorldSession::handleQuestPOIQueryOpcode(WorldPacket& recvPacket)
 {
+#if VERSION_STRING > TBC
     CmsgQuestPoiQuery srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
@@ -390,8 +400,8 @@ void WorldSession::handleQuestPOIQueryOpcode(WorldPacket& recvPacket)
         sQuestMgr.BuildQuestPOIResponse(data, questId);
 
     SendPacket(&data);
-}
 #endif
+}
 
 void WorldSession::handleQuestgiverCancelOpcode(WorldPacket& /*recvPacket*/)
 {
@@ -412,7 +422,7 @@ void WorldSession::handleQuestgiverHelloOpcode(WorldPacket& recvPacket)
     {
         if (!questGiver->isQuestGiver())
         {
-            sLogger.debug("Creature with guid %u is not a questgiver.", srlPacket.questGiverGuid.getGuidLowPart());
+            sLogger.debug("Creature with guid {} is not a questgiver.", srlPacket.questGiverGuid.getGuidLowPart());
             return;
         }
 
@@ -420,7 +430,7 @@ void WorldSession::handleQuestgiverHelloOpcode(WorldPacket& recvPacket)
     }
     else
     {
-        sLogger.debug("Invalid questgiver guid %u.", srlPacket.questGiverGuid.getGuidLowPart());
+        sLogger.debug("Invalid questgiver guid {}.", srlPacket.questGiverGuid.getGuidLowPart());
     }
 }
 
@@ -468,7 +478,7 @@ void WorldSession::handleQuestgiverStatusQueryOpcode(WorldPacket& recvPacket)
 
     if (!qst_giver)
     {
-        sLogger.debug("Invalid questgiver GUID " I64FMT ".", srlPacket.questGiverGuid.getRawGuid());
+        sLogger.debug("Invalid questgiver GUID {}.", std::to_string(srlPacket.questGiverGuid.getRawGuid()));
         return;
     }
 
@@ -493,7 +503,7 @@ void WorldSession::handleQuestGiverQueryQuestOpcode(WorldPacket& recvPacket)
     QuestProperties const* qst = sMySQLStore.getQuestProperties(srlPacket.questId);
     if (!qst)
     {
-        sLogger.debug("Invalid quest with id %u", srlPacket.questId);
+        sLogger.debug("Invalid quest with id {}", srlPacket.questId);
         return;
     }
 
@@ -592,7 +602,7 @@ void WorldSession::handleQuestlogRemoveQuestOpcode(WorldPacket& recvPacket)
     QuestLogEntry* qEntry = _player->getQuestLogBySlotId(srlPacket.questLogSlot);
     if (!qEntry)
     {
-        sLogger.debug(" No quest in slot %d.", srlPacket.questLogSlot);
+        sLogger.debug(" No quest in slot {}.", srlPacket.questLogSlot);
         return;
     }
     QuestProperties const* qPtr = qEntry->getQuestProperties();
@@ -659,7 +669,7 @@ void WorldSession::handleQuestgiverRequestRewardOpcode(WorldPacket& recvPacket)
 
             if (!qst)
             {
-                sLogger.debug("Cannot get reward for quest %u, as it doesn't exist at Unit %u.", srlPacket.questId, quest_giver->getEntry());
+                sLogger.debug("Cannot get reward for quest {}, as it doesn't exist at Unit {}.", srlPacket.questId, quest_giver->getEntry());
                 return;
             }
             status = sQuestMgr.CalcQuestStatus(qst_giver, _player, qst, static_cast<uint8_t>(quest_giver->GetQuestRelation(qst->id)), false);
@@ -681,7 +691,7 @@ void WorldSession::handleQuestgiverRequestRewardOpcode(WorldPacket& recvPacket)
             qst = go_quest_giver->FindQuest(srlPacket.questId, QUESTGIVER_QUEST_END);
             if (!qst)
             {
-                sLogger.debug("Cannot get reward for quest %u, as it doesn't exist at GO %u.", srlPacket.questId, quest_giver->getEntry());
+                sLogger.debug("Cannot get reward for quest {}, as it doesn't exist at GO {}.", srlPacket.questId, quest_giver->getEntry());
                 return;
             }
             status = sQuestMgr.CalcQuestStatus(qst_giver, _player, qst, static_cast<uint8_t>(go_quest_giver->GetQuestRelation(qst->id)), false);
@@ -734,7 +744,7 @@ void WorldSession::handleQuestgiverCompleteQuestOpcode(WorldPacket& recvPacket)
             qst = quest_giver->FindQuest(srlPacket.questId, QUESTGIVER_QUEST_END);
             if (!qst)
             {
-                sLogger.debug("Cannot complete quest %u, as it doesn't exist at Unit %u.", srlPacket.questId, quest_giver->getEntry());
+                sLogger.debug("Cannot complete quest {}, as it doesn't exist at Unit {}.", srlPacket.questId, quest_giver->getEntry());
                 return;
             }
             status = sQuestMgr.CalcQuestStatus(qst_giver, _player, qst, static_cast<uint8_t>(quest_giver->GetQuestRelation(qst->id)), false);
@@ -754,7 +764,7 @@ void WorldSession::handleQuestgiverCompleteQuestOpcode(WorldPacket& recvPacket)
             qst = go_quest_giver->FindQuest(srlPacket.questId, QUESTGIVER_QUEST_END);
             if (!qst)
             {
-                sLogger.debug("Cannot complete quest %u, as it doesn't exist at GO %u.", srlPacket.questId, quest_giver->getEntry());
+                sLogger.debug("Cannot complete quest {}, as it doesn't exist at GO {}.", srlPacket.questId, quest_giver->getEntry());
                 return;
             }
             status = sQuestMgr.CalcQuestStatus(qst_giver, _player, qst, static_cast<uint8_t>(go_quest_giver->GetQuestRelation(qst->id)), false);
@@ -884,19 +894,17 @@ void WorldSession::handlePushQuestToPartyOpcode(WorldPacket& recvPacket)
     QuestProperties const* pQuest = sMySQLStore.getQuestProperties(srlPacket.questId);
     if (pQuest)
     {
-        Group* pGroup = _player->getGroup();
-        if (pGroup)
+        if (auto group = _player->getGroup())
         {
             uint32_t pguid = _player->getGuidLow();
-            SubGroup* sgr = _player->getGroup() ?
-                _player->getGroup()->GetSubGroup(_player->getSubGroupSlot()) : 0;
+            SubGroup* sgr = group ? group->GetSubGroup(_player->getSubGroupSlot()) : nullptr;
 
             if (sgr)
             {
-                _player->getGroup()->Lock();
-                for (GroupMembersSet::iterator itr = sgr->GetGroupMembersBegin(); itr != sgr->GetGroupMembersEnd(); ++itr)
+                group->Lock();
+                for (const auto cachedCharacterInfo : sgr->getGroupMembers())
                 {
-                    Player* pPlayer = sObjectMgr.GetPlayer((*itr)->guid);
+                    Player* pPlayer = sObjectMgr.getPlayer(cachedCharacterInfo->guid);
                     if (pPlayer && pPlayer->getGuid() != pguid)
                     {
                         _player->getSession()->SendPacket(MsgQuestPushResult(pPlayer->getGuid(), 0, QUEST_SHARE_MSG_SHARING_QUEST).serialise().get());
@@ -942,7 +950,7 @@ void WorldSession::handlePushQuestToPartyOpcode(WorldPacket& recvPacket)
                         pPlayer->getSession()->SendPacket(&data);
                     }
                 }
-                _player->getGroup()->Unlock();
+                group->Unlock();
             }
         }
     }

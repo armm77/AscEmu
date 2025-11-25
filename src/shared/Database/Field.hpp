@@ -1,49 +1,35 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include <stdlib.h>
-#include <stdio.h>
-#include "Common.hpp"
-#include "CommonTypes.hpp"
+#include <cstdint>
 
 class Field
 {
 public:
-    bool isSet() const { return mValue ? true : false; }
-    inline void SetValue(char* value) { mValue = value; }
+    bool isSet() const;
+    void setValue(char* value);
 
-    inline const char* GetString() { return mValue; }
-    inline float GetFloat() { return mValue ? static_cast<float>(atof(mValue)) : 0; }
-    inline bool GetBool() { return mValue ? atoi(mValue) > 0 : false; }
+    const char* asCString() const;
 
-    inline uint8_t GetUInt8() { return mValue ? static_cast<uint8_t>(atol(mValue)) : 0U; }
-    inline int8_t GetInt8() { return mValue ? static_cast<int8_t>(atol(mValue)) : 0; }
-    inline uint16_t GetUInt16() { return mValue ? static_cast<uint16_t>(atol(mValue)) : 0U; }
-    inline int16_t GetInt16() { return mValue ? static_cast<int16_t>(atol(mValue)) : 0; }
-    inline uint32_t GetUInt32() { return mValue ? static_cast<uint32_t>(atol(mValue)) : 0U; }
-    inline int32_t GetInt32() { return mValue ? static_cast<int32_t>(atol(mValue)) : 0; }
+    float asFloat() const;
+    bool asBool() const;
 
-    uint64_t GetUInt64()
-    {
-        if (mValue)
-        {
-            uint64_t value;
-            int return_value;
-            return_value = sscanf(mValue, I64FMTD, (unsigned long long int*)&value);
+    uint8_t asUint8(bool _silencedError = false) const;
+    int8_t asInt8() const;
 
-            if (return_value != 1)
-                return 0;
-            else
-                return value;
-        }
-        else
-            return 0;
-    }
+    uint16_t asUint16(bool _silencedError = false) const;
+    int16_t asInt16() const;
+
+    uint32_t asUint32(bool _silencedError = false) const;
+    int32_t asInt32() const;
+
+    uint64_t asUint64(bool _silencedError = false) const;
+    int64_t asInt64() const;
 
 private:
-    char* mValue;
+    char* m_value;
 };

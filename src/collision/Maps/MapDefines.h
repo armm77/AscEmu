@@ -1,6 +1,6 @@
 /*
  * AscEmu Framework based on ArcEmu MMORPG Server
- * Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+ * Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
  * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,21 +20,20 @@
 #ifndef _MAPDEFINES_H
 #define _MAPDEFINES_H
 
-#include "Common.hpp"
 #include "DetourNavMesh.h"
 
-const uint32 MMAP_MAGIC = 0x4d4d4150; // 'MMAP'
+const uint32_t MMAP_MAGIC = 0x4d4d4150; // 'MMAP'
 #define MMAP_VERSION 5
 
 #define NO_WMO_HEIGHT -200000
 
 struct MmapTileHeader
 {
-    uint32 mmapMagic;
-    uint32 dtVersion;
-    uint32 mmapVersion;
-    uint32 size;
-    uint32 usesLiquids;
+    uint32_t mmapMagic;
+    uint32_t dtVersion;
+    uint32_t mmapVersion;
+    uint32_t size;
+    uint32_t usesLiquids;
 
     MmapTileHeader() : mmapMagic(MMAP_MAGIC), dtVersion(DT_NAVMESH_VERSION),
         mmapVersion(MMAP_VERSION), size(0), usesLiquids(0) {}

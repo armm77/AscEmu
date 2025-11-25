@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -10,11 +10,17 @@ This file is released under the MIT license. See README-MIT for more information
  * Have fun ~Azolex
  */
 
- // \todo move most defines to enum, text to db (use SendScriptTextChatMessage(ID))
-#include "Setup.h"
+// \todo move most defines to enum, text to db (use SendScriptTextChatMessage(ID))
 #include "Instance_OldHillsbradFoothills.h"
-#include "Management/TaxiMgr.h"
-#include "Management/WorldStates.h"
+
+#include "Setup.h"
+#include "Management/QuestLogEntry.hpp"
+#include "Management/WorldStates.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/GameObject.h"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/Script/InstanceScript.hpp"
+#include "Server/Script/ScriptMgr.hpp"
 
 class OldHilsbradInstance : public InstanceScript
 {

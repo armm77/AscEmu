@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
+#include "Logging/Logger.hpp"
+#include "Management/Group.h"
 #include "Server/Packets/MsgInspectHonorStats.h"
 #include "Server/Packets/CmsgBattlemasterJoinArena.h"
 #include "Server/Packets/CmsgBattlefieldPort.h"
@@ -17,7 +18,10 @@ This file is released under the MIT license. See README-MIT for more information
 #include "Objects/Units/Players/Player.hpp"
 #include "Management/Battleground/Battleground.hpp"
 #include "Map/Management/MapMgr.hpp"
-#include "Management/ObjectMgr.h"
+#include "Management/ObjectMgr.hpp"
+#include "Management/Battleground/BattlegroundMgr.hpp"
+#include "Map/Maps/WorldMap.hpp"
+#include "Objects/Units/Creatures/Creature.h"
 #include "Storage/MySQLDataStore.hpp"
 
 #if VERSION_STRING >= Cata
@@ -41,7 +45,7 @@ void WorldSession::handleInspectHonorStatsOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_INSPECT_HONOR_STATS: %u (guidLow)", srlPacket.guid.getGuidLow());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_INSPECT_HONOR_STATS: {} (guidLow)", srlPacket.guid.getGuidLow());
 
     const auto player = _player->getWorldMap()->getPlayer(srlPacket.guid.getGuidLow());
     if (player == nullptr)
@@ -101,7 +105,7 @@ void WorldSession::handleArenaJoinOpcode(WorldPacket& recvPacket)
             battlegroundType = BattlegroundDef::TYPE_ARENA_5V5;
             break;
         default:
-            sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEMASTER_JOIN_ARENA: with invalid category (%u)", srlPacket.category);
+            sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEMASTER_JOIN_ARENA: with invalid category ({})", srlPacket.category);
             battlegroundType = 0;
             break;
     }
@@ -139,9 +143,15 @@ void WorldSession::handleBattlefieldListOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEFIELD_LIST: %u (bgType), %u (fromType)", srlPacket.bgType, srlPacket.fromType);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEFIELD_LIST: {} (bgType), {} (fromType)", srlPacket.bgType, srlPacket.fromType);
 
+#if VERSION_STRING <= WotLK
     sBattlegroundManager.handleBattlegroundListPacket(this, srlPacket.bgType, srlPacket.fromType);
+ #else
+    WoWGuid guid;
+    guid.init(uint64_t(0));
+    sBattlegroundManager.handleBattlegroundListPacket(guid, this, srlPacket.bgType);
+#endif
 }
 
 void WorldSession::handleBattleMasterHelloOpcode(WorldPacket& recvPacket)
@@ -150,7 +160,7 @@ void WorldSession::handleBattleMasterHelloOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEMASTER_HELLO: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_BATTLEMASTER_HELLO: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto creature = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (creature == nullptr || !creature->isBattleMaster())
@@ -167,11 +177,11 @@ void WorldSession::handleBattlegroundPlayerPositionsOpcode(WorldPacket& /*recvPa
 
     uint32_t flagHolders = 0;
 
-    const auto alliancePlayer = sObjectMgr.GetPlayer(static_cast<uint32_t>(Battleground->GetFlagHolderGUID(TEAM_ALLIANCE)));
+    const auto alliancePlayer = sObjectMgr.getPlayer(static_cast<uint32_t>(Battleground->GetFlagHolderGUID(TEAM_ALLIANCE)));
     if (alliancePlayer)
         ++flagHolders;
 
-    const auto hordePlayer = sObjectMgr.GetPlayer(static_cast<uint32_t>(Battleground->GetFlagHolderGUID(TEAM_HORDE)));
+    const auto hordePlayer = sObjectMgr.getPlayer(static_cast<uint32_t>(Battleground->GetFlagHolderGUID(TEAM_HORDE)));
     if (hordePlayer)
         ++flagHolders;
 
@@ -188,7 +198,7 @@ void WorldSession::handleAreaSpiritHealerQueueOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREA_SPIRIT_HEALER_QUEUE: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREA_SPIRIT_HEALER_QUEUE: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto spiritHealer = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (spiritHealer == nullptr)
@@ -208,7 +218,7 @@ void WorldSession::handleAreaSpiritHealerQueryOpcode(WorldPacket& recvPacket)
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREA_SPIRIT_HEALER_QUEUE: %u (guidLowPart)", srlPacket.guid.getGuidLowPart());
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_AREA_SPIRIT_HEALER_QUEUE: {} (guidLowPart)", srlPacket.guid.getGuidLowPart());
 
     const auto spiritHealer = _player->getWorldMap()->getCreature(srlPacket.guid.getGuidLowPart());
     if (spiritHealer == nullptr)
@@ -264,6 +274,8 @@ void WorldSession::sendBattlegroundList(Creature* creature, uint32_t mapId)
     if (creature == nullptr)
         return;
 
+    WoWGuid guid;
+
     uint32_t battlegroundType = BattlegroundDef::TYPE_WARSONG_GULCH;
     if (mapId == 0)
     {
@@ -274,7 +286,10 @@ void WorldSession::sendBattlegroundList(Creature* creature, uint32_t mapId)
         else
         {
             if (const auto battleMaster = sMySQLStore.getBattleMaster(creature->GetCreatureProperties()->Id))
+            {
                 battlegroundType = battleMaster->battlegroundId;
+                guid.init(creature->getGuid());
+            }
         }
     }
     else
@@ -282,30 +297,38 @@ void WorldSession::sendBattlegroundList(Creature* creature, uint32_t mapId)
         battlegroundType = mapId;
     }
 
+#if VERSION_STRING <= WotLK
     sBattlegroundManager.handleBattlegroundListPacket(this, battlegroundType);
+#else
+    sBattlegroundManager.handleBattlegroundListPacket(guid, this, battlegroundType);
+#endif
 }
 
-#if VERSION_STRING >= Cata
-void WorldSession::handleRequestRatedBgInfoOpcode(WorldPacket & recvPacket)
+void WorldSession::handleRequestRatedBgInfoOpcode(WorldPacket& recvPacket)
 {
+#if VERSION_STRING >= Cata
     CmsgRequestRatedBgInfo srlPacket;
     if (!srlPacket.deserialise(recvPacket))
         return;
 
-    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_RATED_BG_INFO received with unk_type = %u", srlPacket.type);
+    sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_RATED_BG_INFO received with unk_type = {}", srlPacket.type);
 
     SendPacket(SmsgRatedBgInfo(0).serialise().get());
+#endif
 }
 
 void WorldSession::handleRequestRatedBgStatsOpcode(WorldPacket& /*recvPacket*/)
 {
+#if VERSION_STRING >= Cata
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_RATED_BG_STATS received");
 
     SendPacket(SmsgRatedBgStats(3).serialise().get());
+#endif
 }
 
 void WorldSession::handleRequestPvPRewardsOpcode(WorldPacket& /*recvPacket*/)
 {
+#if VERSION_STRING >= Cata
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_RATED_BG_STATS received");
 
     WorldPacket packet(SMSG_REQUEST_PVP_REWARDS_RESPONSE, 24);
@@ -317,12 +340,15 @@ void WorldSession::handleRequestPvPRewardsOpcode(WorldPacket& /*recvPacket*/)
     packet << uint32_t(0);    // unknown currency week cap conquest points
 
     SendPacket(&packet);
+#endif
 }
 
 void WorldSession::handleRequestPvpOptionsOpcode(WorldPacket& /*recvPacket*/)
 {
+#if VERSION_STRING >= Cata
     sLogger.debugFlag(AscEmu::Logging::LF_OPCODE, "Received CMSG_REQUEST_RATED_BG_STATS received");
 
     SendPacket(SmsgPvpOptionsEnabled(true, true, true).serialise().get());
-}
 #endif
+}
+

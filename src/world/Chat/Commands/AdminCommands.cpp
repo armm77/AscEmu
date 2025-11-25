@@ -1,49 +1,56 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
-
-#include "Server/MainServerDefines.h"
+#include "Chat/ChatDefines.hpp"
+#include "Chat/ChatCommandHandler.hpp"
+#include "Logging/Log.hpp"
+#include "Management/ObjectMgr.hpp"
+#include "Objects/Units/Players/Player.hpp"
+#include "Server/EventMgr.h"
+#include "Server/World.h"
+#include "Server/WorldSession.h"
+#include "Server/WorldSessionLog.hpp"
+#include "Spell/Spell.hpp"
+#include "Spell/SpellAura.hpp"
+#include "Spell/SpellInfo.hpp"
 #include "Spell/SpellMgr.hpp"
-#include "Chat/ChatHandler.hpp"
-#include "Management/ObjectMgr.h"
 #include "Spell/Definitions/SpellEffects.hpp"
-#include "Spell/SpellAuras.h"
 
 //.admin castall
-bool ChatHandler::HandleAdminCastAllCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleAdminCastAllCommand(const char* args, WorldSession* m_session)
 {
     if (!args)
     {
-        RedSystemMessage(m_session, "No spellid specified.");
+        redSystemMessage(m_session, "No spellid specified.");
         return true;
     }
 
-    uint32 spell_id = atol(args);
-    auto spell_entry = sSpellMgr.getSpellInfo(spell_id);
+    uint32_t spell_id = std::stoul(args);
+    SpellInfo const* spell_entry = sSpellMgr.getSpellInfo(spell_id);
     if (!spell_entry)
     {
-        RedSystemMessage(m_session, "Spell %u is not a valid spell!", spell_id);
+        redSystemMessage(m_session, "Spell {} is not a valid spell!", spell_id);
         return true;
     }
 
-    for (uint8 i = 0; i < 3; ++i)
+    for (uint8_t i = 0; i < 3; ++i)
     {
         if (spell_entry->getEffect(i) == SPELL_EFFECT_LEARN_SPELL)
         {
             sGMLog.writefromsession(m_session, "used learn spell stopped %u", spell_id);
-            RedSystemMessage(m_session, "Learn spell specified.");
+            redSystemMessage(m_session, "Learn spell specified.");
             return true;
         }
     }
 
     sGMLog.writefromsession(m_session, "used castall command, spellid %u", spell_id);
 
-    sObjectMgr._playerslock.lock();
-    for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
+    std::lock_guard guard(sObjectMgr.m_playerLock);
+    for (const auto playerPair : sObjectMgr.getPlayerStorage())
     {
-        Player* player = itr->second;
+        Player* player = playerPair.second;
         if (player->getSession() && player->IsInWorld())
         {
             if (player->getWorldMap() != m_session->GetPlayer()->getWorldMap())
@@ -58,25 +65,24 @@ bool ChatHandler::HandleAdminCastAllCommand(const char* args, WorldSession* m_se
             }
         }
     }
-    sObjectMgr._playerslock.unlock();
 
-    BlueSystemMessage(m_session, "Casted spell %u on all players!", spell_id);
+    blueSystemMessage(m_session, "Casted spell {} on all players!", spell_id);
     return true;
 }
 
 //.admin dispellall
-bool ChatHandler::HandleAdminDispelAllCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleAdminDispelAllCommand(const char* args, WorldSession* m_session)
 {
-    uint32 pos = 0;
+    uint32_t pos = 0;
     if (*args)
         pos = atoi(args);
 
     sGMLog.writefromsession(m_session, "used dispelall command, pos %u", pos);
 
-    sObjectMgr._playerslock.lock();
-    for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
+    std::lock_guard guard(sObjectMgr.m_playerLock);
+    for (const auto playerPair : sObjectMgr.getPlayerStorage())
     {
-        Player* player = itr->second;
+        Player* player = playerPair.second;
         if (player->getSession() && player->IsInWorld())
         {
             if (player->getWorldMap() != m_session->GetPlayer()->getWorldMap())
@@ -96,16 +102,15 @@ bool ChatHandler::HandleAdminDispelAllCommand(const char* args, WorldSession* m_
         }
     }
     sGMLog.writefromsession(m_session, "used mass dispel");
-    sObjectMgr._playerslock.unlock();
 
-    BlueSystemMessage(m_session, "Dispel action done.");
+    blueSystemMessage(m_session, "Dispel action done.");
     return true;
 }
 
 //.admin masssummon
-bool ChatHandler::HandleAdminMassSummonCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleAdminMassSummonCommand(const char* args, WorldSession* m_session)
 {
-    sObjectMgr._playerslock.lock();
+    sObjectMgr.m_playerLock.lock();
 
     Player* summon_player = m_session->GetPlayer();
 
@@ -128,20 +133,21 @@ bool ChatHandler::HandleAdminMassSummonCommand(const char* args, WorldSession* m
         snprintf(Buffer, 170, "%s%s Has requested a mass summon of all players. Do not feel obliged to accept the summon, as it is most likely for an event or a test of sorts", MSG_COLOR_GOLD, m_session->GetPlayer()->getName().c_str());
     }
 
-    uint32 summon_count = 0;
-    for (PlayerStorageMap::const_iterator itr = sObjectMgr._players.begin(); itr != sObjectMgr._players.end(); ++itr)
+    uint32_t summon_count = 0;
+    std::lock_guard guard(sObjectMgr.m_playerLock);
+    for (const auto playerPair : sObjectMgr.getPlayerStorage())
     {
-        Player* plr = itr->second;
-        if (plr->getSession() && plr->IsInWorld())
+        Player* player = playerPair.second;
+        if (player->getSession() && player->IsInWorld())
         {
-            if (faction > -1 && plr->getTeam() == static_cast<uint32>(faction))
+            if (faction > -1 && player->getTeam() == static_cast<uint32_t>(faction))
             {
-                plr->sendSummonRequest(summon_player->getGuidLow(), summon_player->GetZoneId(), summon_player->GetMapId(), summon_player->GetInstanceID(), summon_player->GetPosition());
+                player->sendSummonRequest(summon_player->getGuidLow(), summon_player->getZoneId(), summon_player->GetMapId(), summon_player->GetInstanceID(), summon_player->GetPosition());
                 ++summon_count;
             }
             else if (faction == -1)
             {
-                plr->sendSummonRequest(summon_player->getGuidLow(), summon_player->GetZoneId(), summon_player->GetMapId(), summon_player->GetInstanceID(), summon_player->GetPosition());
+                player->sendSummonRequest(summon_player->getGuidLow(), summon_player->getZoneId(), summon_player->GetMapId(), summon_player->GetInstanceID(), summon_player->GetPosition());
                 ++summon_count;
             }
 
@@ -150,24 +156,22 @@ bool ChatHandler::HandleAdminMassSummonCommand(const char* args, WorldSession* m
 
     sGMLog.writefromsession(m_session, "requested a mass summon of %u players.", summon_count);
 
-    sObjectMgr._playerslock.unlock();
-
     return true;
 }
 
 //.admin playall
-bool ChatHandler::HandleAdminPlayGlobalSoundCommand(const char* args, WorldSession* m_session)
+bool ChatCommandHandler::HandleAdminPlayGlobalSoundCommand(const char* args, WorldSession* m_session)
 {
     if (!*args)
         return false;
 
-    uint32 sound_id = atoi(args);
+    uint32_t sound_id = atoi(args);
     if (sound_id == 0)
         return false;
 
     sWorld.playSoundToAllPlayers(sound_id);
 
-    BlueSystemMessage(m_session, "Broadcasted sound %u to server.", sound_id);
+    blueSystemMessage(m_session, "Broadcasted sound {} to server.", sound_id);
 
     sGMLog.writefromsession(m_session, "used play all command soundid %u", sound_id);
 

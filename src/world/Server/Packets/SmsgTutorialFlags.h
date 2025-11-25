@@ -1,9 +1,10 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
@@ -31,7 +32,7 @@ namespace AscEmu::Packets
         bool internalSerialise(WorldPacket& packet) override
         {
             // All versions share same implementation
-            for (auto tutorial_id : tutorials)
+            for (uint32_t tutorial_id : tutorials)
                 packet << tutorial_id;
             return true;
         }

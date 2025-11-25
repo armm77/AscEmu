@@ -1,12 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
+#include "Setup.h"
 #include "Portal_Intro.hpp"
-#include "Objects/Units/Creatures/Summons/Summon.h"
-#include "Movement/MovementGenerators/PointMovementGenerator.h"
-#include "Server/Script/CreatureAIScript.h"
+#include "Instance_TheVioletHold.hpp"
+#include "CommonTime.hpp"
+#include "Utilities/Random.hpp"
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Intro Portal AI
@@ -14,6 +15,7 @@ IntroPortalAI::IntroPortalAI(Creature* pCreature) : CreatureAIScript(pCreature)
 {
     // Instance Script
     mInstance = getInstanceScript();
+    portalLocation = 0;
 }
 
 CreatureAIScript* IntroPortalAI::Create(Creature* pCreature) { return new IntroPortalAI(pCreature); }
@@ -24,7 +26,7 @@ void IntroPortalAI::OnLoad()
     if (!getCreature()->isSummon())
         getCreature()->Despawn(10, 0);
 
-    getCreature()->getAIInterface()->setImmuneToNPC(true);
+    getCreature()->getAIInterface()->setIgnoreCreatureCombat(true);
     getCreature()->setUnitFlags(UNIT_FLAG_NOT_SELECTABLE);
 }
 

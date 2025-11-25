@@ -1,12 +1,14 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
+
 #include <cstdint>
 
 #include "ManagedPacket.h"
+#include "Utilities/utf8String.hpp"
 
 namespace AscEmu::Packets
 {
@@ -15,7 +17,7 @@ namespace AscEmu::Packets
         static const size_t PACKET_SIZE = sizeof(uint8_t) + 96;
     public:
         uint8_t failed;
-        std::string name;
+        utf8_string name;
 
         SmsgGroupInvite() : SmsgGroupInvite(0, "")
         {

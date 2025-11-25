@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
@@ -7,27 +7,30 @@ This file is released under the MIT license. See README-MIT for more information
 
 #include "BattlegroundDefines.hpp"
 #include "Server/EventableObject.h"
+#include <deque>
+#include <vector>
+#include <map>
+#include <mutex>
 
 class WorldSession;
 class WorldPacket;
 class Battleground;
+class BattlegroundMap;
 class Player;
 class Group;
 class Corpse;
 class Arena;
+class WoWGuid;
 
 typedef Battleground* (*BattlegroundFactoryMethod)(BattlegroundMap* mgr, uint32_t iid, uint32_t group, uint32_t type);
 typedef Battleground* (*ArenaFactoryMethod)(BattlegroundMap* mgr, uint32_t iid, uint32_t group, uint32_t type, uint32_t players_per_side);
 
-
 class SERVER_DECL BattlegroundManager : public EventableObject
 {
-
     BattlegroundManager() = default;
     ~BattlegroundManager() = default;
 
 public:
-
     static BattlegroundManager& getInstance();
     void initialize();
 
@@ -40,7 +43,11 @@ public:
     void registerArenaFactory(uint32_t map, ArenaFactoryMethod method);
     void registerMapForBgType(uint32_t type, uint32_t map);
 
+#if VERSION_STRING <= WotLK
     void handleBattlegroundListPacket(WorldSession* session, uint32_t battlegroundType, uint8_t from = 0);
+#else
+    void handleBattlegroundListPacket(WoWGuid& wowGuid, WorldSession* session, uint32_t battlegroundType);
+#endif
     void handleArenaJoin(WorldSession* session, uint32_t battlegroundType, uint8_t asGroup, uint8_t ratedMatch);
     void handleGetBattlegroundQueueCommand(WorldSession* session);
     void handleBattlegroundJoin(WorldSession* session, WorldPacket& packet);
@@ -51,7 +58,7 @@ public:
     void eventQueueUpdate(bool forceStart);
 
     void removePlayerFromQueues(Player* player);
-    void removeGroupFromQueues(Group* group);
+    void removeGroupFromQueues(uint32_t  group);
 
     Battleground* createInstance(uint32_t type, uint32_t levelGroup);
 

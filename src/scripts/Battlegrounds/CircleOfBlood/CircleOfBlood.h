@@ -1,12 +1,13 @@
 /*
-Copyright (c) 2014-2022 AscEmu Team <http://www.ascemu.org>
+Copyright (c) 2014-2025 AscEmu Team <http://www.ascemu.org>
 This file is released under the MIT license. See README-MIT for more information.
 */
 
 #pragma once
 
-#include "Management/Arenas.h"
-#include "Management/Battleground/Battleground.hpp"
+#include "Management/Arenas.hpp"
+
+class BattlegroundMap;
 
 class CircleOfBlood : public Arena
 {
